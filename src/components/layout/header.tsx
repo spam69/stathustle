@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare } from 'lucide-react'; // PlusSquare removed
+import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,7 +17,7 @@ import {
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar'; 
-// useFeed import removed
+import { useFeed } from '@/contexts/feed-context';
 
 interface HeaderProps {
   toggleChat: () => void;
@@ -26,7 +26,7 @@ interface HeaderProps {
 export default function Header({ toggleChat }: HeaderProps) {
   const { user, logout, loading } = useAuth();
   const { toggleSidebar, isMobile } = useSidebar(); 
-  // openCreatePostModal from useFeed removed
+  const { openCreatePostModal } = useFeed();
 
   const getInitials = (name: string) => {
     return name
@@ -61,7 +61,11 @@ export default function Header({ toggleChat }: HeaderProps) {
           </div>
         </form>
 
-        {/* Create Post button removed from here */}
+        {user && !isMobile && (
+          <Button variant="ghost" size="icon" onClick={openCreatePostModal} aria-label="Create Post">
+            <PlusSquare className="h-5 w-5" />
+          </Button>
+        )}
 
         <ThemeSwitcher />
         <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
@@ -99,6 +103,12 @@ export default function Header({ toggleChat }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              {isMobile && (
+                <DropdownMenuItem onClick={openCreatePostModal}>
+                  <PlusSquare className="mr-2 h-4 w-4" />
+                  Create Post
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem asChild>
                 <Link href={`/profile/${user.username}`}>
                   <UserCircle className="mr-2 h-4 w-4" />
@@ -111,7 +121,6 @@ export default function Header({ toggleChat }: HeaderProps) {
                   Settings
                 </Link>
               </DropdownMenuItem>
-               {/* Mobile only create post button removed */}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>
                 <LogOut className="mr-2 h-4 w-4" />
