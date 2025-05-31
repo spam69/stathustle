@@ -23,16 +23,17 @@ export const authOptions: NextAuthOptions = {
         );
 
         // For mock purposes, we're not hashing passwords. In a real app, compare hashed passwords.
-        if (user) { // && user.password === credentials.password (if passwords were stored, and hashed)
-          // IMPORTANT: The object returned here is what populates the `user` object in JWT and session callbacks
-          return { 
-            id: user.id, 
-            username: user.username, 
+        // Also, in a real app, you'd check the password here.
+        if (user) {
+          // This object structure should align with NextAuth's expected User type (DefaultUser)
+          // and our augmented User type in next-auth.d.ts
+          return {
+            id: user.id,
+            username: user.username,
             email: user.email,
-            name: user.username, // NextAuth typically expects a 'name' property
-            image: user.profilePictureUrl, // NextAuth typically expects an 'image' property
-            // ... any other fields from your AppUser you want in the token initially
-          } as any; // Using 'as any' here because we're shaping the User object for NextAuth
+            name: user.username, // NextAuth uses 'name' for display, often maps to username or a full name
+            image: user.profilePictureUrl, // NextAuth uses 'image' for avatar
+          };
         }
         return null; // Login failed
       }
@@ -45,21 +46,24 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user, account }) {
       // Persist the user id and username to the token right after signin
+      // The `user` object here is what's returned from the `authorize` callback
       if (account && user) {
-        return {
-          ...token,
-          id: user.id,
-          username: (user as AppUser).username, // Cast to your AppUser if username is not on DefaultUser
-        };
+        token.id = user.id;
+        token.username = user.username; // user.username is available from authorize's return
+        // other fields from user like email, name, image are already part of the default token if needed
       }
       return token;
     },
     async session({ session, token }) {
       // Send properties to the client, like an access_token and user id from a provider.
-      if (session.user && token.id && token.username) {
-        session.user.id = token.id as string;
-        session.user.username = token.username as string;
-        // You can add other properties from the token to the session.user here
+      // `token` here is the JWT token object from the `jwt` callback
+      if (session.user) { // Check if session.user exists
+        if (token.id) {
+          session.user.id = token.id as string;
+        }
+        if (token.username) {
+          session.user.username = token.username as string;
+        }
       }
       return session;
     }
@@ -68,7 +72,9 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
     // error: '/auth/error', // Custom error page
   },
-  secret: process.env.NEXTAUTH_SECRET || 'your_very_secure_secret_here_in_production', // Fallback for development
+  // Ensure NEXTAUTH_SECRET is set. Use a strong fallback for development.
+  // The secret should be at least 32 characters long.
+  secret: process.env.NEXTAUTH_SECRET || 'super_secret_fallback_for_dev_env_32_chars_long',
   debug: process.env.NODE_ENV === 'development',
 };
 
