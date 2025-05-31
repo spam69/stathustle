@@ -1,7 +1,12 @@
+
+import MainLayout from "./(main)/layout";
 import SocialFeedPage from "./(main)/page";
 
 export default function HomePage() {
-  // This component now simply renders the SocialFeedPage,
-  // which will be wrapped by the (main)/layout.tsx
-  return <SocialFeedPage />;
+  // Wrap SocialFeedPage with MainLayout to ensure consistent layout (including Header)
+  return (
+    <MainLayout>
+      <SocialFeedPage />
+    </MainLayout>
+  );
 }
