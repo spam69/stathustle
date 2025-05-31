@@ -10,6 +10,9 @@ import UserProfileCard from '@/components/user-profile-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { Button } from '@/components/ui/button';
+
+const POSTS_PER_PAGE = 5;
 
 export default function UserProfilePage() {
   const params = useParams();
@@ -18,10 +21,12 @@ export default function UserProfilePage() {
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [visiblePostsCount, setVisiblePostsCount] = useState(POSTS_PER_PAGE);
 
   useEffect(() => {
     if (username) {
       setLoading(true);
+      setVisiblePostsCount(POSTS_PER_PAGE); // Reset visible count on username change
       setTimeout(() => {
         const foundUser = mockUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (foundUser) {
@@ -91,6 +96,12 @@ export default function UserProfilePage() {
     );
   };
 
+  const loadMorePosts = () => {
+    setVisiblePostsCount(prevCount => prevCount + POSTS_PER_PAGE);
+  };
+
+  const displayedPosts = userPosts.slice(0, visiblePostsCount);
+
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto">
@@ -117,8 +128,8 @@ export default function UserProfilePage() {
       <UserProfileCard profileUser={profileUser} />
       
       <h2 className="text-2xl font-bold mt-8 mb-4 font-headline">Posts by {profileUser.username}</h2>
-      {userPosts.length > 0 ? (
-        userPosts.map(post => (
+      {displayedPosts.length > 0 ? (
+        displayedPosts.map(post => (
           <PostCard 
             key={post.id} 
             post={post} 
@@ -129,6 +140,14 @@ export default function UserProfilePage() {
         ))
       ) : (
         <p className="text-muted-foreground text-center py-8">@{profileUser.username} hasn't posted anything yet.</p>
+      )}
+
+      {visiblePostsCount < userPosts.length && (
+        <div className="text-center mt-6">
+          <Button onClick={loadMorePosts} variant="outline">
+            Load More Posts
+          </Button>
+        </div>
       )}
     </div>
   );
