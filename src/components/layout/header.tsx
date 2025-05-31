@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useState } from 'react'; // Added for modal state
+import { useState } from 'react'; 
 import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"; // Added Dialog
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -26,23 +26,26 @@ interface HeaderProps {
 }
 
 export default function Header({ toggleChat }: HeaderProps) {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading: authContextLoading, session } = useAuth(); // Get user from new AuthContext
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
-  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false); // State for search modal
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
-  const getInitials = (name: string) => {
+  // The user object from useAuth is now derived from NextAuth's session
+  const currentUser = user; // This user already has id, username from our AuthContext mapping
+
+  const getInitials = (name: string = "") => { // Added default empty string
     return name
       .split(' ')
       .map((n) => n[0])
       .join('')
-      .toUpperCase();
+      .toUpperCase() || (name ? name[0]?.toUpperCase() : 'U');
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // TODO: Implement actual search logic
-    console.log("Search submitted from modal with value:", event.currentTarget.searchQuery.value);
+    const searchInput = event.currentTarget.elements.namedItem('searchQuery') as HTMLInputElement;
+    console.log("Search submitted from modal with value:", searchInput?.value);
     setIsSearchModalOpen(false);
   };
 
@@ -60,7 +63,6 @@ export default function Header({ toggleChat }: HeaderProps) {
       </Link>
       
       <div className="flex flex-1 items-center justify-end gap-1 md:gap-2">
-        {/* Search Form (visible sm and up) */}
         <form className="ml-auto hidden sm:flex flex-1 sm:flex-initial">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -72,15 +74,14 @@ export default function Header({ toggleChat }: HeaderProps) {
           </div>
         </form>
 
-        {/* Search Icon Button (visible on screens smaller than sm) */}
-        <div className="ml-auto sm:hidden"> {/* Wrapper to apply ml-auto */}
+        <div className="ml-auto sm:hidden">
           <Button variant="ghost" size="icon" onClick={() => setIsSearchModalOpen(true)}>
             <Search className="h-5 w-5" />
             <span className="sr-only">Open search</span>
           </Button>
         </div>
 
-        {user && (
+        {currentUser && (
           <Button variant="ghost" size="icon" onClick={openCreatePostModal} aria-label="Create Post">
             <PlusSquare className="h-5 w-5" />
           </Button>
@@ -100,25 +101,27 @@ export default function Header({ toggleChat }: HeaderProps) {
           <span className="sr-only">Live Support</span>
         </Button>
 
-        {loading ? (
+        {authContextLoading ? (
           <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-        ) : user ? (
+        ) : currentUser ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.profilePictureUrl} alt={user.username} />
-                  <AvatarFallback>{getInitials(user.username)}</AvatarFallback>
+                  <AvatarImage src={currentUser.profilePictureUrl} alt={currentUser.username} />
+                  <AvatarFallback>{getInitials(currentUser.username)}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user.username}</p>
-                  <p className="text-xs leading-none text-muted-foreground">
-                    {user.email}
-                  </p>
+                  <p className="text-sm font-medium leading-none">{currentUser.username}</p>
+                  {currentUser.email && (
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {currentUser.email}
+                    </p>
+                  )}
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -129,7 +132,7 @@ export default function Header({ toggleChat }: HeaderProps) {
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem asChild>
-                <Link href={`/profile/${user.username}`}>
+                <Link href={`/profile/${currentUser.username}`}>
                   <UserCircle className="mr-2 h-4 w-4" />
                   Profile
                 </Link>
@@ -141,7 +144,7 @@ export default function Header({ toggleChat }: HeaderProps) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout}>
+              <DropdownMenuItem onClick={() => logout()}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Log out
               </DropdownMenuItem>
@@ -163,7 +166,6 @@ export default function Header({ toggleChat }: HeaderProps) {
         )}
       </div>
       
-      {/* Search Modal */}
       <Dialog open={isSearchModalOpen} onOpenChange={setIsSearchModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -174,7 +176,7 @@ export default function Header({ toggleChat }: HeaderProps) {
           </DialogHeader>
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 mt-4">
             <Input
-              name="searchQuery" // Added name for form submission access
+              name="searchQuery"
               type="search"
               placeholder="Search..."
               className="flex-1"

@@ -1,38 +1,29 @@
 
 "use client";
 
-import type { User, SportInterest } from '@/types';
-import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import type { User as AppUser, SportInterest } from '@/types'; // Renamed to AppUser to avoid conflict with NextAuth.User
+import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { signIn, signOut, useSession } from 'next-auth/react';
+import type { Session } from 'next-auth';
 
 interface AuthContextType {
-  user: User | null;
-  login: (credentials: Pick<User, 'email'> & { password: string }) => Promise<User | null>;
+  user: (AppUser & { id: string; username: string }) | null; // Adjusted user type
+  login: (credentials: { emailOrUsername: string; password: string }) => Promise<boolean>; // Returns boolean for success
   logout: () => void;
-  signup: (signupData: Omit<User, 'id' | 'themePreference' | 'isIdentity'> & { password: string }) => Promise<User | null>;
-  updateUserSettings: (settings: Partial<Pick<User, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl'>>) => Promise<User | null>;
-  loading: boolean; // For initial session load
-  isAuthActionLoading: boolean; // For login/signup/update actions
+  signup: (signupData: Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }) => Promise<AppUser | null>;
+  updateUserSettings: (settings: Partial<Pick<AppUser, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl'>>) => Promise<AppUser | null>;
+  loading: boolean; // For initial session load from NextAuth
+  isAuthActionLoading: boolean; // For signup/update actions (login handled by NextAuth directly)
+  session: Session | null; // Expose the raw NextAuth session if needed
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-async function loginUser(credentials: Pick<User, 'email'> & { password: string }): Promise<User> {
-  const response = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(credentials),
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'Login failed');
-  }
-  return response.json();
-}
-
-async function signupUser(signupData: Omit<User, 'id' | 'themePreference' | 'isIdentity'> & { password: string }): Promise<User> {
-  const response = await fetch('/api/auth/signup', {
+// Keep signup and update user data functions as they interact with custom APIs
+async function signupUser(signupData: Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }): Promise<AppUser> {
+  const response = await fetch('/api/auth/signup', { // This API route should remain
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(signupData),
@@ -44,8 +35,8 @@ async function signupUser(signupData: Omit<User, 'id' | 'themePreference' | 'isI
   return response.json();
 }
 
-async function updateUserData(userId: string, settings: Partial<User>): Promise<User> {
-  const response = await fetch(`/api/user/settings`, {
+async function updateUserData(userId: string, settings: Partial<AppUser>): Promise<AppUser> {
+  const response = await fetch(`/api/user/settings`, { // This API route should remain
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, ...settings }),
@@ -59,116 +50,117 @@ async function updateUserData(userId: string, settings: Partial<User>): Promise<
 
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // For initial local storage check
+  const { data: session, status } = useSession();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const loading = status === 'loading';
+  
+  // Map NextAuth session user to our AppUser type
+  // Ensure all necessary fields from your AppUser are present in the NextAuth User/Session types (via next-auth.d.ts)
+  const appUserFromSession = session?.user ? {
+    id: session.user.id,
+    username: session.user.username,
+    email: session.user.email ?? '', // Provide default if potentially null
+    // Map other fields if they exist on session.user and are needed for AppUser
+    profilePictureUrl: session.user.image ?? undefined, 
+    // bannerImageUrl, socialLinks, sportInterests, themePreference, bio typically not on NextAuth's default session.user
+    // These would need to be fetched separately or added via JWT/session callbacks if critical for AuthContext.user
+    // For now, we'll assume they are fetched on profile pages etc.
+  } as (AppUser & { id: string; username: string }) : null;
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem('stathustle-user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error("Failed to parse stored user", e);
-        localStorage.removeItem('stathustle-user');
-      }
+
+  const login = async (credentials: {emailOrUsername: string; password: string}) => {
+    const result = await signIn('credentials', {
+      redirect: false, // Handle redirect manually or based on result
+      emailOrUsername: credentials.emailOrUsername,
+      password: credentials.password,
+    });
+
+    if (result?.error) {
+      toast({ title: "Login Failed", description: result.error, variant: "destructive" });
+      return false;
     }
-    setLoading(false);
-  }, []);
+    if (result?.ok) {
+      toast({ title: "Login Successful", description: `Welcome back!`});
+      // queryClient.invalidateQueries({ queryKey: ['posts'] }); // Invalidate queries that depend on auth state
+      return true;
+    }
+    return false;
+  };
 
-  const loginMutation = useMutation<User, Error, Pick<User, 'email'> & { password: string }>({
-    mutationFn: loginUser,
-    onSuccess: (data) => {
-      setUser(data);
-      localStorage.setItem('stathustle-user', JSON.stringify(data));
-      toast({ title: "Login Successful", description: `Welcome back, ${data.username}!` });
-      queryClient.invalidateQueries({ queryKey: ['user', data.id] }); // Invalidate any user-specific queries
-      queryClient.invalidateQueries({ queryKey: ['posts'] }); // Posts might differ based on user
-    },
-    onError: (error) => {
-      toast({ title: "Login Failed", description: error.message, variant: "destructive" });
-    },
-  });
+  const logout = () => {
+    signOut({ callbackUrl: '/login' }); // Redirect to login after signout
+    toast({ title: "Logged Out", description: "You have been successfully logged out."});
+    queryClient.clear();
+  };
 
-  const signupMutation = useMutation<User, Error, Omit<User, 'id' | 'themePreference' | 'isIdentity'> & { password: string }>({
+  // Signup mutation remains, as it calls our custom API
+  const signupMutation = useMutation<AppUser, Error, Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }>({
     mutationFn: signupUser,
     onSuccess: (data) => {
-      setUser(data);
-      localStorage.setItem('stathustle-user', JSON.stringify(data));
-      toast({ title: "Signup Successful", description: "Welcome to StatHustle!" });
+      toast({ title: "Signup Successful", description: "Please log in with your new account." });
+      // Optionally, automatically sign in the user here, or redirect to login
     },
     onError: (error) => {
       toast({ title: "Signup Failed", description: error.message, variant: "destructive" });
     },
   });
+
+  const signup = async (signupData: Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }) => {
+    try {
+     const signedUpUser = await signupMutation.mutateAsync(signupData);
+     return signedUpUser;
+   } catch (error) {
+     return null;
+   }
+ };
   
-  const updateSettingsMutation = useMutation<User, Error, Partial<User>>({
+  // Update settings mutation remains
+  const updateSettingsMutation = useMutation<AppUser, Error, Partial<AppUser>>({
     mutationFn: (settings) => {
-      if (!user) throw new Error("User not logged in");
-      return updateUserData(user.id, settings);
+      if (!appUserFromSession) throw new Error("User not logged in");
+      return updateUserData(appUserFromSession.id, settings);
     },
     onSuccess: (data) => {
-      setUser(data); // Update context user
-      localStorage.setItem('stathustle-user', JSON.stringify(data)); // Update local storage
       toast({ title: "Settings Updated", description: "Your profile information has been saved." });
       queryClient.invalidateQueries({ queryKey: ['profile', data.username] });
+      // If themePreference changes, next-themes should pick it up if it's stored in session and used by ThemeSwitcher
+      // For now, AuthContext doesn't directly manage themePreference from session for theme switching
     },
     onError: (error) => {
       toast({ title: "Update Failed", description: error.message, variant: "destructive" });
     },
   });
 
-
-  const login = async (credentials: Pick<User, 'email'> & { password: string }) => {
-    try {
-      const loggedInUser = await loginMutation.mutateAsync(credentials);
-      return loggedInUser;
-    } catch (error) {
-      return null;
-    }
-  };
-
-  const signup = async (signupData: Omit<User, 'id' | 'themePreference' | 'isIdentity'> & { password: string }) => {
-     try {
-      const signedUpUser = await signupMutation.mutateAsync(signupData);
-      return signedUpUser;
-    } catch (error) {
-      return null;
-    }
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('stathustle-user');
-    queryClient.clear(); // Clear all query cache on logout
-    toast({ title: "Logged Out", description: "You have been successfully logged out."});
-  };
-  
-  const updateUserSettings = useCallback(async (settings: Partial<Pick<User, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl'>>) => {
-    if (!user) {
+  const updateUserSettings = useCallback(async (settings: Partial<Pick<AppUser, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl'>>) => {
+    if (!appUserFromSession) {
       toast({ title: "Error", description: "You must be logged in to update settings.", variant: "destructive"});
       return null;
     }
     try {
       const updatedUser = await updateSettingsMutation.mutateAsync(settings);
-      // Also update theme via next-themes if themePreference is changed
-      if (settings.themePreference) {
-        // The ThemeSwitcher component handles calling setTheme from next-themes
-        // We just ensure the user object has the correct preference for persistence
-      }
       return updatedUser;
     } catch(e) {
-      // Error already handled by useMutation's onError
       return null;
     }
-  }, [user, updateSettingsMutation, toast]);
+  }, [appUserFromSession, updateSettingsMutation, toast, queryClient]);
 
-  const isAuthActionLoading = loginMutation.isPending || signupMutation.isPending || updateSettingsMutation.isPending;
+
+  // isAuthActionLoading now primarily for signup and update settings. Login loading is part of NextAuth's status.
+  const isAuthActionLoading = signupMutation.isPending || updateSettingsMutation.isPending;
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, signup, updateUserSettings, loading, isAuthActionLoading }}>
+    <AuthContext.Provider value={{ 
+        user: appUserFromSession, 
+        login, 
+        logout, 
+        signup, 
+        updateUserSettings, 
+        loading, 
+        isAuthActionLoading,
+        session
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -181,5 +173,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-    

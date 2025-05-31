@@ -8,56 +8,62 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Keep for "Forgot Password" if used later
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from '@/contexts/auth-context';
-// Toast is now handled by AuthContext
+import { useState } from 'react';
 
 const loginSchema = z.object({
-  email: z.string().email({ message: "Invalid email address." }),
-  password: z.string().min(1, { message: "Password is required." }), // Min 1 for presence, API handles length
+  emailOrUsername: z.string().min(1, { message: "Email or Username is required." }),
+  password: z.string().min(1, { message: "Password is required." }),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isAuthActionLoading } = useAuth();
+  const { login } = useAuth(); // Use login from new AuthContext
+  const [isLoading, setIsLoading] = useState(false); // Local loading state for the form
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
+      emailOrUsername: "",
       password: "",
     },
   });
 
   const onSubmit = async (data: LoginFormValues) => {
-    const loggedInUser = await login(data);
-    if (loggedInUser) {
-      router.push('/');
+    setIsLoading(true);
+    const success = await login({
+      emailOrUsername: data.emailOrUsername,
+      password: data.password,
+    });
+    setIsLoading(false);
+    if (success) {
+      router.push('/'); // Redirect to home on successful login
+      router.refresh(); // Force refresh to update session state if necessary
     }
-    // Error toast is handled by AuthContext's useMutation
+    // Error toast is handled by AuthContext (via NextAuth signIn result)
   };
 
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="space-y-1 text-center">
         <CardTitle className="text-2xl font-headline">Login to StatHustle</CardTitle>
-        <CardDescription>Enter your email below to login to your account</CardDescription>
+        <CardDescription>Enter your email or username below to login</CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardContent className="grid gap-4">
             <FormField
               control={form.control}
-              name="email"
+              name="emailOrUsername"
               render={({ field }) => (
                 <FormItem className="grid gap-2">
-                  <FormLabel htmlFor="email">Email</FormLabel>
+                  <FormLabel htmlFor="emailOrUsername">Email or Username</FormLabel>
                   <FormControl>
-                    <Input id="email" type="email" placeholder="m@example.com" {...field} />
+                    <Input id="emailOrUsername" placeholder="m@example.com or username" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -70,11 +76,6 @@ export default function LoginPage() {
                 <FormItem className="grid gap-2">
                   <div className="flex items-center">
                     <FormLabel htmlFor="password">Password</FormLabel>
-                    {/* 
-                    <Link href="#" className="ml-auto inline-block text-sm underline">
-                      Forgot your password?
-                    </Link> 
-                    */}
                   </div>
                   <FormControl>
                     <Input id="password" type="password" {...field} />
@@ -85,8 +86,8 @@ export default function LoginPage() {
             />
           </CardContent>
           <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full" disabled={isAuthActionLoading}>
-              {isAuthActionLoading ? 'Logging in...' : 'Login'}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Logging in...' : 'Login'}
             </Button>
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{' '}
@@ -100,5 +101,3 @@ export default function LoginPage() {
     </Card>
   );
 }
-
-    
