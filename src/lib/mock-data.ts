@@ -140,7 +140,44 @@ const mockComment1_post3: Comment = {
   ],
 };
 
+const originalPostForSharing1: Post = {
+  id: 'original-post-1',
+  author: mockUser1Data,
+  content: 'This is an original post by FantasyFanatic about the importance of weekly waiver wire pickups. Never underestimate them! #FantasyStrategy',
+  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 100).toISOString(), // Older post
+  detailedReactions: [{ userId: mockUser2Data.id, reactionType: 'like', createdAt: new Date().toISOString() }],
+  shares: 5,
+  repliesCount: 1,
+  comments: [{
+    id: 'comment-op1',
+    author: mockUser2Data,
+    content: 'Totally agree, waiver wire is key!',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 99).toISOString(),
+    detailedReactions: []
+  }],
+  tags: ['#FantasyFootball', '#WaiverWire']
+};
+
+const originalPostForSharing2: Post = {
+  id: 'original-post-2',
+  author: mockIdentityAnalystProData,
+  content: 'Just published a new blog on breakout candidates for the second half of the MLB season. Check it out on my profile! ⚾️ #MLB #FantasyBaseball @AnalystPro',
+  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 70).toISOString(),
+  detailedReactions: [
+    { userId: mockUser1Data.id, reactionType: 'wow', createdAt: new Date().toISOString() },
+    { userId: mockAdminUserData.id, reactionType: 'like', createdAt: new Date().toISOString() }
+  ],
+  shares: 12,
+  repliesCount: 0,
+  comments: [],
+  mediaUrl: 'https://placehold.co/500x300.png',
+  mediaType: 'image',
+  tags: ['#MLBAnalysis']
+};
+
 export let mockPosts: Post[] = [
+  originalPostForSharing1, // Add original posts first so they exist for sharing
+  originalPostForSharing2,
   {
     id: 'post1',
     author: mockUser1Data,
@@ -184,7 +221,77 @@ export let mockPosts: Post[] = [
     mediaType: 'gif',
     tags: ['#Hockey']
   },
+  // --- SHARED POSTS ---
+  {
+    id: 'share-post-1',
+    author: mockUser2Data, // User2 is sharing originalPostForSharing1
+    content: 'Absolutely crucial advice from @FantasyFanatic! Everyone should read this.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(), // Recent share
+    detailedReactions: [{ userId: mockAdminUserData.id, reactionType: 'like', createdAt: new Date().toISOString() }],
+    shares: 0, // This is a share, its own share count is 0 initially
+    repliesCount: 0,
+    comments: [],
+    sharedOriginalPostId: originalPostForSharing1.id,
+    // sharedOriginalPost: originalPostForSharing1, // Simulate pre-loaded shared post
+  },
+  {
+    id: 'share-post-2',
+    author: mockAdminUserData, // Admin is sharing originalPostForSharing2
+    content: 'Top-notch MLB insights from @AnalystPro as always. Highly recommend their work!',
+    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // More recent share
+    detailedReactions: [{ userId: mockUser1Data.id, reactionType: 'love', createdAt: new Date().toISOString() }],
+    shares: 0,
+    repliesCount: 0,
+    comments: [],
+    sharedOriginalPostId: originalPostForSharing2.id,
+    sharedOriginalPost: originalPostForSharing2, // Simulate pre-loaded shared post data for this one
+  },
+  {
+    id: 'share-post-3-no-preload',
+    author: mockUser1Data, // User1 sharing originalPostForSharing2 (again, but without preload to test fetching)
+    content: 'Checking out this great MLB analysis by @AnalystPro!',
+    createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+    detailedReactions: [],
+    shares: 0,
+    repliesCount: 0,
+    comments: [],
+    sharedOriginalPostId: originalPostForSharing2.id,
+    // sharedOriginalPost is deliberately undefined here to test fetching
+  },
+  // Add more posts to make the feed longer
+  {
+    id: 'post-extra-1',
+    author: mockUser1Data,
+    content: 'Thinking about starting a new fantasy league. What platform do you all prefer and why? #FantasySports #LeagueCommish',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString(),
+    detailedReactions: [], shares: 0, repliesCount: 0, comments: [],
+  },
+  {
+    id: 'post-extra-2',
+    author: mockUser2Data,
+    content: 'The trade deadline is approaching in my main league. Any bold predictions? #FantasyTrade #DeadlineDay',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+    detailedReactions: [], shares: 0, repliesCount: 0, comments: [], mediaUrl: 'https://placehold.co/600x350.png', mediaType: 'image'
+  },
+  {
+    id: 'post-extra-3',
+    author: mockIdentityFanaticBrandData,
+    content: 'Just posted as FanaticInsights: My weekly NFL player rankings are up! Who is too high, who is too low? Let me know! #NFLRankings #FantasyFootball',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 15).toISOString(),
+    detailedReactions: [], shares: 3, repliesCount: 0, comments: [],
+  },
+  {
+    id: 'post-extra-4',
+    author: mockAdminUserData,
+    content: 'Welcome to all new StatHustle users! We are excited to have you. Explore the features and start hustling those stats!',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString(),
+    detailedReactions: [], shares: 1, repliesCount: 0, comments: [],
+  },
 ];
+
+// Ensure mockPosts are sorted by date for initial feed display (most recent first)
+mockPosts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
 
 export let mockBlogs: Blog[] = [
   {
@@ -247,7 +354,7 @@ export const mockPlayerConnorMcDavidData: Player = {
 
 
 export let mockPlayers: Player[] = [
-    mockPlayerLukaData, 
+    mockPlayerLukaData,
     mockPlayerShoheiData,
     mockPlayerPatrickMahomesData,
     mockPlayerConnorMcDavidData
@@ -276,6 +383,6 @@ export const sportInterestLevels: SportInterestLevel[] = ['very interested', 'so
 // Expose the original mockUser1 and mockUser2 for AuthContext default or other direct uses if needed.
 export const mockUser1 = mockUser1Data;
 export const mockUser2 = mockUser2Data;
-export const mockAdminUser = mockAdminUserData; 
+export const mockAdminUser = mockAdminUserData;
 export const mockIdentityAnalystPro = mockIdentityAnalystProData;
 export const mockIdentityFanaticBrand = mockIdentityFanaticBrandData;

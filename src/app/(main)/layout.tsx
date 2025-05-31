@@ -1,8 +1,6 @@
-
 "use client";
 import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
-// useRouter and useSession are not needed here if we default to admin logged in
 // import { useRouter } from 'next/navigation';
 // import { useSession } from 'next-auth/react';
 import Header from '@/components/layout/header';
@@ -19,25 +17,44 @@ import { useFeed } from '@/contexts/feed-context';
 
 
 function CreatePostModal() {
-  const { isCreatePostModalOpen, closeCreatePostModal, publishPost, isPublishingPost } = useFeed();
+  const { 
+    isCreatePostModalOpen, 
+    closeCreatePostModal, 
+    publishPost, 
+    isPublishingPost,
+    postToShare, // Get the post to share from context
+    // clearPostToShare (this will be handled by closeCreatePostModal or form success)
+  } = useFeed();
   const { user } = useAuth();
 
   if (!user) return null;
 
-  const handleModalPostCreated = (newPostData: {content: string; mediaUrl?: string; mediaType?: "image" | "gif"}) => {
+  const handleModalPostCreated = (newPostData: {content: string; mediaUrl?: string; mediaType?: "image" | "gif", sharedOriginalPostId?: string}) => {
     publishPost(newPostData);
+    // Modal closing and clearing postToShare is handled by publishPost success or closeCreatePostModal
+  };
+  
+  const handleModalClose = () => {
+    closeCreatePostModal(); // This will also clear postToShare via its implementation in FeedContext
   };
 
+
   return (
-    <Dialog open={isCreatePostModalOpen} onOpenChange={(isOpen) => !isOpen && closeCreatePostModal()}>
+    <Dialog open={isCreatePostModalOpen} onOpenChange={(isOpen) => !isOpen && handleModalClose()}>
       <DialogContent className="sm:max-w-[625px]">
         <DialogHeader>
-          <DialogTitle className="font-headline">Create a new post</DialogTitle>
+          <DialogTitle className="font-headline">{postToShare ? "Share Post" : "Create a new post"}</DialogTitle>
           <DialogDescription>
-            Share your thoughts, analysis, or attach your fantasy team.
+            {postToShare ? "Add your thoughts to this post or share it directly." : "Share your thoughts, analysis, or attach your fantasy team."}
           </DialogDescription>
         </DialogHeader>
-        <CreatePostForm onPostCreated={handleModalPostCreated} isSubmitting={isPublishingPost} isModal={true}/>
+        <CreatePostForm 
+            onPostCreated={handleModalPostCreated} 
+            isSubmitting={isPublishingPost} 
+            isModal={true}
+            postToShare={postToShare} // Pass postToShare to the form
+            onCancelShare={handleModalClose} // Allow form to trigger modal close/clear
+        />
       </DialogContent>
     </Dialog>
   );
@@ -75,7 +92,6 @@ export default function MainLayout({
   //   return null;
   // }
 
-  // Always render the main layout with the default admin user
   return (
     <FeedProvider>
       <SidebarProvider>

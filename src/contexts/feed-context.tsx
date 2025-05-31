@@ -12,29 +12,45 @@ interface FeedContextType {
   posts: Post[];
   isPostsLoading: boolean;
   postsError: Error | null;
+  
   isCreatePostModalOpen: boolean;
-  openCreatePostModal: () => void;
+  openCreatePostModal: (postToShare?: Post) => void; // Can optionally take a post to share
   closeCreatePostModal: () => void;
-  publishPost: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }) => void;
+  postToShare: Post | null; // State to hold the post being shared
+
+  publishPost: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif'; sharedOriginalPostId?: string }) => void;
   addCommentToFeedPost: (data: { postId: string; content: string; parentId?: string }) => void;
-  reactToPost: (data: { postId: string; reactionType: ReactionType | null }) => void; // Updated
-  reactToComment: (data: { postId: string; commentId: string; reactionType: ReactionType | null }) => void; // Updated
+  reactToPost: (data: { postId: string; reactionType: ReactionType | null }) => void;
+  reactToComment: (data: { postId: string; commentId: string; reactionType: ReactionType | null }) => void;
+  
+  fetchSinglePost: (postId: string) => Promise<Post | null>; // For fetching original shared post
+
   isPublishingPost: boolean;
   isCommenting: boolean;
-  isReactingToPost: boolean; // Updated
-  isReactingToComment: boolean; // Updated
+  isReactingToPost: boolean;
+  isReactingToComment: boolean;
 }
 
 const FeedContext = createContext<FeedContextType | undefined>(undefined);
 
 // API interaction functions
-const fetchPosts = async (): Promise<Post[]> => {
+const fetchPostsAPI = async (): Promise<Post[]> => {
   const response = await fetch('/api/posts');
   if (!response.ok) throw new Error('Failed to fetch posts');
-  return response.json();
+  const postsData: Post[] = await response.json();
+  // Attempt to populate sharedOriginalPost if not already present
+  return postsData.map(post => {
+    if (post.sharedOriginalPostId && !post.sharedOriginalPost) {
+      const original = postsData.find(p => p.id === post.sharedOriginalPostId);
+      if (original) {
+        return { ...post, sharedOriginalPost: original };
+      }
+    }
+    return post;
+  });
 };
 
-const createPost = async (newPostData: { content: string; authorId: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }): Promise<Post> => {
+const createPostAPI = async (newPostData: { content: string; authorId: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string }): Promise<Post> => {
   const response = await fetch('/api/posts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -47,7 +63,7 @@ const createPost = async (newPostData: { content: string; authorId: string; medi
   return response.json();
 };
 
-const addComment = async (commentData: { postId: string; content: string; authorId: string; parentId?: string }): Promise<CommentType> => {
+const addCommentAPI = async (commentData: { postId: string; content: string; authorId: string; parentId?: string }): Promise<CommentType> => {
   const { postId, ...payload } = commentData;
   const response = await fetch(`/api/posts/${postId}/comments`, {
     method: 'POST',
@@ -61,13 +77,12 @@ const addComment = async (commentData: { postId: string; content: string; author
   return response.json();
 };
 
-// Updated: reactToPostAPI
 const reactToPostAPI = async (data: { postId: string; reactionType: ReactionType | null; userId: string }): Promise<Post> => {
   const { postId, ...payload } = data;
   const response = await fetch(`/api/posts/${postId}/react`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload), // userId is part of payload now
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const errorData = await response.json();
@@ -76,17 +91,25 @@ const reactToPostAPI = async (data: { postId: string; reactionType: ReactionType
   return response.json();
 };
 
-// Updated: reactToCommentAPI
-const reactToCommentAPI = async (data: { postId: string; commentId: string; reactionType: ReactionType | null; userId: string }): Promise<Post> => { // API returns whole post
+const reactToCommentAPI = async (data: { postId: string; commentId: string; reactionType: ReactionType | null; userId: string }): Promise<Post> => {
   const { postId, commentId, ...payload } = data;
   const response = await fetch(`/api/posts/${postId}/comments/${commentId}/react`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload), // userId is part of payload now
+    body: JSON.stringify(payload),
   });
    if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.message || 'Failed to react to comment');
+  }
+  return response.json();
+};
+
+const fetchSinglePostAPI = async (postId: string): Promise<Post | null> => {
+  const response = await fetch(`/api/posts/${postId}`);
+  if (!response.ok) {
+    if (response.status === 404) return null;
+    throw new Error(`Failed to fetch post ${postId}`);
   }
   return response.json();
 };
@@ -97,25 +120,34 @@ interface FeedProviderProps {
 }
 
 export const FeedProvider = ({ children }: FeedProviderProps) => {
-  const { user } = useAuth(); // User is always mockAdminUser in current dev setup
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
+  const [postToShare, setPostToShare] = useState<Post | null>(null); // For sharing flow
 
   const { data: posts = [], isLoading: isPostsLoading, error: postsError } = useQuery<Post[], Error>({
     queryKey: ['posts'],
-    queryKeyHash: 'posts',
-    queryFn: fetchPosts,
-    staleTime: 1000 * 60 * 1, // 1 minute for faster updates during dev
+    queryFn: fetchPostsAPI,
+    staleTime: 1000 * 60 * 1, 
   });
 
-  const openCreatePostModal = useCallback(() => setIsCreatePostModalOpen(true), []);
-  const closeCreatePostModal = useCallback(() => setIsCreatePostModalOpen(false), []);
+  const openCreatePostModal = useCallback((postForSharing?: Post) => {
+    if (postForSharing) {
+      setPostToShare(postForSharing);
+    }
+    setIsCreatePostModalOpen(true);
+  }, []);
 
-  const publishPostMutation = useMutation<Post, Error, { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }>({
+  const closeCreatePostModal = useCallback(() => {
+    setIsCreatePostModalOpen(false);
+    setPostToShare(null); // Clear postToShare when modal closes
+  }, []);
+
+  const publishPostMutation = useMutation<Post, Error, { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string }>({
     mutationFn: (postData) => {
       if (!user) throw new Error("User not logged in");
-      return createPost({ ...postData, authorId: user.id });
+      return createPostAPI({ ...postData, authorId: user.id });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
@@ -130,10 +162,10 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
   const addCommentMutation = useMutation<CommentType, Error, { postId: string; content: string; parentId?: string }>({
     mutationFn: (commentData) => {
       if (!user) throw new Error("User not logged in");
-      return addComment({ ...commentData, authorId: user.id });
+      return addCommentAPI({ ...commentData, authorId: user.id });
     },
-    onSuccess: (newComment, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['posts'] }); // Could be more targeted
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
       toast({ title: "Success", description: "Comment posted!"});
     },
     onError: (error) => {
@@ -141,44 +173,66 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     }
   });
 
-  // Updated: reactToPostMutation
   const reactToPostMutation = useMutation<Post, Error, { postId: string; reactionType: ReactionType | null }>({
     mutationFn: (data) => {
       if (!user) throw new Error("User not logged in");
       return reactToPostAPI({ ...data, userId: user.id });
     },
     onSuccess: (updatedPost) => {
-      // Optimistically update the specific post in the query cache
       queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
         return oldData?.map(post => post.id === updatedPost.id ? updatedPost : post) || [];
       });
-      // Or just invalidate, which is simpler for now
-      // queryClient.invalidateQueries({ queryKey: ['posts'] });
-      // Toast can be added if desired, e.g., "Reaction updated!"
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message || "Failed to react to post.", variant: "destructive" });
     }
   });
 
-  // Updated: reactToCommentMutation
   const reactToCommentMutation = useMutation<Post, Error, { postId: string; commentId: string; reactionType: ReactionType | null }>({
     mutationFn: (data) => {
       if (!user) throw new Error("User not logged in");
       return reactToCommentAPI({ ...data, userId: user.id });
     },
     onSuccess: (updatedPostContainingComment) => {
-       // Optimistically update the specific post in the query cache
       queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
         return oldData?.map(post => post.id === updatedPostContainingComment.id ? updatedPostContainingComment : post) || [];
       });
-      // Or just invalidate
-      // queryClient.invalidateQueries({ queryKey: ['posts'] });
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message || "Failed to react to comment.", variant: "destructive" });
     }
   });
+
+  const fetchSinglePost = useCallback(async (postId: string): Promise<Post | null> => {
+    try {
+      // Check cache first
+      const cachedPosts = queryClient.getQueryData<Post[]>(['posts']);
+      const cachedPost = cachedPosts?.find(p => p.id === postId);
+      if (cachedPost) {
+        // If it's a share and original data is missing, try to find it in cache
+        if (cachedPost.sharedOriginalPostId && !cachedPost.sharedOriginalPost) {
+            const original = cachedPosts?.find(p => p.id === cachedPost.sharedOriginalPostId);
+            if (original) return {...cachedPost, sharedOriginalPost: original };
+        }
+        return cachedPost;
+      }
+      // Fetch from API if not in cache
+      const post = await fetchSinglePostAPI(postId);
+      if (post) {
+         // If the fetched post is a share, try to fetch its original post if not embedded
+        if (post.sharedOriginalPostId && !post.sharedOriginalPost) {
+            const original = await fetchSinglePostAPI(post.sharedOriginalPostId);
+            if (original) post.sharedOriginalPost = original;
+        }
+        // Optionally update cache here, though PostCard will manage its own state for display
+      }
+      return post;
+    } catch (error) {
+      console.error("Error fetching single post:", error);
+      toast({ title: "Error", description: `Could not fetch post details for ${postId}.`, variant: "destructive"});
+      return null;
+    }
+  }, [queryClient, toast]);
 
 
   return (
@@ -189,10 +243,12 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       isCreatePostModalOpen,
       openCreatePostModal,
       closeCreatePostModal,
+      postToShare, // Provide postToShare to consumers
       publishPost: publishPostMutation.mutate,
       addCommentToFeedPost: addCommentMutation.mutate,
       reactToPost: reactToPostMutation.mutate,
       reactToComment: reactToCommentMutation.mutate,
+      fetchSinglePost,
       isPublishingPost: publishPostMutation.isPending,
       isCommenting: addCommentMutation.isPending,
       isReactingToPost: reactToPostMutation.isPending,
