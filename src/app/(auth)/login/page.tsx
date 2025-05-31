@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -7,24 +8,22 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Keep for "Forgot Password" if used later
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast';
-import { mockUser1 } from '@/lib/mock-data'; // For mock login
+// Toast is now handled by AuthContext
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
+  password: z.string().min(1, { message: "Password is required." }), // Min 1 for presence, API handles length
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
-  const { toast } = useToast();
+  const { login, isAuthActionLoading } = useAuth();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -34,23 +33,12 @@ export default function LoginPage() {
     },
   });
 
-  const onSubmit = (data: LoginFormValues) => {
-    // In a real app, you'd call an API. Here, we mock login.
-    // For simplicity, any valid email/password logs in as mockUser1
-    if (data.email && data.password) {
-      login(mockUser1); // Using mockUser1 directly, can enhance to check credentials
-      toast({
-        title: "Login Successful",
-        description: `Welcome back, ${mockUser1.username}!`,
-      });
+  const onSubmit = async (data: LoginFormValues) => {
+    const loggedInUser = await login(data);
+    if (loggedInUser) {
       router.push('/');
-    } else {
-      toast({
-        title: "Login Failed",
-        description: "Invalid credentials provided.",
-        variant: "destructive",
-      });
     }
+    // Error toast is handled by AuthContext's useMutation
   };
 
   return (
@@ -82,9 +70,11 @@ export default function LoginPage() {
                 <FormItem className="grid gap-2">
                   <div className="flex items-center">
                     <FormLabel htmlFor="password">Password</FormLabel>
+                    {/* 
                     <Link href="#" className="ml-auto inline-block text-sm underline">
                       Forgot your password?
-                    </Link>
+                    </Link> 
+                    */}
                   </div>
                   <FormControl>
                     <Input id="password" type="password" {...field} />
@@ -95,8 +85,8 @@ export default function LoginPage() {
             />
           </CardContent>
           <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full">
-              Login
+            <Button type="submit" className="w-full" disabled={isAuthActionLoading}>
+              {isAuthActionLoading ? 'Logging in...' : 'Login'}
             </Button>
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{' '}
@@ -110,3 +100,5 @@ export default function LoginPage() {
     </Card>
   );
 }
+
+    

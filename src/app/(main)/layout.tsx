@@ -6,31 +6,26 @@ import Header from '@/components/layout/header';
 import SidebarNav from '@/components/layout/sidebar-nav';
 import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { LifeBuoy, PlusSquare } from 'lucide-react';
+import { LifeBuoy } from 'lucide-react';
 import LiveSupportChat from '@/components/live-support-chat';
 import { FeedProvider, useFeed } from '@/contexts/feed-context';
-import { mockPosts } from '@/lib/mock-data'; // For initial posts
 import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast';
-
 
 function CreatePostModal() {
-  const { isCreatePostModalOpen, closeCreatePostModal, publishPost } = useFeed();
+  const { isCreatePostModalOpen, closeCreatePostModal, publishPost, isPublishingPost } = useFeed();
   const { user } = useAuth();
-  const { toast } = useToast();
 
-  if (!user) return null; // Don't render modal if user not logged in (button won't show anyway)
+  if (!user) return null; 
 
   const handleModalPostCreated = (newPostData: {content: string; mediaUrl?: string; mediaType?: "image" | "gif"}) => {
-    publishPost(newPostData.content, newPostData.mediaUrl, newPostData.mediaType);
-    toast({ title: "Success", description: "Your post has been published from the modal!" });
-    closeCreatePostModal();
+    publishPost(newPostData); // publishPost from context now takes this object
+    // Toast is handled within the mutation's onSuccess in FeedContext
   };
 
   return (
-    <Dialog open={isCreatePostModalOpen} onOpenChange={closeCreatePostModal}>
+    <Dialog open={isCreatePostModalOpen} onOpenChange={(isOpen) => !isOpen && closeCreatePostModal()}>
       <DialogContent className="sm:max-w-[625px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Create a new post</DialogTitle>
@@ -38,12 +33,11 @@ function CreatePostModal() {
             Share your thoughts, analysis, or attach your fantasy team.
           </DialogDescription>
         </DialogHeader>
-        <CreatePostForm onPostCreated={handleModalPostCreated} />
+        <CreatePostForm onPostCreated={handleModalPostCreated} isSubmitting={isPublishingPost} />
       </DialogContent>
     </Dialog>
   );
 }
-
 
 export default function MainLayout({
   children,
@@ -54,7 +48,7 @@ export default function MainLayout({
   const toggleChat = () => setIsChatOpen(!isChatOpen);
 
   return (
-    <FeedProvider initialPosts={mockPosts}>
+    <FeedProvider> {/* FeedProvider now fetches its own initial data */}
       <SidebarProvider>
         <div className="flex min-h-screen flex-col">
           <Header toggleChat={toggleChat} />
@@ -88,3 +82,5 @@ export default function MainLayout({
     </FeedProvider>
   );
 }
+
+    

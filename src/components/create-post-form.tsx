@@ -12,8 +12,6 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Image as ImageIcon, Film, Users, Paperclip, Smile } from "lucide-react";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { useFeed } from '@/contexts/feed-context';
-
 
 const postSchema = z.object({
   content: z.string().min(1, "Post cannot be empty.").max(1000, "Post too long."),
@@ -22,18 +20,16 @@ const postSchema = z.object({
 type PostFormValues = z.infer<typeof postSchema>;
 
 interface CreatePostFormProps {
-  onPostCreated?: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }) => void; // Made optional for modal usage
-  isModal?: boolean; // To differentiate styling or behavior if needed
+  onPostCreated: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }) => void;
+  isSubmitting: boolean; // Prop to indicate if submission is in progress
+  isModal?: boolean;
 }
 
-export default function CreatePostForm({ onPostCreated, isModal = false }: CreatePostFormProps) {
+export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = false }: CreatePostFormProps) {
   const { user } = useAuth();
-  const { toast } = useToast();
-  const { publishPost, closeCreatePostModal } = useFeed(); // Get publishPost from context
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast(); // Keep for local UI feedback like adding mock media
   const [mediaUrl, setMediaUrl] = useState<string | undefined>(undefined);
   const [mediaType, setMediaType] = useState<'image' | 'gif' | undefined>(undefined);
-
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
@@ -42,14 +38,11 @@ export default function CreatePostForm({ onPostCreated, isModal = false }: Creat
     },
   });
 
-  const onSubmit = async (data: PostFormValues) => {
+  const onSubmit = (data: PostFormValues) => { // No async needed here, mutation handles it
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to post.", variant: "destructive" });
       return;
     }
-    setIsSubmitting(true);
-
-    await new Promise(resolve => setTimeout(resolve, 300)); // Simulate API call
 
     const postData = {
       content: data.content,
@@ -57,18 +50,14 @@ export default function CreatePostForm({ onPostCreated, isModal = false }: Creat
       mediaType: mediaType,
     };
 
-    if (onPostCreated) { // If prop is provided (typically for inline form)
-      onPostCreated(postData);
-    } else { // Otherwise, use context function (typically for modal)
-      publishPost(postData.content, postData.mediaUrl, postData.mediaType);
-      toast({ title: "Success", description: "Your post has been published!" });
-      if (isModal) closeCreatePostModal();
-    }
+    onPostCreated(postData); // Call the handler from FeedContext (via props)
     
-    form.reset();
-    setMediaUrl(undefined);
-    setMediaType(undefined);
-    setIsSubmitting(false);
+    // Reset form only if not submitting (i.e., success, handled by context)
+    if (!isSubmitting) {
+        form.reset();
+        setMediaUrl(undefined);
+        setMediaType(undefined);
+    }
   };
   
   const getInitials = (name: string = "") => {
@@ -91,7 +80,7 @@ export default function CreatePostForm({ onPostCreated, isModal = false }: Creat
     toast({ title: "GIF Added (Mock)", description: "A placeholder GIF has been attached."});
   };
 
-  if (!user && !isModal) { // Don't show login prompt if it's in a modal (parent controls visibility)
+  if (!user && !isModal) {
     return (
       <Card className="mb-6 p-4 text-center">
         <p className="text-muted-foreground">Please <a href="/login" className="underline text-primary">login</a> to create a post.</p>
@@ -99,7 +88,7 @@ export default function CreatePostForm({ onPostCreated, isModal = false }: Creat
     );
   }
   
-  if (!user && isModal) return null; // Don't render anything if in modal and no user
+  if (!user && isModal) return null;
 
   return (
     <Card className={`mb-6 shadow-lg ${isModal ? 'shadow-none border-0' : ''}`}>
@@ -113,7 +102,7 @@ export default function CreatePostForm({ onPostCreated, isModal = false }: Creat
             <Textarea
               {...form.register("content")}
               placeholder={`What's on your mind, ${user?.username}?`}
-              className="min-h-[80px] flex-1 resize-none border-0 shadow-none focus-visible:ring-0"
+              className="min-h-[80px] flex-1 resize-none shadow-none focus-visible:ring-0"
               maxLength={1000}
             />
           </div>
@@ -131,7 +120,7 @@ export default function CreatePostForm({ onPostCreated, isModal = false }: Creat
           )}
         </CardContent>
         <CardFooter className="flex justify-between items-center p-4 pt-0 border-t">
-          <div className="flex gap-2"> {/* Increased gap from gap-1 to gap-2 */}
+          <div className="flex gap-2">
             <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Add Image" onClick={handleAddImageMock} disabled={!!mediaUrl && mediaType !== 'image'}>
               <ImageIcon className="h-5 w-5" />
             </Button>
@@ -148,7 +137,7 @@ export default function CreatePostForm({ onPostCreated, isModal = false }: Creat
               <Smile className="h-5 w-5" />
             </Button>
           </div>
-          <Button type="submit" disabled={isSubmitting || !form.formState.isValid && form.formState.isSubmitted} className="font-headline">
+          <Button type="submit" disabled={isSubmitting || (!form.formState.isDirty && !mediaUrl) || !form.formState.isValid && form.formState.isSubmitted} className="font-headline">
             {isSubmitting ? "Posting..." : "Post"}
           </Button>
         </CardFooter>
@@ -156,3 +145,5 @@ export default function CreatePostForm({ onPostCreated, isModal = false }: Creat
     </Card>
   );
 }
+
+    

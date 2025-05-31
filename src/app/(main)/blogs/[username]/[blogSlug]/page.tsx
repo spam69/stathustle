@@ -7,13 +7,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Blog, Identity } from '@/types';
-import { mockBlogs } from '@/lib/mock-data';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, MessageSquare, Share2, Award } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
 
 const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
   const [sanitizedHtml, setSanitizedHtml] = useState('');
@@ -29,27 +29,25 @@ const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
   return <div className="prose prose-lg max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
 };
 
+const fetchBlog = async (username: string, blogSlug: string): Promise<Blog> => {
+  const response = await fetch(`/api/blogs/${username}/${blogSlug}`);
+  if (!response.ok) {
+    if (response.status === 404) throw new Error('Blog post not found');
+    throw new Error('Network response was not ok');
+  }
+  return response.json();
+};
 
 export default function BlogPostPage() {
   const params = useParams();
-  const usernameParam = params.username as string; // This is author's username
+  const usernameParam = params.username as string;
   const blogSlug = params.blogSlug as string;
 
-  const [blog, setBlog] = useState<Blog | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (usernameParam && blogSlug) {
-      setLoading(true);
-      setTimeout(() => {
-        const foundBlog = mockBlogs.find(
-          b => b.author.username.toLowerCase() === usernameParam.toLowerCase() && b.slug === blogSlug
-        );
-        setBlog(foundBlog || null);
-        setLoading(false);
-      }, 500);
-    }
-  }, [usernameParam, blogSlug]);
+  const { data: blog, isLoading, error } = useQuery<Blog, Error>({
+    queryKey: ['blog', usernameParam, blogSlug],
+    queryFn: () => fetchBlog(usernameParam, blogSlug),
+    enabled: !!usernameParam && !!blogSlug, // Only run query if params are available
+  });
   
   const getInitials = (name: string) => {
     return name
@@ -59,7 +57,7 @@ export default function BlogPostPage() {
       .toUpperCase();
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <article className="max-w-3xl mx-auto py-8 px-4">
         <Skeleton className="h-12 w-3/4 mb-4" />
@@ -79,12 +77,12 @@ export default function BlogPostPage() {
     );
   }
 
-  if (!blog) {
+  if (error || !blog) {
     return (
       <div className="max-w-3xl mx-auto text-center py-10">
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
         <h1 className="text-2xl font-bold font-headline">Blog Post Not Found</h1>
-        <p className="text-muted-foreground">This blog post could not be found.</p>
+        <p className="text-muted-foreground">{error ? error.message : "This blog post could not be found."}</p>
          <Button asChild className="mt-4">
           <Link href="/blogs">Back to Blogs</Link>
         </Button>
@@ -150,3 +148,5 @@ export default function BlogPostPage() {
     </article>
   );
 }
+
+    

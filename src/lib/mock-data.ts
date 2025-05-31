@@ -1,8 +1,8 @@
 
-
 import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment, Identity } from '@/types';
 
-export const mockUser1: User = {
+// Make mock data mutable for API route simulation
+let mockUser1Data: User = {
   id: 'user1',
   username: 'FantasyFanatic',
   email: 'fanatic@stathustle.com',
@@ -21,9 +21,9 @@ export const mockUser1: User = {
   isIdentity: false,
 };
 
-export const mockUser2: User = {
+let mockUser2Data: User = {
   id: 'user2',
-  username: 'AnalystProUser', // Changed to avoid conflict with Identity username
+  username: 'AnalystProUser',
   email: 'pro@stathustle.com',
   profilePictureUrl: 'https://placehold.co/200x200.png',
   bannerImageUrl: 'https://placehold.co/1200x300.png',
@@ -36,94 +36,91 @@ export const mockUser2: User = {
   isIdentity: false,
 };
 
-export const mockUsers: User[] = [mockUser1, mockUser2];
+export let mockUsers: User[] = [mockUser1Data, mockUser2Data];
 
-export const mockIdentityAnalystPro: Identity = {
+export let mockIdentityAnalystProData: Identity = {
   id: 'identity1',
-  username: 'AnalystPro', // The @username for the Identity
+  username: 'AnalystPro',
   displayName: 'Pro Analysis Hub',
   email: 'contact@proanalysis.com',
   profilePictureUrl: 'https://placehold.co/200x200.png?text=ProIdentity',
   bannerImageUrl: 'https://placehold.co/1200x300.png?text=ProBanner',
   socialLinks: [{ platform: 'Website', url: 'https://proanalysis.com'}],
   bio: 'The official hub for AnalystPro\'s insights and articles. Follow for top-tier fantasy advice.',
-  owner: mockUser2, // mockUser2 is the owner
+  owner: mockUser2Data,
   teamMembers: [
-    { user: mockUser1, permissions: ['can_post_blogs'] } // Example team member
+    { user: mockUser1Data, permissions: ['can_post_blogs'] }
   ],
   isIdentity: true,
   themePreference: 'dark',
 };
 
-export const mockIdentityFanaticBrand: Identity = {
+export let mockIdentityFanaticBrandData: Identity = {
   id: 'identity2',
-  username: 'FanaticInsights', // The @username for the Identity
+  username: 'FanaticInsights',
   displayName: 'FantasyFanatic Insights',
   profilePictureUrl: 'https://placehold.co/200x200.png?text=FFI',
   bannerImageUrl: 'https://placehold.co/1200x300.png?text=FFIBanner',
   bio: 'Deep dives and hot takes from FantasyFanatic.',
-  owner: mockUser1,
+  owner: mockUser1Data,
   isIdentity: true,
   themePreference: 'light',
 };
 
-
-export const mockIdentities: Identity[] = [mockIdentityAnalystPro, mockIdentityFanaticBrand];
+export let mockIdentities: Identity[] = [mockIdentityAnalystProData, mockIdentityFanaticBrandData];
 
 
 const mockComment1_post1: Comment = {
   id: 'comment1-post1',
-  author: mockUser2,
+  author: mockUser2Data,
   content: 'Great point about sleeper picks! I am keeping an eye on Player Z.',
-  createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
+  createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
   likes: 5,
 };
 
 const mockReply1_to_comment1_post1: Comment = {
   id: 'reply1-to-comment1-post1',
-  author: mockUser1,
+  author: mockUser1Data,
   content: 'Thanks! Player Z is a good call, solid potential.',
-  createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 mins ago
+  createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
   parentId: 'comment1-post1',
   likes: 2,
 };
 
 const mockReply2_to_comment1_post1: Comment = {
   id: 'reply2-to-comment1-post1',
-  author: mockUser2,
+  author: mockUser2Data,
   content: 'Definitely! Watched some film on him, looks promising.',
-  createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(), // 10 mins ago
+  createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
   parentId: 'comment1-post1',
   likes: 1,
 };
 
 const mockComment2_post1: Comment = {
   id: 'comment2-post1',
-  author: mockUser1,
+  author: mockUser1Data,
   content: 'Any thoughts on Player X? Seems a bit overrated to me this year.',
-  createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(), // 25 mins ago
+  createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
   likes: 3,
 };
 
-
 const mockComment1_post3: Comment = {
   id: 'comment1-post3',
-  author: mockUser2,
+  author: mockUser2Data,
   content: 'That game was epic! Still buzzing from it.',
-  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString(), // 23 hours ago
+  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString(),
   likes: 10,
 };
 
-
-export const mockPosts: Post[] = [
+export let mockPosts: Post[] = [
   {
     id: 'post1',
-    author: mockUser1, // User post
+    author: mockUser1Data,
     content: 'Just drafted my fantasy basketball team! Feeling good about this season. 🏀 Who do you think is a sleeper pick this year? #FantasyBasketball #NBA',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
     reactions: 15,
     shares: 3,
-    repliesCount: 4, 
+    repliesCount: 4,
     comments: [mockComment1_post1, mockReply1_to_comment1_post1, mockReply2_to_comment1_post1, mockComment2_post1],
     mediaUrl: 'https://placehold.co/600x400.png',
     mediaType: 'image',
@@ -131,9 +128,9 @@ export const mockPosts: Post[] = [
   },
   {
     id: 'post2',
-    author: mockIdentityAnalystPro, // Identity post
+    author: mockIdentityAnalystProData,
     content: "<b>Deep Dive Analysis (posted as @AnalystPro)</b>: Top 5 NFL quarterbacks to watch for MVP contention. My projections are looking interesting! 🏈 <i>Full blog post coming soon!</i>",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
     reactions: 42,
     shares: 10,
     repliesCount: 0,
@@ -143,43 +140,43 @@ export const mockPosts: Post[] = [
   },
   {
     id: 'post3',
-    author: mockUser1,
+    author: mockUser1Data,
     content: "Anyone else catch that amazing hockey game last night? The overtime goal was insane! 🏒🥅 #NHL #HockeyHighlights",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     reactions: 22,
     shares: 1,
-    repliesCount: 1, 
+    repliesCount: 1,
     comments: [mockComment1_post3],
-    mediaUrl: 'https://placehold.co/400x225.png', 
+    mediaUrl: 'https://placehold.co/400x225.png',
     mediaType: 'gif',
     tags: ['#Hockey']
   },
 ];
 
-export const mockBlogs: Blog[] = [
+export let mockBlogs: Blog[] = [
   {
     id: 'blog1',
-    author: mockIdentityAnalystPro, // Blog by Identity
+    author: mockIdentityAnalystProData,
     title: 'The Undervalued Stars of MLB: A Statistical Breakdown (by @AnalystPro)',
     slug: 'undervalued-mlb-stars',
     excerpt: 'Discover which MLB players are outperforming their fantasy value based on advanced metrics. My analysis points to some key pickups...',
     content: '<p>Full blog content here... discussing advanced stats like wOBA, FIP, and xBA for several players. Includes charts and tables.</p><img src="https://placehold.co/800x400.png" alt="MLB Stats Chart" data-ai-hint="baseball statistics" /> <p>More analysis follows...</p>',
     coverImageUrl: 'https://placehold.co/800x450.png',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
   },
   {
     id: 'blog2',
-    author: mockUser1, // Blog by User (can be changed to Identity if needed)
+    author: mockUser1Data,
     title: 'My Top 10 Fantasy Basketball Draft Picks for 2024',
     slug: 'top-10-fantasy-basketball-2024',
     excerpt: 'Get ready for your fantasy basketball draft! Here are my top 10 must-have players for the upcoming season, complete with rationale...',
     content: '<p>Detailed analysis of 10 basketball players, their strengths, weaknesses, and fantasy outlook. </p> <p>Inline images can be added here for each player.</p>',
     coverImageUrl: 'https://placehold.co/800x450.png',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), // 3 days ago
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
   },
 ];
 
-export const mockPlayerLuka: Player = {
+export const mockPlayerLukaData: Player = {
   id: 'player1',
   name: 'Luka Doncic',
   sport: 'Basketball',
@@ -188,7 +185,7 @@ export const mockPlayerLuka: Player = {
   position: 'Guard',
 };
 
-export const mockPlayerShohei: Player = {
+export const mockPlayerShoheiData: Player = {
   id: 'player2',
   name: 'Shohei Ohtani',
   sport: 'Baseball',
@@ -197,24 +194,32 @@ export const mockPlayerShohei: Player = {
   position: 'Pitcher/Designated Hitter',
 };
 
-export const mockPlayers: Player[] = [mockPlayerLuka, mockPlayerShohei];
+export let mockPlayers: Player[] = [mockPlayerLukaData, mockPlayerShoheiData];
 
-export const mockPlayerChatMessages: PlayerChatMessage[] = [
+export let mockPlayerChatMessages: PlayerChatMessage[] = [
   {
     id: 'chatmsg1',
-    player: mockPlayerLuka,
-    author: mockUser1,
+    player: mockPlayerLukaData,
+    author: mockUser1Data,
     message: 'Luka is a fantasy beast! Triple-double machine.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 minutes ago
+    createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
   },
   {
     id: 'chatmsg2',
-    player: mockPlayerLuka,
-    author: mockIdentityAnalystPro, // Chat message by Identity
+    player: mockPlayerLukaData,
+    author: mockIdentityAnalystProData,
     message: 'His usage rate is off the charts. Consistently a top performer.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(), // 2 minutes ago
+    createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
   },
 ];
 
 export const availableSports: string[] = ['Basketball', 'Football', 'Baseball', 'Hockey', 'Soccer', 'Tennis', 'Golf'];
 export const sportInterestLevels: SportInterestLevel[] = ['very interested', 'somewhat interested', 'no interest'];
+
+// Expose the original mockUser1 and mockUser2 for AuthContext default or other direct uses if needed.
+export const mockUser1 = mockUser1Data;
+export const mockUser2 = mockUser2Data;
+export const mockIdentityAnalystPro = mockIdentityAnalystProData;
+export const mockIdentityFanaticBrand = mockIdentityFanaticBrandData;
+
+    

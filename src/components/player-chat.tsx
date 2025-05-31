@@ -1,22 +1,44 @@
 
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Player, PlayerChatMessage, User, Identity } from '@/types';
 import { useAuth } from '@/contexts/auth-context';
-import { mockPlayerChatMessages } from '@/lib/mock-data'; 
 import { formatDistanceToNow } from 'date-fns';
 import { Send, Award } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from './ui/badge';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Skeleton } from './ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 interface PlayerChatProps {
   player: Player;
 }
+
+const fetchChatMessages = async (sport: string, playerNameSlug: string): Promise<PlayerChatMessage[]> => {
+  const response = await fetch(`/api/players/${sport}/${playerNameSlug.replace(/\s+/g, '_')}/chat`);
+  if (!response.ok) throw new Error("Failed to fetch chat messages");
+  return response.json();
+};
+
+const postChatMessage = async (data: { sport: string, playerNameSlug: string, message: string, authorId: string }): Promise<PlayerChatMessage> => {
+  const { sport, playerNameSlug, ...payload } = data;
+  const response = await fetch(`/api/players/${sport}/${playerNameSlug.replace(/\s+/g, '_')}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to post message");
+  }
+  return response.json();
+};
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
   const username = author.username;
@@ -27,41 +49,43 @@ const getAuthorDisplayInfo = (author: User | Identity) => {
 };
 
 export default function PlayerChat({ player }: PlayerChatProps) {
-  const { user } = useAuth(); // user can be User or Identity
-  const [messages, setMessages] = useState<PlayerChatMessage[]>([]);
-  const [newMessage, setNewMessage] = useState('');
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [newMessage, setNewMessage] = useState('');
 
-  useEffect(() => {
-    const playerMessages = mockPlayerChatMessages.filter(msg => msg.player.id === player.id);
-    setMessages(playerMessages);
+  const playerNameSlug = player.name.toLowerCase().replace(/\s+/g, '_');
+  const queryKey = ['playerChat', player.sport, playerNameSlug];
 
-    const intervalId = setInterval(() => {
-      // console.log(`Polling for new messages for ${player.name}...`);
-    }, 15000); 
+  const { data: messages = [], isLoading, error } = useQuery<PlayerChatMessage[], Error>({
+    queryKey: queryKey,
+    queryFn: () => fetchChatMessages(player.sport, playerNameSlug),
+    refetchInterval: 15000, // Poll for new messages every 15 seconds
+  });
 
-    return () => clearInterval(intervalId);
-  }, [player.id]);
+  const mutation = useMutation<PlayerChatMessage, Error, { message: string }>({
+    mutationFn: ({ message }) => {
+      if (!user) throw new Error("User not logged in");
+      return postChatMessage({ sport: player.sport, playerNameSlug, message, authorId: user.id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      setNewMessage('');
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message || "Could not send message.", variant: "destructive"});
+    }
+  });
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !user) return;
-
-    const chatMessage: PlayerChatMessage = {
-      id: `chat-${Date.now()}`,
-      player: player,
-      author: user, // Author is the currently logged-in user/identity
-      message: newMessage.trim(),
-      createdAt: new Date().toISOString(),
-    };
-
-    setMessages(prevMessages => [...prevMessages, chatMessage]);
-    setNewMessage('');
+    mutation.mutate({ message: newMessage.trim() });
   };
   
   const getInitials = (name: string = "") => {
@@ -81,9 +105,15 @@ export default function PlayerChat({ player }: PlayerChatProps) {
       </CardHeader>
       <CardContent className="p-0">
         <div className="h-80 overflow-y-auto p-4 space-y-4 bg-muted/30">
-          {messages.map(msg => {
+          {isLoading && (
+            <>
+              {[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full rounded-md" />)}
+            </>
+          )}
+          {error && <p className="text-destructive text-center">Error loading messages: {error.message}</p>}
+          {!isLoading && !error && messages.map(msg => {
             const authorInfo = getAuthorDisplayInfo(msg.author);
-            const isCurrentUserMsg = currentUserInfo && msg.author.id === currentUserInfo.username; // Comparing by username as ID might differ for mock
+            const isCurrentUserMsg = currentUserInfo && msg.author.id === user?.id;
             
             return (
               <div key={msg.id} className={`flex items-start gap-3 ${isCurrentUserMsg ? 'justify-end' : ''}`}>
@@ -131,8 +161,9 @@ export default function PlayerChat({ player }: PlayerChatProps) {
               onChange={(e) => setNewMessage(e.target.value)}
               maxLength={300}
               className="flex-1"
+              disabled={mutation.isPending}
             />
-            <Button type="submit" size="icon" disabled={!newMessage.trim()}>
+            <Button type="submit" size="icon" disabled={!newMessage.trim() || mutation.isPending}>
               <Send className="h-4 w-4" />
               <span className="sr-only">Send</span>
             </Button>
@@ -146,3 +177,5 @@ export default function PlayerChat({ player }: PlayerChatProps) {
     </Card>
   );
 }
+
+    

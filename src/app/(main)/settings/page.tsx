@@ -3,31 +3,30 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast';
-import type { SportInterest, SportInterestLevel, User, Identity } from '@/types';
+import type { SportInterest, User } from '@/types';
 import { availableSports, sportInterestLevels, mockIdentities } from '@/lib/mock-data';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Newspaper, Users, PlusCircle } from 'lucide-react';
-
+// Toast is handled by AuthContext for updateUserSettings
 
 const settingsSchema = z.object({
-  username: z.string().min(3, { message: "Username must be at least 3 characters." }),
-  email: z.string().email({ message: "Invalid email address." }),
-  bio: z.string().max(300, "Bio cannot exceed 300 characters.").optional(),
-  profilePictureUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
-  bannerImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')),
+  // Username and email are not typically updatable via a simple settings form
+  // username: z.string().min(3, { message: "Username must be at least 3 characters." }),
+  // email: z.string().email({ message: "Invalid email address." }),
+  bio: z.string().max(300, "Bio cannot exceed 300 characters.").optional().nullable(),
+  profilePictureUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')).nullable(),
+  bannerImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')).nullable(),
   sportInterests: z.array(z.object({
     sport: z.string(),
     level: z.enum(['very interested', 'somewhat interested', 'no interest']),
@@ -35,19 +34,16 @@ const settingsSchema = z.object({
   themePreference: z.enum(['light', 'dark', 'system']),
 });
 
-type SettingsFormValues = z.infer<typeof settingsSchema>;
+type SettingsFormValues = Omit<z.infer<typeof settingsSchema>, 'username' | 'email'>; // Omit non-updatable fields for form
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, updateUserInterests, updateThemePreference, loading: authLoading } = useAuth();
-  const { toast } = useToast();
+  const { user, updateUserSettings, loading: authLoading, isAuthActionLoading } = useAuth();
   const { theme, setTheme } = useTheme();
 
-  const form = useForm<SettingsFormValues>({
-    resolver: zodResolver(settingsSchema),
+  const form = useForm<SettingsFormValues>({ // Use the omitted type for form values
+    resolver: zodResolver(settingsSchema.omit({ username: true, email: true })), // Omit for resolver too
     defaultValues: {
-      username: user?.username || "",
-      email: user?.email || "",
       bio: user?.bio || "",
       profilePictureUrl: user?.profilePictureUrl || "",
       bannerImageUrl: user?.bannerImageUrl || "",
@@ -62,8 +58,6 @@ export default function SettingsPage() {
     }
     if (user) {
       form.reset({
-        username: user.username,
-        email: user.email,
         bio: user.bio || "",
         profilePictureUrl: user.profilePictureUrl || "",
         bannerImageUrl: user.bannerImageUrl || "",
@@ -76,19 +70,22 @@ export default function SettingsPage() {
   }, [user, authLoading, router, form, theme]);
 
 
-  const onSubmit = (data: SettingsFormValues) => {
+  const onSubmit = async (data: SettingsFormValues) => {
     if (!user) return;
 
-    const updatedInterests = data.sportInterests?.filter(interest => interest.level !== 'no interest') as SportInterest[];
-    updateUserInterests(updatedInterests);
+    const settingsToUpdate: Partial<User> = {
+      sportInterests: data.sportInterests?.filter(interest => interest.level !== 'no interest') as SportInterest[],
+      themePreference: data.themePreference as User['themePreference'],
+      bio: data.bio,
+      profilePictureUrl: data.profilePictureUrl,
+      bannerImageUrl: data.bannerImageUrl,
+    };
     
-    setTheme(data.themePreference);
-    updateThemePreference(data.themePreference as 'light' | 'dark');
-
-    toast({
-      title: "Settings Updated",
-      description: "Your profile information has been saved.",
-    });
+    const updatedUser = await updateUserSettings(settingsToUpdate);
+    if (updatedUser && updatedUser.themePreference) {
+      setTheme(updatedUser.themePreference as 'light' | 'dark' | 'system');
+    }
+    // Toast for success/error is handled by AuthContext's useMutation
   };
 
   const userOwnedIdentity = user ? mockIdentities.find(identity => identity.owner.id === user.id) : null;
@@ -105,38 +102,16 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="font-headline">Profile Information</CardTitle>
-              <CardDescription>Update your personal details.</CardDescription>
+              <CardDescription>Update your personal details. Username: @{user.username}, Email: {user.email}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Username</FormLabel>
-                    <FormControl><Input placeholder="Your username" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl><Input type="email" placeholder="your.email@example.com" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               <FormField
                 control={form.control}
                 name="bio"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Bio</FormLabel>
-                    <FormControl><Textarea placeholder="Tell us a bit about yourself" {...field} /></FormControl>
+                    <FormControl><Textarea placeholder="Tell us a bit about yourself" {...field} value={field.value ?? ""} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -147,7 +122,7 @@ export default function SettingsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Profile Picture URL</FormLabel>
-                    <FormControl><Input placeholder="https://example.com/avatar.png" {...field} /></FormControl>
+                    <FormControl><Input placeholder="https://example.com/avatar.png" {...field} value={field.value ?? ""} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -158,7 +133,7 @@ export default function SettingsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Banner Image URL</FormLabel>
-                    <FormControl><Input placeholder="https://example.com/banner.png" {...field} /></FormControl>
+                    <FormControl><Input placeholder="https://example.com/banner.png" {...field} value={field.value ?? ""} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -234,7 +209,9 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Button type="submit" className="w-full md:w-auto">Save Changes</Button>
+          <Button type="submit" className="w-full md:w-auto" disabled={isAuthActionLoading}>
+            {isAuthActionLoading ? 'Saving...' : 'Save Changes'}
+          </Button>
         </form>
       </Form>
 
@@ -257,7 +234,7 @@ export default function SettingsPage() {
                   </Link>
                 </Button>
                 <Button asChild>
-                  <Link href={`/blogs/create?identityId=${userOwnedIdentity.id}`}> {/* Pass identityId for context */}
+                  <Link href={`/blogs/create?identityId=${userOwnedIdentity.id}`}>
                     <Newspaper className="mr-2 h-4 w-4" /> Create Blog Post
                   </Link>
                 </Button>
@@ -281,3 +258,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    

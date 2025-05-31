@@ -1,21 +1,20 @@
+
 "use client";
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
-import { useToast } from '@/hooks/use-toast';
 import type { SportInterest, SportInterestLevel } from '@/types';
 import { availableSports, sportInterestLevels } from '@/lib/mock-data';
-import { Checkbox } from '@/components/ui/checkbox';
+// Toast is now handled by AuthContext
 
 const signupSchema = z.object({
   username: z.string().min(3, { message: "Username must be at least 3 characters." }),
@@ -31,8 +30,7 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signup } = useAuth();
-  const { toast } = useToast();
+  const { signup, isAuthActionLoading } = useAuth();
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -44,22 +42,20 @@ export default function SignupPage() {
     },
   });
 
-  const onSubmit = (data: SignupFormValues) => {
+  const onSubmit = async (data: SignupFormValues) => {
     const interests = data.sportInterests?.filter(interest => interest.level !== 'no interest') as SportInterest[];
     
-    signup({
+    const signedUpUser = await signup({
       username: data.username,
       email: data.email,
-      // In a real app, password would be hashed on the backend
-      // For mock, we don't store/use it directly.
+      password: data.password, // Password sent to API
       sportInterests: interests,
     });
 
-    toast({
-      title: "Signup Successful",
-      description: "Welcome to StatHustle! Your account has been created.",
-    });
-    router.push('/');
+    if (signedUpUser) {
+      router.push('/');
+    }
+    // Error toast is handled by AuthContext's useMutation
   };
 
   return (
@@ -112,7 +108,7 @@ export default function SignupPage() {
             />
             
             <div className="space-y-2">
-              <Label className="font-headline">Sport Interests</Label>
+              <FormLabel className="font-headline">Sport Interests</FormLabel>
               <p className="text-sm text-muted-foreground">Select your level of interest for each sport.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-60 overflow-y-auto p-1">
                 {availableSports.map((sport, index) => (
@@ -148,8 +144,8 @@ export default function SignupPage() {
 
           </CardContent>
           <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full">
-              Sign Up
+            <Button type="submit" className="w-full" disabled={isAuthActionLoading}>
+              {isAuthActionLoading ? 'Signing up...' : 'Sign Up'}
             </Button>
             <div className="mt-4 text-center text-sm">
               Already have an account?{' '}
@@ -163,3 +159,5 @@ export default function SignupPage() {
     </Card>
   );
 }
+
+    
