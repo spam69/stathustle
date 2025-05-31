@@ -56,23 +56,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loading = status === 'loading';
   
-  // Map NextAuth session user to our AppUser type
-  // Ensure all necessary fields from your AppUser are present in the NextAuth User/Session types (via next-auth.d.ts)
   const appUserFromSession = session?.user ? {
     id: session.user.id,
     username: session.user.username,
-    email: session.user.email ?? '', // Provide default if potentially null
-    // Map other fields if they exist on session.user and are needed for AppUser
+    email: session.user.email ?? '', 
     profilePictureUrl: session.user.image ?? undefined, 
-    // bannerImageUrl, socialLinks, sportInterests, themePreference, bio typically not on NextAuth's default session.user
-    // These would need to be fetched separately or added via JWT/session callbacks if critical for AuthContext.user
-    // For now, we'll assume they are fetched on profile pages etc.
   } as (AppUser & { id: string; username: string }) : null;
 
 
   const login = async (credentials: {emailOrUsername: string; password: string}) => {
     const result = await signIn('credentials', {
-      redirect: false, // Handle redirect manually or based on result
+      redirect: false, 
       emailOrUsername: credentials.emailOrUsername,
       password: credentials.password,
     });
@@ -83,25 +77,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     if (result?.ok) {
       toast({ title: "Login Successful", description: `Welcome back!`});
-      // queryClient.invalidateQueries({ queryKey: ['posts'] }); // Invalidate queries that depend on auth state
+      queryClient.invalidateQueries({ queryKey: ['posts'] }); 
       return true;
     }
     return false;
   };
 
   const logout = () => {
-    signOut({ callbackUrl: '/login' }); // Redirect to login after signout
+    signOut({ callbackUrl: '/login' }); 
     toast({ title: "Logged Out", description: "You have been successfully logged out."});
     queryClient.clear();
   };
 
-  // Signup mutation remains, as it calls our custom API
   const signupMutation = useMutation<AppUser, Error, Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }>({
     mutationFn: signupUser,
-    onSuccess: (data) => {
-      toast({ title: "Signup Successful", description: "Please log in with your new account." });
-      // Optionally, automatically sign in the user here, or redirect to login
-    },
+    // onSuccess toast is now handled by the main signup function for a combined flow message
     onError: (error) => {
       toast({ title: "Signup Failed", description: error.message, variant: "destructive" });
     },
@@ -109,14 +99,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signup = async (signupData: Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }) => {
     try {
-     const signedUpUser = await signupMutation.mutateAsync(signupData);
-     return signedUpUser;
-   } catch (error) {
-     return null;
-   }
- };
+      const signedUpUser = await signupMutation.mutateAsync(signupData);
+
+      if (signedUpUser) {
+        toast({
+          title: "Account Created!",
+          description: "Logging you in automatically...",
+        });
+        
+        // Attempt to log in with the new credentials
+        // The login function handles its own success/failure toasts.
+        await login({ 
+          emailOrUsername: signedUpUser.email, 
+          password: signupData.password,  // Password from the original signup form
+        });
+
+        // Return the user object if API signup was successful.
+        // The SignupPage will redirect based on this.
+        return signedUpUser; 
+      }
+      return null; // Should not be reached if mutateAsync succeeds and returns a user
+    } catch (error) {
+      // Errors from signupUser API call are handled by signupMutation.onError.
+      // This catch is for other potential errors during the process.
+      return null;
+    }
+  };
   
-  // Update settings mutation remains
   const updateSettingsMutation = useMutation<AppUser, Error, Partial<AppUser>>({
     mutationFn: (settings) => {
       if (!appUserFromSession) throw new Error("User not logged in");
@@ -125,8 +134,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: (data) => {
       toast({ title: "Settings Updated", description: "Your profile information has been saved." });
       queryClient.invalidateQueries({ queryKey: ['profile', data.username] });
-      // If themePreference changes, next-themes should pick it up if it's stored in session and used by ThemeSwitcher
-      // For now, AuthContext doesn't directly manage themePreference from session for theme switching
     },
     onError: (error) => {
       toast({ title: "Update Failed", description: error.message, variant: "destructive" });
@@ -146,8 +153,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [appUserFromSession, updateSettingsMutation, toast, queryClient]);
 
-
-  // isAuthActionLoading now primarily for signup and update settings. Login loading is part of NextAuth's status.
   const isAuthActionLoading = signupMutation.isPending || updateSettingsMutation.isPending;
 
   return (
