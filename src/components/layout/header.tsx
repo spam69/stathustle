@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -15,11 +16,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
-import { useSidebar } from '@/components/ui/sidebar'; // Assuming useSidebar is available
+import { useSidebar } from '@/components/ui/sidebar'; 
 
 export default function Header() {
   const { user, logout, loading } = useAuth();
-  const { toggleSidebar, isMobile } = useSidebar(); // Get toggleSidebar and isMobile from context
+  const { toggleSidebar, isMobile } = useSidebar(); 
 
   const getInitials = (name: string) => {
     return name
