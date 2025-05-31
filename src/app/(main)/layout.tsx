@@ -22,16 +22,16 @@ export default function MainLayout({
       <SidebarProvider>
         <div className="flex min-h-screen flex-col">
           <Header toggleChat={toggleChat} />
-          {/* Removed pt-16 from this div, and fixed positioning from Sidebar component */}
-          <div className="flex flex-1"> 
-            <Sidebar collapsible="icon"> {/* Removed className for fixed positioning */}
+          {/* Add pt-16 here to account for the sticky header's height (h-16) */}
+          <div className="flex flex-1 pt-16"> 
+            <Sidebar collapsible="icon">
               <SidebarContent>
                 <SidebarNav />
               </SidebarContent>
             </Sidebar>
             <SidebarInset>
-              {/* Removed explicit height and overflow from main element */}
-              <main className="flex-1 p-4 md:p-6 lg:p-8">
+              {/* The main content area. It will fill the remaining space. */}
+              <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto h-[calc(100vh_-_4rem)]">
                 {children}
               </main>
             </SidebarInset>
