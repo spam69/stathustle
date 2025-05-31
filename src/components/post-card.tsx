@@ -6,21 +6,21 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Repeat, Heart, Upload, MoreHorizontal, Award } from "lucide-react"; // Added Award
-import type { Post, Comment as CommentType, User, Identity } from "@/types";
+import { MessageCircle, Repeat, Upload, MoreHorizontal, Award } from "lucide-react";
+import type { Post, User, Identity } from "@/types"; // Removed CommentType as it's not directly used here
 import { formatDistanceToNow } from 'date-fns';
 import DOMPurify from 'dompurify';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import CommentsModal from './comments-modal'; 
-import { Badge } from './ui/badge'; // Added Badge
+import { Badge } from './ui/badge';
+import ReactionButton from './reaction-button'; // Import ReactionButton
+import { useFeed } from '@/contexts/feed-context'; // Import useFeed
 
 interface PostCardProps {
   post: Post;
-  onCommentAdded: (postId: string, commentText: string, parentId?: string) => void;
-  onLikeComment: (postId: string, commentId: string) => void; 
-  onLikePost: (postId: string) => void; 
+  // onCommentAdded, onLikeComment, onLikePost are now handled by useFeed context
 }
 
 const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
@@ -30,7 +30,6 @@ const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
     if (typeof window !== 'undefined') {
       setSanitizedHtml(DOMPurify.sanitize(htmlContent, { USE_PROFILES: { html: true } }));
     } else {
-      // Basic sanitization for SSR or non-browser environments if needed
       setSanitizedHtml(htmlContent.replace(/<script.*?>.*?<\/script>/gi, ''));
     }
   }, [htmlContent]);
@@ -39,19 +38,24 @@ const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
 };
 
 
-export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePost }: PostCardProps) {
-  const { author, content, createdAt, mediaUrl, mediaType, teamSnapshot, reactions, shares } = post;
+export default function PostCard({ post }: PostCardProps) {
+  const { author, content, createdAt, mediaUrl, mediaType, teamSnapshot, shares } = post;
   const { user: currentUser } = useAuth();
-  const { toast } = useToast();
+  const { toast } = useToast(); // Kept for other potential uses
+  const { 
+    addCommentToFeedPost, 
+    reactToPost, 
+    reactToComment, 
+    isReactingToPost,
+    isReactingToComment // Added from useFeed
+  } = useFeed();
   
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
 
   const authorUsername = author.username;
-  // Display name logic for User vs Identity
   const authorDisplayName = 'isIdentity' in author && (author as Identity).displayName ? (author as Identity).displayName : author.username;
   const authorProfilePic = author.profilePictureUrl;
   const isIdentityAuthor = 'isIdentity' in author && (author as Identity).isIdentity;
-
 
   const getInitials = (name: string = "") => {
     return name
@@ -64,19 +68,20 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
   const timeAgo = formatDistanceToNow(new Date(createdAt), { addSuffix: true });
 
   const handleToggleCommentsModal = () => {
+    if (!currentUser) {
+        toast({ title: "Login Required", description: "Please login to view comments.", variant: "destructive"});
+        return;
+    }
     setIsCommentsModalOpen(prev => !prev);
   };
   
-  const handleLikePostClick = () => {
+  const handleReactToPost = (reactionType: import("@/lib/reactions").ReactionType | null) => {
     if (!currentUser) {
-        toast({ title: "Login Required", description: "Please login to like posts.", variant: "destructive"});
+        toast({ title: "Login Required", description: "Please login to react.", variant: "destructive"});
         return;
     }
-    onLikePost(post.id);
-    // Toast can be handled by the context or here, for simplicity handling in context for now
-    // toast({ title: "Post Liked!", description: `You liked ${authorDisplayName}'s post.`});
+    reactToPost({ postId: post.id, reactionType });
   };
-
 
   return (
     <>
@@ -97,7 +102,7 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
                 <Badge variant="outline" className="text-xs px-1.5 py-0.5"><Award className="h-3 w-3 mr-1"/>Identity</Badge>
               )}
             </div>
-             {!isIdentityAuthor && ( // Show @username only if it's different from display name (for users) or if it's an Identity
+             {!isIdentityAuthor && (
                 <p className="text-xs text-muted-foreground">@{authorUsername}</p>
              )}
             <p className="text-xs text-muted-foreground">{timeAgo}</p>
@@ -129,15 +134,19 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
         </CardContent>
         <CardFooter className="flex flex-col items-start p-4 pt-2 border-t">
           <div className="flex justify-between items-center w-full">
-            <div className="flex gap-1">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary" onClick={handleToggleCommentsModal} disabled={!currentUser}>
+            <div className="flex gap-1 items-center"> {/* items-center to align ReactionButton with others */}
+              <ReactionButton
+                reactions={post.detailedReactions}
+                onReact={handleReactToPost}
+                currentUserId={currentUser?.id}
+                isSubmitting={isReactingToPost}
+                buttonSize="sm"
+              />
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary" onClick={handleToggleCommentsModal}>
                 <MessageCircle className="h-4 w-4 mr-1.5" /> {post.repliesCount || 0} 
               </Button>
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-green-500" disabled={!currentUser}>
                 <Repeat className="h-4 w-4 mr-1.5" /> {shares}
-              </Button>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-red-500" onClick={handleLikePostClick} disabled={!currentUser}>
-                <Heart className="h-4 w-4 mr-1.5" /> {reactions}
               </Button>
             </div>
             <div className="flex gap-1">
@@ -154,8 +163,11 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
           post={post}
           isOpen={isCommentsModalOpen}
           onClose={handleToggleCommentsModal}
-          onCommentSubmit={onCommentAdded} // Propagated from SocialFeedContent (now context func)
-          onLikeComment={onLikeComment} // Propagated from SocialFeedContent (now context func)
+          // onCommentSubmit and onLikeComment are now handled by useFeed context directly in CommentsModal
+          // so we don't need to pass them here if CommentsModal uses useFeed.
+          // However, CommentsModal structure was using props, so keeping structure consistent for now.
+          onCommentSubmit={(postId, text, parentId) => addCommentToFeedPost({ postId, content: text, parentId })}
+          onReactToComment={(postId, commentId, reactionType) => reactToComment({ postId, commentId, reactionType })}
           currentUser={currentUser}
         />
       )}

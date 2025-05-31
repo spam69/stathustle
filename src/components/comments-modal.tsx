@@ -3,25 +3,27 @@
 
 import { useState, useEffect, Fragment } from 'react';
 import type { Post, Comment as CommentType, User, Identity } from '@/types';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Heart, MessageSquare, Send, CornerDownRight, X, Award } from 'lucide-react';
+import { MessageSquare, Send, X, Award } from 'lucide-react'; // Removed Heart
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from './ui/badge';
-
+import ReactionButton from './reaction-button'; // Import ReactionButton
+import { useFeed } from '@/contexts/feed-context'; // Import useFeed
+import type { ReactionType } from '@/lib/reactions';
 
 interface CommentsModalProps {
   post: Post | null;
   isOpen: boolean;
   onClose: () => void;
-  onCommentSubmit: (postId: string, text: string, parentId?: string) => void;
-  onLikeComment: (postId: string, commentId: string) => void;
-  currentUser: User | Identity | null; // Current user can also be an identity
+  onCommentSubmit: (postId: string, text: string, parentId?: string) => void; // Keep for structure consistency
+  onReactToComment: (postId: string, commentId: string, reactionType: ReactionType | null) => void; // Keep for structure consistency
+  currentUser: User | Identity | null;
 }
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
@@ -37,11 +39,12 @@ const getInitials = (name: string = "") => {
   return name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U';
 };
 
-export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, onLikeComment, currentUser }: CommentsModalProps) {
+export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, onReactToComment, currentUser }: CommentsModalProps) {
   const [newCommentText, setNewCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ topLevelCommentId: string; displayUsername: string } | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const { toast } = useToast();
+  const { isReactingToComment } = useFeed(); // Get reaction loading state
 
   useEffect(() => {
     if (isOpen) {
@@ -58,23 +61,32 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
       toast({ title: "Error", description: "Comment cannot be empty and you must be logged in.", variant: "destructive" });
       return;
     }
-    setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 300));
+    setIsSubmittingComment(true);
+    // Simulating API call delay, in real app onCommentSubmit might be async
+    await new Promise(resolve => setTimeout(resolve, 300)); 
     onCommentSubmit(post.id, newCommentText.trim(), replyingTo?.topLevelCommentId);
     setNewCommentText('');
     setReplyingTo(null);
-    setIsSubmitting(false);
+    setIsSubmittingComment(false);
     toast({ title: "Success", description: replyingTo ? "Reply posted!" : "Comment posted!"});
   };
 
   const startReply = (topLevelId: string, usernameToReplyTo: string) => {
-    const authorInfo = getAuthorDisplayInfo(currentUser!); // Assuming currentUser is not null when this is callable
     setReplyingTo({ topLevelCommentId: topLevelId, displayUsername: usernameToReplyTo });
+    // Focus textarea can be added here
   };
 
   const cancelReply = () => {
     setReplyingTo(null);
     setNewCommentText(''); 
+  };
+
+  const handleReactToCommentClick = (commentId: string, reactionType: ReactionType | null) => {
+    if (!currentUser) {
+        toast({ title: "Login Required", description: "Please login to react to comments.", variant: "destructive"});
+        return;
+    }
+    onReactToComment(post.id, commentId, reactionType);
   };
 
   const renderCommentAndReplies = (comment: CommentType, allComments: CommentType[], originalCommentId: string, depth = 0) => {
@@ -106,11 +118,15 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
             </div>
             <p className="text-sm mb-1">{comment.content}</p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Button variant="ghost" size="xs" className="p-1 h-auto" onClick={() => onLikeComment(post.id, comment.id)} disabled={!currentUser}>
-                <Heart className={`h-3.5 w-3.5 ${comment.likes && comment.likes > 0 ? 'text-red-500 fill-red-500' : ''}`} />
-                <span className="ml-1">{comment.likes || 0}</span>
-              </Button>
-              <Button variant="ghost" size="xs" className="p-1 h-auto" onClick={() => startReply(originalCommentId, authorInfo.displayName)} disabled={!currentUser}>
+              <ReactionButton
+                reactions={comment.detailedReactions}
+                onReact={(reactionType) => handleReactToCommentClick(comment.id, reactionType)}
+                currentUserId={currentUser?.id}
+                isSubmitting={isReactingToComment} // Use global feed context loading state
+                buttonSize="xs"
+                popoverSide="bottom"
+              />
+              <Button variant="ghost" size="xs" className="p-1 h-auto text-muted-foreground" onClick={() => startReply(originalCommentId, authorInfo.displayName)} disabled={!currentUser}>
                 <MessageSquare className="h-3.5 w-3.5" />
                 <span className="ml-1">Reply</span>
               </Button>
@@ -134,6 +150,7 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
       <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col p-0">
         <DialogHeader className="p-4 border-b">
           <DialogTitle className="font-headline">Comments on {getAuthorDisplayInfo(post.author).displayName}'s post</DialogTitle>
+          {/* <DialogDescription> is not used here to save space </DialogDescription> */}
         </DialogHeader>
         
         <ScrollArea className="flex-grow overflow-y-auto px-4">
@@ -168,7 +185,7 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
                   maxLength={500}
                   rows={2}
                 />
-                <Button type="submit" size="icon" className="h-10 w-10" disabled={isSubmitting || !newCommentText.trim()}>
+                <Button type="submit" size="icon" className="h-10 w-10" disabled={isSubmittingComment || !newCommentText.trim()}>
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
@@ -186,8 +203,9 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
   );
 }
 
-declare module '@/components/ui/button' {
-    interface ButtonProps {
-        size?: 'default' | 'sm' | 'lg' | 'icon' | 'xs';
-    }
-}
+// Declaration merging was here for button size 'xs', removing as it's now in the main button file
+// declare module '@/components/ui/button' {
+//     interface ButtonProps {
+//         size?: 'default' | 'sm' | 'lg' | 'icon' | 'xs';
+//     }
+// }
