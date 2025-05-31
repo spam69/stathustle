@@ -60,15 +60,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     id: session.user.id,
     username: session.user.username,
     email: session.user.email ?? '', 
-    // Attempt to get these from mockUsers if session doesn't have them directly
-    // In a real app, these would ideally be part of the session/JWT token
-    // or fetched separately after login.
     profilePictureUrl: session.user.image ?? mockUsers.find(u => u.id === session.user.id)?.profilePictureUrl,
     bannerImageUrl: mockUsers.find(u => u.id === session.user.id)?.bannerImageUrl,
     bio: mockUsers.find(u => u.id === session.user.id)?.bio,
     sportInterests: mockUsers.find(u => u.id === session.user.id)?.sportInterests,
     themePreference: mockUsers.find(u => u.id === session.user.id)?.themePreference || 'system',
-    isIdentity: false, // Assuming NextAuth session user is not an Identity by default here
+    isIdentity: false, 
   } as (AppUser & { id: string; username: string }) : null;
 
 
@@ -80,14 +77,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     if (result?.error) {
-      console.error("NextAuth SignIn Error:", result.error);
+      console.error("NextAuth SignIn Error:", result.error); // Log to browser console
       toast({ title: "Login Failed", description: result.error === "CredentialsSignin" ? "Invalid credentials." : result.error, variant: "destructive" });
       return false;
     }
     if (result?.ok) {
       toast({ title: "Login Successful", description: `Welcome back!`});
       queryClient.invalidateQueries({ queryKey: ['posts'] }); 
-      queryClient.invalidateQueries({ queryKey: ['profile', credentials.emailOrUsername] }); // also invalidate profile
+      queryClient.invalidateQueries({ queryKey: ['profile', credentials.emailOrUsername] }); 
       return true;
     }
     return false;
@@ -102,41 +99,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signupMutation = useMutation<AppUser, Error, Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }>({
     mutationFn: signupUser,
     onError: (error) => {
-      // This specific error is handled by the main signup function's try/catch as well,
-      // but direct API errors will be caught here.
-      toast({ title: "Signup API Failed", description: error.message, variant: "destructive" });
+      // This error is for the /api/auth/signup call itself.
+      toast({ title: "Account Creation Failed", description: error.message, variant: "destructive" });
     },
   });
 
   const signup = async (signupData: Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }) => {
+    let signedUpUser: AppUser | null = null;
     try {
-      const signedUpUser = await signupMutation.mutateAsync(signupData);
-
-      if (signedUpUser) {
-        toast({
-          title: "Account Created!",
-          description: "Logging you in automatically...",
-        });
-        
-        const loginSuccess = await login({ 
-          emailOrUsername: signedUpUser.email, 
-          password: signupData.password,
-        });
-
-        // The login function handles its own success/failure toasts.
-        // If login was not successful, the user might still be "signed up" but not logged in.
-        // The page redirection should still occur based on signup success.
-        return signedUpUser; 
-      }
-      return null;
-    } catch (error: any) {
-      // Catch errors from signupUser (if not already handled by mutation's onError, e.g. network issues before API call)
-      // Or other issues in this flow.
-       if (!signupMutation.isError) { // Avoid double-toasting if mutation already caught it
-         toast({ title: "Signup Process Failed", description: error.message || "An unexpected error occurred.", variant: "destructive" });
-       }
+      signedUpUser = await signupMutation.mutateAsync(signupData);
+    } catch (error) {
+      // Error already handled by signupMutation.onError
       return null;
     }
+
+    if (signedUpUser) {
+      toast({
+        title: "Account Created!",
+        description: "Attempting to log you in automatically...",
+      });
+      
+      // Attempt to log in the user automatically.
+      // The login function itself handles success/failure toasts for the NextAuth part.
+      await login({ 
+        emailOrUsername: signedUpUser.email, 
+        password: signupData.password,
+      });
+      
+      // Return the signedUpUser so the page can redirect, regardless of auto-login success.
+      // The user has an account, they can manually log in if auto-login failed.
+      return signedUpUser; 
+    }
+    return null; // Signup API call failed
   };
   
   const updateSettingsMutation = useMutation<AppUser, Error, Partial<AppUser>>({
@@ -146,9 +140,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     },
     onSuccess: (data) => {
       toast({ title: "Settings Updated", description: "Your profile information has been saved." });
-      // Update the session or refetch if necessary, or rely on next refetch of profile data
       queryClient.invalidateQueries({ queryKey: ['profile', data.username] });
-      queryClient.invalidateQueries({ queryKey: ['session'] }); // Invalidate NextAuth session to pick up changes if any were made to session-relevant fields
+      queryClient.invalidateQueries({ queryKey: ['session'] }); 
     },
     onError: (error) => {
       toast({ title: "Update Failed", description: error.message, variant: "destructive" });
@@ -164,7 +157,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const updatedUser = await updateSettingsMutation.mutateAsync(settings);
       return updatedUser;
     } catch(e) {
-      // error already handled by mutation's onError
       return null;
     }
   }, [appUserFromSession, updateSettingsMutation, toast, queryClient]);
@@ -195,7 +187,4 @@ export const useAuth = () => {
   return context;
 };
 
-// Helper to get mockUsers, ensure it's available for AuthContext
-// This is a bit of a workaround because client components can't directly import server-only data easily
-// In a real app, these details would come from the session/JWT or an API call.
 import { mockUsers } from '@/lib/mock-data';
