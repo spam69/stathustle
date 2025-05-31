@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare } from 'lucide-react';
+import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,6 +17,7 @@ import {
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar'; 
+import { useFeed } from '@/contexts/feed-context'; // Import useFeed
 
 interface HeaderProps {
   toggleChat: () => void;
@@ -25,6 +26,7 @@ interface HeaderProps {
 export default function Header({ toggleChat }: HeaderProps) {
   const { user, logout, loading } = useAuth();
   const { toggleSidebar, isMobile } = useSidebar(); 
+  const { openCreatePostModal } = useFeed(); // Consume FeedContext
 
   const getInitials = (name: string) => {
     return name
@@ -43,12 +45,11 @@ export default function Header({ toggleChat }: HeaderProps) {
          </Button>
       )}
       <Link href="/" className="flex items-center gap-2">
-        {/* Replace with SVG logo if available */}
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
         <span className="font-headline text-lg font-semibold tracking-tight">StatHustle</span>
       </Link>
       
-      <div className="flex flex-1 items-center justify-end gap-2 md:gap-4">
+      <div className="flex flex-1 items-center justify-end gap-1 md:gap-2">
         <form className="ml-auto hidden flex-1 sm:flex-initial md:flex">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -59,6 +60,14 @@ export default function Header({ toggleChat }: HeaderProps) {
             />
           </div>
         </form>
+
+        {user && (
+          <Button variant="ghost" size="icon" onClick={openCreatePostModal} aria-label="Create Post" className="hidden md:inline-flex">
+            <PlusSquare className="h-5 w-5" />
+            <span className="sr-only">Create Post</span>
+          </Button>
+        )}
+
         <ThemeSwitcher />
         <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
           <Bell className="h-5 w-5" />
@@ -106,6 +115,11 @@ export default function Header({ toggleChat }: HeaderProps) {
                   <Settings className="mr-2 h-4 w-4" />
                   Settings
                 </Link>
+              </DropdownMenuItem>
+               {/* Mobile only create post button */}
+               <DropdownMenuItem onClick={openCreatePostModal} className="md:hidden">
+                  <PlusSquare className="mr-2 h-4 w-4" />
+                  Create Post
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>

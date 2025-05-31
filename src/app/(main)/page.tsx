@@ -10,14 +10,19 @@ import { mockPosts } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { FeedProvider, useFeed } from '@/contexts/feed-context';
 
-export default function SocialFeedPage() {
+function SocialFeedContent() {
   const { user } = useAuth();
   const [posts, setPosts] = useState<PostType[]>(mockPosts);
   const [visiblePostsCount, setVisiblePostsCount] = useState(5); // For pagination
+  const { isCreatePostModalOpen, closeCreatePostModal, publishPost: publishPostViaContext } = useFeed();
 
-  const handlePostCreated = (newPost: PostType) => {
-    setPosts(prevPosts => [newPost, ...prevPosts].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+  const handlePostCreatedForForm = (newPost: PostType) => {
+    // This function is passed to CreatePostForm
+    // It will call the context's publishPost, which updates state and closes modal
+    publishPostViaContext(newPost);
   };
 
   const handleCommentAdded = (postId: string, commentText: string, parentId?: string) => {
@@ -37,7 +42,7 @@ export default function SocialFeedPage() {
         post.id === postId
           ? {
               ...post,
-              comments: [...(post.comments || []), newComment].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()), // Keep flat list sorted by creation for now
+              comments: [...(post.comments || []), newComment].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
               repliesCount: (post.repliesCount || 0) + 1,
             }
           : post
@@ -73,7 +78,6 @@ export default function SocialFeedPage() {
     );
   };
 
-
   const loadMorePosts = () => {
     setVisiblePostsCount(prevCount => prevCount + 5);
   };
@@ -84,7 +88,15 @@ export default function SocialFeedPage() {
     <div className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-bold mb-6 font-headline text-primary">Social Feed</h1>
       
-      <CreatePostForm onPostCreated={handlePostCreated} />
+      {/* Create Post Modal controlled by FeedContext */}
+      <Dialog open={isCreatePostModalOpen} onOpenChange={(isOpen) => !isOpen && closeCreatePostModal()}>
+        <DialogContent className="sm:max-w-[625px]">
+          <DialogHeader>
+            <DialogTitle className="font-headline text-lg">Create Post</DialogTitle>
+          </DialogHeader>
+          <CreatePostForm onPostCreated={handlePostCreatedForForm} />
+        </DialogContent>
+      </Dialog>
       
       <h2 className="text-xl font-semibold mt-8 mb-3 font-headline">Recent Posts</h2>
       {displayedPosts.length > 0 ? (
@@ -109,5 +121,16 @@ export default function SocialFeedPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SocialFeedPage() {
+  // Need to manage posts state here to pass to FeedProvider
+  const [posts, setPosts] = useState<PostType[]>(mockPosts);
+
+  return (
+    <FeedProvider initialPosts={posts} setInitialPosts={setPosts}>
+      <SocialFeedContent />
+    </FeedProvider>
   );
 }
