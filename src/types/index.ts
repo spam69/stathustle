@@ -1,4 +1,5 @@
 
+import type { ReactionType } from '@/lib/reactions';
 
 export type SportInterestLevel = 'very interested' | 'somewhat interested' | 'no interest';
 
@@ -11,44 +12,52 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  password?: string; // Added for mock authentication
+  password?: string; 
   profilePictureUrl?: string;
   bannerImageUrl?: string;
   socialLinks?: { platform: string; url: string }[];
   sportInterests?: SportInterest[];
-  themePreference?: 'light' | 'dark' | 'pink' | 'blue'; // Pink and blue are future
+  themePreference?: 'light' | 'dark' | 'pink' | 'blue'; 
   bio?: string;
-  isIdentity?: false; // Explicitly mark as not an identity
+  isIdentity?: false; 
 }
 
 export interface TeamMember {
   user: User;
-  permissions: string[]; // e.g., ['can_post', 'can_edit_blogs']
+  permissions: string[]; 
 }
 
 export interface Identity {
   id: string;
-  username: string; // The @username for the Identity itself
-  displayName?: string; // Optional display name for the Identity
-  email?: string; // Contact email for the Identity
+  username: string; 
+  displayName?: string; 
+  email?: string; 
   profilePictureUrl?: string;
   bannerImageUrl?: string;
   socialLinks?: { platform: string; url: string }[];
   bio?: string;
-  owner: User; // The User who owns/manages this Identity
+  owner: User; 
   teamMembers?: TeamMember[];
-  isIdentity: true; // Discriminator property
-  themePreference?: 'light' | 'dark' | 'pink' | 'blue'; // Identities can also have theme preferences
+  isIdentity: true; 
+  themePreference?: 'light' | 'dark' | 'pink' | 'blue'; 
 }
 
+export interface ReactionEntry {
+  userId: string; // ID of the User or Identity owner who reacted
+  // In a more complex system, you might distinguish if an Identity itself reacted
+  // For now, we assume the owner of an Identity reacts as the Identity if currentUser is an Identity.
+  // Or, simply always use the User's ID from the session. Let's stick to User's ID from session.
+  reactionType: ReactionType;
+  createdAt: string;
+}
 
 export interface Comment {
   id: string;
   author: User | Identity;
   content: string;
   createdAt: string;
-  parentId?: string; // ID of the comment this is a reply to
-  likes?: number;
+  parentId?: string; 
+  detailedReactions?: ReactionEntry[]; // Replaces likes
 }
 
 export interface Post {
@@ -60,10 +69,10 @@ export interface Post {
   teamSnapshot?: any;
   tags?: string[];
   createdAt: string;
-  reactions: number; // Reactions on the post itself
+  detailedReactions?: ReactionEntry[]; // Replaces reactions (number)
   shares: number;
-  repliesCount: number; // Total number of comments and replies on the post
-  comments?: Comment[]; // Flat list of all comments and replies for this post
+  repliesCount: number; 
+  comments?: Comment[]; 
 }
 
 export interface Blog {
@@ -82,8 +91,8 @@ export interface Player {
   name: string;
   sport: string;
   profilePictureUrl?: string;
-  team?: string; // e.g., "Los Angeles Lakers"
-  position?: string; // e.g., "Guard"
+  team?: string; 
+  position?: string; 
 }
 
 export interface PlayerChatMessage {

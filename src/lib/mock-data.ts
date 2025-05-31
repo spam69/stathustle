@@ -1,12 +1,13 @@
 
-import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment, Identity } from '@/types';
+import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment, Identity, ReactionEntry } from '@/types';
+import type { ReactionType } from '@/lib/reactions';
 
 // Make mock data mutable for API route simulation
 let mockUser1Data: User = {
   id: 'user1',
   username: 'FantasyFanatic',
   email: 'fanatic@stathustle.com',
-  password: 'password123', // Added mock password
+  password: 'password123',
   profilePictureUrl: 'https://placehold.co/200x200.png',
   bannerImageUrl: 'https://placehold.co/1200x300.png',
   socialLinks: [
@@ -26,7 +27,7 @@ let mockUser2Data: User = {
   id: 'user2',
   username: 'AnalystProUser',
   email: 'pro@stathustle.com',
-  password: 'password456', // Added mock password
+  password: 'password456',
   profilePictureUrl: 'https://placehold.co/200x200.png',
   bannerImageUrl: 'https://placehold.co/1200x300.png',
   sportInterests: [
@@ -42,7 +43,7 @@ const mockAdminUserData: User = {
   id: 'admin-user',
   username: 'admin',
   email: 'admin@email.com',
-  password: 'admin', // Added mock password
+  password: 'admin',
   profilePictureUrl: 'https://placehold.co/200x200.png?text=Admin',
   bannerImageUrl: 'https://placehold.co/1200x300.png?text=AdminBanner',
   sportInterests: [
@@ -95,7 +96,9 @@ const mockComment1_post1: Comment = {
   author: mockUser2Data,
   content: 'Great point about sleeper picks! I am keeping an eye on Player Z.',
   createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-  likes: 5,
+  detailedReactions: [
+    { userId: mockUser1Data.id, reactionType: 'like', createdAt: new Date().toISOString() }
+  ],
 };
 
 const mockReply1_to_comment1_post1: Comment = {
@@ -104,7 +107,7 @@ const mockReply1_to_comment1_post1: Comment = {
   content: 'Thanks! Player Z is a good call, solid potential.',
   createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
   parentId: 'comment1-post1',
-  likes: 2,
+  detailedReactions: [],
 };
 
 const mockReply2_to_comment1_post1: Comment = {
@@ -113,7 +116,7 @@ const mockReply2_to_comment1_post1: Comment = {
   content: 'Definitely! Watched some film on him, looks promising.',
   createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
   parentId: 'comment1-post1',
-  likes: 1,
+  detailedReactions: [],
 };
 
 const mockComment2_post1: Comment = {
@@ -121,7 +124,9 @@ const mockComment2_post1: Comment = {
   author: mockUser1Data,
   content: 'Any thoughts on Player X? Seems a bit overrated to me this year.',
   createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-  likes: 3,
+  detailedReactions: [
+     { userId: mockUser2Data.id, reactionType: 'haha', createdAt: new Date().toISOString() }
+  ],
 };
 
 const mockComment1_post3: Comment = {
@@ -129,7 +134,10 @@ const mockComment1_post3: Comment = {
   author: mockUser2Data,
   content: 'That game was epic! Still buzzing from it.',
   createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString(),
-  likes: 10,
+  detailedReactions: [
+    { userId: mockUser1Data.id, reactionType: 'love', createdAt: new Date().toISOString() },
+    { userId: mockAdminUserData.id, reactionType: 'wow', createdAt: new Date().toISOString() }
+  ],
 };
 
 export let mockPosts: Post[] = [
@@ -138,7 +146,10 @@ export let mockPosts: Post[] = [
     author: mockUser1Data,
     content: 'Just drafted my fantasy basketball team! Feeling good about this season. 🏀 Who do you think is a sleeper pick this year? #FantasyBasketball #NBA',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    reactions: 15,
+    detailedReactions: [
+        { userId: mockUser2Data.id, reactionType: 'like', createdAt: new Date().toISOString() },
+        { userId: mockAdminUserData.id, reactionType: 'love', createdAt: new Date().toISOString() }
+    ],
     shares: 3,
     repliesCount: 4,
     comments: [mockComment1_post1, mockReply1_to_comment1_post1, mockReply2_to_comment1_post1, mockComment2_post1],
@@ -151,7 +162,7 @@ export let mockPosts: Post[] = [
     author: mockIdentityAnalystProData,
     content: "<b>Deep Dive Analysis (posted as @AnalystPro)</b>: Top 5 NFL quarterbacks to watch for MVP contention. My projections are looking interesting! 🏈 <i>Full blog post coming soon!</i>",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    reactions: 42,
+    detailedReactions: [],
     shares: 10,
     repliesCount: 0,
     comments: [],
@@ -163,7 +174,9 @@ export let mockPosts: Post[] = [
     author: mockUser1Data,
     content: "Anyone else catch that amazing hockey game last night? The overtime goal was insane! 🏒🥅 #NHL #HockeyHighlights",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    reactions: 22,
+    detailedReactions: [
+        { userId: mockUser2Data.id, reactionType: 'wow', createdAt: new Date().toISOString() }
+    ],
     shares: 1,
     repliesCount: 1,
     comments: [mockComment1_post3],
@@ -263,8 +276,6 @@ export const sportInterestLevels: SportInterestLevel[] = ['very interested', 'so
 // Expose the original mockUser1 and mockUser2 for AuthContext default or other direct uses if needed.
 export const mockUser1 = mockUser1Data;
 export const mockUser2 = mockUser2Data;
-export const mockAdminUser = mockAdminUserData; // Export the admin user as well
+export const mockAdminUser = mockAdminUserData; 
 export const mockIdentityAnalystPro = mockIdentityAnalystProData;
 export const mockIdentityFanaticBrand = mockIdentityFanaticBrandData;
-
-    

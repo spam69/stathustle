@@ -2,7 +2,8 @@
 "use client";
 
 import type { Post, User, Comment as CommentType, Identity } from '@/types';
-import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import type { ReactionType } from '@/lib/reactions'; // Import ReactionType
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { useAuth } from './auth-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -16,12 +17,12 @@ interface FeedContextType {
   closeCreatePostModal: () => void;
   publishPost: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }) => void;
   addCommentToFeedPost: (data: { postId: string; content: string; parentId?: string }) => void;
-  likeFeedPost: (postId: string) => void;
-  likeFeedComment: (data: { postId: string; commentId: string }) => void;
+  reactToPost: (data: { postId: string; reactionType: ReactionType | null }) => void; // Updated
+  reactToComment: (data: { postId: string; commentId: string; reactionType: ReactionType | null }) => void; // Updated
   isPublishingPost: boolean;
   isCommenting: boolean;
-  isLikingPost: boolean;
-  isLikingComment: boolean;
+  isReactingToPost: boolean; // Updated
+  isReactingToComment: boolean; // Updated
 }
 
 const FeedContext = createContext<FeedContextType | undefined>(undefined);
@@ -60,26 +61,43 @@ const addComment = async (commentData: { postId: string; content: string; author
   return response.json();
 };
 
-const likePost = async (postId: string): Promise<Post> => {
-  const response = await fetch(`/api/posts/${postId}/like`, { method: 'POST' });
-  if (!response.ok) throw new Error('Failed to like post');
+// Updated: reactToPostAPI
+const reactToPostAPI = async (data: { postId: string; reactionType: ReactionType | null; userId: string }): Promise<Post> => {
+  const { postId, ...payload } = data;
+  const response = await fetch(`/api/posts/${postId}/react`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload), // userId is part of payload now
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to react to post');
+  }
   return response.json();
 };
 
-const likeComment = async (ids: { postId: string; commentId: string }): Promise<CommentType> => {
-  const response = await fetch(`/api/posts/${ids.postId}/comments/${ids.commentId}/like`, { method: 'POST' });
-  if (!response.ok) throw new Error('Failed to like comment');
+// Updated: reactToCommentAPI
+const reactToCommentAPI = async (data: { postId: string; commentId: string; reactionType: ReactionType | null; userId: string }): Promise<Post> => { // API returns whole post
+  const { postId, commentId, ...payload } = data;
+  const response = await fetch(`/api/posts/${postId}/comments/${commentId}/react`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload), // userId is part of payload now
+  });
+   if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to react to comment');
+  }
   return response.json();
 };
 
 
 interface FeedProviderProps {
   children: ReactNode;
-  // initialPosts prop removed as we fetch from API
 }
 
 export const FeedProvider = ({ children }: FeedProviderProps) => {
-  const { user } = useAuth();
+  const { user } = useAuth(); // User is always mockAdminUser in current dev setup
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
@@ -88,7 +106,7 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     queryKey: ['posts'],
     queryKeyHash: 'posts',
     queryFn: fetchPosts,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 1, // 1 minute for faster updates during dev
   });
 
   const openCreatePostModal = useCallback(() => setIsCreatePostModalOpen(true), []);
@@ -114,8 +132,8 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       if (!user) throw new Error("User not logged in");
       return addComment({ ...commentData, authorId: user.id });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    onSuccess: (newComment, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] }); // Could be more targeted
       toast({ title: "Success", description: "Comment posted!"});
     },
     onError: (error) => {
@@ -123,25 +141,42 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     }
   });
 
-  const likePostMutation = useMutation<Post, Error, string>({
-    mutationFn: likePost,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-      // toast({ title: "Success", description: "Post liked!" }); // Optional: can be too noisy
+  // Updated: reactToPostMutation
+  const reactToPostMutation = useMutation<Post, Error, { postId: string; reactionType: ReactionType | null }>({
+    mutationFn: (data) => {
+      if (!user) throw new Error("User not logged in");
+      return reactToPostAPI({ ...data, userId: user.id });
+    },
+    onSuccess: (updatedPost) => {
+      // Optimistically update the specific post in the query cache
+      queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
+        return oldData?.map(post => post.id === updatedPost.id ? updatedPost : post) || [];
+      });
+      // Or just invalidate, which is simpler for now
+      // queryClient.invalidateQueries({ queryKey: ['posts'] });
+      // Toast can be added if desired, e.g., "Reaction updated!"
     },
     onError: (error) => {
-      toast({ title: "Error", description: error.message || "Failed to like post.", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Failed to react to post.", variant: "destructive" });
     }
   });
 
-  const likeCommentMutation = useMutation<CommentType, Error, { postId: string; commentId: string }>({
-    mutationFn: likeComment,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-      // toast({ title: "Success", description: "Comment liked!" }); // Optional
+  // Updated: reactToCommentMutation
+  const reactToCommentMutation = useMutation<Post, Error, { postId: string; commentId: string; reactionType: ReactionType | null }>({
+    mutationFn: (data) => {
+      if (!user) throw new Error("User not logged in");
+      return reactToCommentAPI({ ...data, userId: user.id });
+    },
+    onSuccess: (updatedPostContainingComment) => {
+       // Optimistically update the specific post in the query cache
+      queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
+        return oldData?.map(post => post.id === updatedPostContainingComment.id ? updatedPostContainingComment : post) || [];
+      });
+      // Or just invalidate
+      // queryClient.invalidateQueries({ queryKey: ['posts'] });
     },
     onError: (error) => {
-      toast({ title: "Error", description: error.message || "Failed to like comment.", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Failed to react to comment.", variant: "destructive" });
     }
   });
 
@@ -156,12 +191,12 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       closeCreatePostModal,
       publishPost: publishPostMutation.mutate,
       addCommentToFeedPost: addCommentMutation.mutate,
-      likeFeedPost: likePostMutation.mutate,
-      likeFeedComment: likeCommentMutation.mutate,
+      reactToPost: reactToPostMutation.mutate,
+      reactToComment: reactToCommentMutation.mutate,
       isPublishingPost: publishPostMutation.isPending,
       isCommenting: addCommentMutation.isPending,
-      isLikingPost: likePostMutation.isPending,
-      isLikingComment: likeCommentMutation.isPending,
+      isReactingToPost: reactToPostMutation.isPending,
+      isReactingToComment: reactToCommentMutation.isPending,
     }}>
       {children}
     </FeedContext.Provider>
@@ -175,5 +210,3 @@ export const useFeed = () => {
   }
   return context;
 };
-
-    
