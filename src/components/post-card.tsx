@@ -7,22 +7,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageCircle, Repeat, Heart, Upload, MoreHorizontal } from "lucide-react";
-import type { Post, Comment as CommentType, User } from "@/types";
+import type { Post, Comment as CommentType, User, Identity } from "@/types";
 import { formatDistanceToNow } from 'date-fns';
 import DOMPurify from 'dompurify';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import CommentsModal from './comments-modal'; // Import the modal
+import CommentsModal from './comments-modal'; 
 
 interface PostCardProps {
   post: Post;
   onCommentAdded: (postId: string, commentText: string, parentId?: string) => void;
-  onLikeComment: (postId: string, commentId: string) => void; // For liking comments
-  onLikePost: (postId: string) => void; // For liking the post itself
+  onLikeComment: (postId: string, commentId: string) => void; 
+  onLikePost: (postId: string) => void; 
 }
 
-// Helper function to sanitize HTML on the client-side
 const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
   const [sanitizedHtml, setSanitizedHtml] = useState('');
 
@@ -45,6 +44,11 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
   
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
 
+  const authorUsername = author.username;
+  const authorDisplayName = 'isIdentity' in author && (author as Identity).displayName ? (author as Identity).displayName : author.username;
+  const authorProfilePic = author.profilePictureUrl;
+
+
   const getInitials = (name: string = "") => {
     return name
       .split(' ')
@@ -59,15 +63,13 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
     setIsCommentsModalOpen(prev => !prev);
   };
   
-  // Mock function for liking a post - replace with actual API call
-  const handleLikePost = () => {
+  const handleLikePostClick = () => {
     if (!currentUser) {
         toast({ title: "Login Required", description: "Please login to like posts.", variant: "destructive"});
         return;
     }
     onLikePost(post.id);
-    // Optimistic update or re-fetch post data
-    toast({ title: "Post Liked!", description: `You liked ${author.username}'s post.`});
+    toast({ title: "Post Liked!", description: `You liked ${authorDisplayName}'s post.`});
   };
 
 
@@ -75,16 +77,19 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
     <>
       <Card className="mb-4 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
         <CardHeader className="flex flex-row items-start gap-4 p-4">
-          <Link href={`/profile/${author.username}`} passHref>
+          <Link href={`/profile/${authorUsername}`} passHref>
             <Avatar className="h-12 w-12 border">
-              <AvatarImage src={author.profilePictureUrl} alt={author.username} data-ai-hint="person avatar" />
-              <AvatarFallback>{getInitials(author.username)}</AvatarFallback>
+              <AvatarImage src={authorProfilePic} alt={authorDisplayName} data-ai-hint="person avatar" />
+              <AvatarFallback>{getInitials(authorDisplayName)}</AvatarFallback>
             </Avatar>
           </Link>
           <div className="grid gap-0.5">
-            <Link href={`/profile/${author.username}`} passHref>
-              <CardTitle className="text-base font-semibold hover:underline font-headline">{author.username}</CardTitle>
+            <Link href={`/profile/${authorUsername}`} passHref>
+              <CardTitle className="text-base font-semibold hover:underline font-headline">{authorDisplayName}</CardTitle>
             </Link>
+             {'isIdentity' in author && (author as Identity).isIdentity && (
+                <span className="text-xs text-muted-foreground">@{authorUsername} (Identity)</span>
+             )}
             <p className="text-xs text-muted-foreground">{timeAgo}</p>
           </div>
           <Button variant="ghost" size="icon" className="ml-auto">
@@ -120,7 +125,7 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-green-500">
                 <Repeat className="h-4 w-4 mr-1.5" /> {shares}
               </Button>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-red-500" onClick={handleLikePost}>
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-red-500" onClick={handleLikePostClick}>
                 <Heart className="h-4 w-4 mr-1.5" /> {reactions}
               </Button>
             </div>
@@ -133,7 +138,7 @@ export default function PostCard({ post, onCommentAdded, onLikeComment, onLikePo
         </CardFooter>
       </Card>
       
-      {isCommentsModalOpen && post && (
+      {isCommentsModalOpen && post && currentUser && ( // Ensure currentUser is available for modal
         <CommentsModal
           post={post}
           isOpen={isCommentsModalOpen}

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -5,15 +6,15 @@ import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import type { Blog } from '@/types';
+import type { Blog, Identity } from '@/types';
 import { mockBlogs } from '@/lib/mock-data';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, MessageSquare, Share2 } from 'lucide-react';
+import { AlertTriangle, MessageSquare, Share2, Award } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
-// Helper component to sanitize HTML on the client-side
 const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
   const [sanitizedHtml, setSanitizedHtml] = useState('');
 
@@ -31,25 +32,24 @@ const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
 
 export default function BlogPostPage() {
   const params = useParams();
-  const username = params.username as string;
+  const usernameParam = params.username as string; // This is author's username
   const blogSlug = params.blogSlug as string;
 
   const [blog, setBlog] = useState<Blog | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (username && blogSlug) {
+    if (usernameParam && blogSlug) {
       setLoading(true);
-      // Simulate API call
       setTimeout(() => {
         const foundBlog = mockBlogs.find(
-          b => b.author.username.toLowerCase() === username.toLowerCase() && b.slug === blogSlug
+          b => b.author.username.toLowerCase() === usernameParam.toLowerCase() && b.slug === blogSlug
         );
         setBlog(foundBlog || null);
         setLoading(false);
       }, 500);
     }
-  }, [username, blogSlug]);
+  }, [usernameParam, blogSlug]);
   
   const getInitials = (name: string) => {
     return name
@@ -62,7 +62,7 @@ export default function BlogPostPage() {
   if (loading) {
     return (
       <article className="max-w-3xl mx-auto py-8 px-4">
-        <Skeleton className="h-12 w-3/4 mb-4" /> {/* Title */}
+        <Skeleton className="h-12 w-3/4 mb-4" />
         <div className="flex items-center gap-4 mb-6">
           <Skeleton className="h-12 w-12 rounded-full" />
           <div className="space-y-2">
@@ -70,7 +70,7 @@ export default function BlogPostPage() {
             <Skeleton className="h-3 w-24" />
           </div>
         </div>
-        <Skeleton className="h-64 w-full mb-8 rounded-lg" /> {/* Cover Image */}
+        <Skeleton className="h-64 w-full mb-8 rounded-lg" />
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}
           <Skeleton className="h-4 w-5/6" />
@@ -91,6 +91,13 @@ export default function BlogPostPage() {
       </div>
     );
   }
+  
+  const author = blog.author;
+  const authorUsername = author.username;
+  const authorDisplayName = 'isIdentity' in author && (author as Identity).displayName ? (author as Identity).displayName : author.username;
+  const authorProfilePic = author.profilePictureUrl;
+  const isIdentityAuthor = 'isIdentity' in author && (author as Identity).isIdentity;
+
 
   return (
     <article className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -99,16 +106,19 @@ export default function BlogPostPage() {
           {blog.title}
         </h1>
         <div className="flex items-center gap-4 text-muted-foreground">
-          <Link href={`/profile/${blog.author.username}`} passHref>
+          <Link href={`/profile/${authorUsername}`} passHref>
             <Avatar className="h-12 w-12">
-              <AvatarImage src={blog.author.profilePictureUrl} alt={blog.author.username} />
-              <AvatarFallback>{getInitials(blog.author.username)}</AvatarFallback>
+              <AvatarImage src={authorProfilePic} alt={authorDisplayName} />
+              <AvatarFallback>{getInitials(authorDisplayName)}</AvatarFallback>
             </Avatar>
           </Link>
           <div>
-            <Link href={`/profile/${blog.author.username}`} passHref>
-              <p className="text-sm font-medium text-foreground hover:underline">{blog.author.username}</p>
-            </Link>
+            <div className="flex items-center gap-2">
+                <Link href={`/profile/${authorUsername}`} passHref>
+                <p className="text-sm font-medium text-foreground hover:underline">{authorDisplayName}</p>
+                </Link>
+                {isIdentityAuthor && <Badge variant="outline" className="text-xs px-1.5 py-0.5"><Award className="h-3 w-3 mr-1"/>Identity</Badge>}
+            </div>
             <p className="text-xs">
               Published on <time dateTime={blog.createdAt}>{format(new Date(blog.createdAt), 'MMMM d, yyyy')}</time>
             </p>

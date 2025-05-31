@@ -3,8 +3,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import type { User, Post, Comment as CommentType } from '@/types'; // Renamed Comment
-import { mockUsers, mockPosts } from '@/lib/mock-data';
+import type { User, Post, Comment as CommentType, Identity } from '@/types'; 
+import { mockUsers, mockPosts, mockIdentities } from '@/lib/mock-data';
 import PostCard from '@/components/post-card';
 import UserProfileCard from '@/components/user-profile-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,7 +18,7 @@ export default function UserProfilePage() {
   const params = useParams();
   const { user: currentUser } = useAuth(); 
   const username = params.username as string;
-  const [profileUser, setProfileUser] = useState<User | null>(null);
+  const [profileData, setProfileData] = useState<User | Identity | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [visiblePostsCount, setVisiblePostsCount] = useState(POSTS_PER_PAGE);
@@ -26,17 +26,21 @@ export default function UserProfilePage() {
   useEffect(() => {
     if (username) {
       setLoading(true);
-      setVisiblePostsCount(POSTS_PER_PAGE); // Reset visible count on username change
+      setVisiblePostsCount(POSTS_PER_PAGE); 
       setTimeout(() => {
-        const foundUser = mockUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (foundUser) {
-          setProfileUser(foundUser);
-          const postsByUser = mockPosts
-            .filter(p => p.author.id === foundUser.id)
+        let foundProfile: User | Identity | undefined = mockUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (!foundProfile) {
+          foundProfile = mockIdentities.find(i => i.username.toLowerCase() === username.toLowerCase());
+        }
+
+        if (foundProfile) {
+          setProfileData(foundProfile);
+          const postsByAuthor = mockPosts
+            .filter(p => p.author.id === foundProfile!.id) // Check against foundProfile's ID
             .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          setUserPosts(postsByUser);
+          setUserPosts(postsByAuthor);
         } else {
-          setProfileUser(null); 
+          setProfileData(null); 
         }
         setLoading(false);
       }, 500);
@@ -48,7 +52,7 @@ export default function UserProfilePage() {
 
     const newComment: CommentType = {
       id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      author: currentUser,
+      author: currentUser, // Comment author is always the logged-in user
       content: commentText,
       createdAt: new Date().toISOString(),
       likes: 0,
@@ -105,19 +109,19 @@ export default function UserProfilePage() {
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto">
-        <Skeleton className="h-64 w-full mb-6 rounded-lg" />
+        <Skeleton className="h-64 w-full mb-6 rounded-lg" /> {/* UserProfileCard Skeleton */}
         <div className="space-y-4">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full rounded-lg" />)}
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full rounded-lg" />)} {/* PostCard Skeletons */}
         </div>
       </div>
     );
   }
 
-  if (!profileUser) {
+  if (!profileData) {
     return (
       <div className="max-w-3xl mx-auto text-center py-10">
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
-        <h1 className="text-2xl font-bold font-headline">User Not Found</h1>
+        <h1 className="text-2xl font-bold font-headline">Profile Not Found</h1>
         <p className="text-muted-foreground">The profile for @{username} could not be found.</p>
       </div>
     );
@@ -125,9 +129,11 @@ export default function UserProfilePage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <UserProfileCard profileUser={profileUser} />
+      <UserProfileCard profileUser={profileData} />
       
-      <h2 className="text-2xl font-bold mt-8 mb-4 font-headline">Posts by {profileUser.username}</h2>
+      <h2 className="text-2xl font-bold mt-8 mb-4 font-headline">
+        Posts by {profileData.isIdentity ? (profileData as Identity).displayName || profileData.username : profileData.username}
+      </h2>
       {displayedPosts.length > 0 ? (
         displayedPosts.map(post => (
           <PostCard 
@@ -139,7 +145,7 @@ export default function UserProfilePage() {
           />
         ))
       ) : (
-        <p className="text-muted-foreground text-center py-8">@{profileUser.username} hasn't posted anything yet.</p>
+        <p className="text-muted-foreground text-center py-8">@{profileData.username} hasn't posted anything yet.</p>
       )}
 
       {visiblePostsCount < userPosts.length && (

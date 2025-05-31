@@ -1,4 +1,5 @@
 
+
 export type SportInterestLevel = 'very interested' | 'somewhat interested' | 'no interest';
 
 export interface SportInterest {
@@ -16,11 +17,33 @@ export interface User {
   sportInterests?: SportInterest[];
   themePreference?: 'light' | 'dark' | 'pink' | 'blue'; // Pink and blue are future
   bio?: string;
+  isIdentity?: false; // Explicitly mark as not an identity
 }
+
+export interface TeamMember {
+  user: User;
+  permissions: string[]; // e.g., ['can_post', 'can_edit_blogs']
+}
+
+export interface Identity {
+  id: string;
+  username: string; // The @username for the Identity itself
+  displayName?: string; // Optional display name for the Identity
+  email?: string; // Contact email for the Identity
+  profilePictureUrl?: string;
+  bannerImageUrl?: string;
+  socialLinks?: { platform: string; url: string }[];
+  bio?: string;
+  owner: User; // The User who owns/manages this Identity
+  teamMembers?: TeamMember[];
+  isIdentity: true; // Discriminator property
+  themePreference?: 'light' | 'dark' | 'pink' | 'blue'; // Identities can also have theme preferences
+}
+
 
 export interface Comment {
   id: string;
-  author: User;
+  author: User | Identity;
   content: string;
   createdAt: string;
   parentId?: string; // ID of the comment this is a reply to
@@ -29,7 +52,7 @@ export interface Comment {
 
 export interface Post {
   id: string;
-  author: User;
+  author: User | Identity;
   content: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'gif';
@@ -42,16 +65,9 @@ export interface Post {
   comments?: Comment[]; // Flat list of all comments and replies for this post
 }
 
-export interface Reply { // This type is currently unused but kept for potential future nested replies
-  id: string;
-  author: User;
-  content: string;
-  createdAt: string;
-}
-
 export interface Blog {
   id:string;
-  author: User; // Or Identity
+  author: User | Identity; 
   title: string;
   slug: string;
   content:string;
@@ -72,14 +88,15 @@ export interface Player {
 export interface PlayerChatMessage {
   id: string;
   player: Player;
-  author: User;
+  author: User | Identity;
   message: string;
   createdAt: string;
 }
 
-export interface Identity extends User {
-  isIdentity: true;
-  // teamMembers?: User[]; // Future
-  // permissions?: any; // Future
-}
+// This was previously defined as an extension of User, but now it's a distinct type.
+// export interface Identity extends User {
+//   isIdentity: true;
+//   // teamMembers?: User[]; // Future
+//   // permissions?: any; // Future
+// }
 

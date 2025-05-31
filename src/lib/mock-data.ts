@@ -1,5 +1,6 @@
 
-import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment } from '@/types';
+
+import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment, Identity } from '@/types';
 
 export const mockUser1: User = {
   id: 'user1',
@@ -17,11 +18,12 @@ export const mockUser1: User = {
   ],
   themePreference: 'light',
   bio: 'Dedicated fantasy sports player. Always looking for the next big stat!',
+  isIdentity: false,
 };
 
 export const mockUser2: User = {
   id: 'user2',
-  username: 'AnalystPro',
+  username: 'AnalystProUser', // Changed to avoid conflict with Identity username
   email: 'pro@stathustle.com',
   profilePictureUrl: 'https://placehold.co/200x200.png',
   bannerImageUrl: 'https://placehold.co/1200x300.png',
@@ -30,10 +32,44 @@ export const mockUser2: User = {
     { sport: 'Hockey', level: 'very interested' },
   ],
   themePreference: 'dark',
-  bio: 'Professional sports analyst providing top-tier insights.',
+  bio: 'Professional sports analyst providing top-tier insights. This is my user account.',
+  isIdentity: false,
 };
 
 export const mockUsers: User[] = [mockUser1, mockUser2];
+
+export const mockIdentityAnalystPro: Identity = {
+  id: 'identity1',
+  username: 'AnalystPro', // The @username for the Identity
+  displayName: 'Pro Analysis Hub',
+  email: 'contact@proanalysis.com',
+  profilePictureUrl: 'https://placehold.co/200x200.png?text=ProIdentity',
+  bannerImageUrl: 'https://placehold.co/1200x300.png?text=ProBanner',
+  socialLinks: [{ platform: 'Website', url: 'https://proanalysis.com'}],
+  bio: 'The official hub for AnalystPro\'s insights and articles. Follow for top-tier fantasy advice.',
+  owner: mockUser2, // mockUser2 is the owner
+  teamMembers: [
+    { user: mockUser1, permissions: ['can_post_blogs'] } // Example team member
+  ],
+  isIdentity: true,
+  themePreference: 'dark',
+};
+
+export const mockIdentityFanaticBrand: Identity = {
+  id: 'identity2',
+  username: 'FanaticInsights', // The @username for the Identity
+  displayName: 'FantasyFanatic Insights',
+  profilePictureUrl: 'https://placehold.co/200x200.png?text=FFI',
+  bannerImageUrl: 'https://placehold.co/1200x300.png?text=FFIBanner',
+  bio: 'Deep dives and hot takes from FantasyFanatic.',
+  owner: mockUser1,
+  isIdentity: true,
+  themePreference: 'light',
+};
+
+
+export const mockIdentities: Identity[] = [mockIdentityAnalystPro, mockIdentityFanaticBrand];
+
 
 const mockComment1_post1: Comment = {
   id: 'comment1-post1',
@@ -82,12 +118,11 @@ const mockComment1_post3: Comment = {
 export const mockPosts: Post[] = [
   {
     id: 'post1',
-    author: mockUser1,
+    author: mockUser1, // User post
     content: 'Just drafted my fantasy basketball team! Feeling good about this season. 🏀 Who do you think is a sleeper pick this year? #FantasyBasketball #NBA',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
     reactions: 15,
     shares: 3,
-    // Total comments and replies for post1: mockComment1_post1, mockReply1_to_comment1_post1, mockReply2_to_comment1_post1, mockComment2_post1 = 4
     repliesCount: 4, 
     comments: [mockComment1_post1, mockReply1_to_comment1_post1, mockReply2_to_comment1_post1, mockComment2_post1],
     mediaUrl: 'https://placehold.co/600x400.png',
@@ -96,8 +131,8 @@ export const mockPosts: Post[] = [
   },
   {
     id: 'post2',
-    author: mockUser2,
-    content: "<b>Deep Dive Analysis</b>: Top 5 NFL quarterbacks to watch for MVP contention. My projections are looking interesting! 🏈 <i>Full blog post coming soon!</i>",
+    author: mockIdentityAnalystPro, // Identity post
+    content: "<b>Deep Dive Analysis (posted as @AnalystPro)</b>: Top 5 NFL quarterbacks to watch for MVP contention. My projections are looking interesting! 🏈 <i>Full blog post coming soon!</i>",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
     reactions: 42,
     shares: 10,
@@ -113,7 +148,7 @@ export const mockPosts: Post[] = [
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
     reactions: 22,
     shares: 1,
-    repliesCount: 1, // mockComment1_post3
+    repliesCount: 1, 
     comments: [mockComment1_post3],
     mediaUrl: 'https://placehold.co/400x225.png', 
     mediaType: 'gif',
@@ -124,8 +159,8 @@ export const mockPosts: Post[] = [
 export const mockBlogs: Blog[] = [
   {
     id: 'blog1',
-    author: mockUser2,
-    title: 'The Undervalued Stars of MLB: A Statistical Breakdown',
+    author: mockIdentityAnalystPro, // Blog by Identity
+    title: 'The Undervalued Stars of MLB: A Statistical Breakdown (by @AnalystPro)',
     slug: 'undervalued-mlb-stars',
     excerpt: 'Discover which MLB players are outperforming their fantasy value based on advanced metrics. My analysis points to some key pickups...',
     content: '<p>Full blog content here... discussing advanced stats like wOBA, FIP, and xBA for several players. Includes charts and tables.</p><img src="https://placehold.co/800x400.png" alt="MLB Stats Chart" data-ai-hint="baseball statistics" /> <p>More analysis follows...</p>',
@@ -134,7 +169,7 @@ export const mockBlogs: Blog[] = [
   },
   {
     id: 'blog2',
-    author: mockUser1,
+    author: mockUser1, // Blog by User (can be changed to Identity if needed)
     title: 'My Top 10 Fantasy Basketball Draft Picks for 2024',
     slug: 'top-10-fantasy-basketball-2024',
     excerpt: 'Get ready for your fantasy basketball draft! Here are my top 10 must-have players for the upcoming season, complete with rationale...',
@@ -175,7 +210,7 @@ export const mockPlayerChatMessages: PlayerChatMessage[] = [
   {
     id: 'chatmsg2',
     player: mockPlayerLuka,
-    author: mockUser2,
+    author: mockIdentityAnalystPro, // Chat message by Identity
     message: 'His usage rate is off the charts. Consistently a top performer.',
     createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(), // 2 minutes ago
   },
