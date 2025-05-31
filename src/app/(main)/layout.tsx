@@ -2,8 +2,9 @@
 "use client";
 import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+// useRouter and useSession are not needed here if we default to admin logged in
+// import { useRouter } from 'next/navigation';
+// import { useSession } from 'next-auth/react';
 import Header from '@/components/layout/header';
 import SidebarNav from '@/components/layout/sidebar-nav';
 import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/components/ui/sidebar';
@@ -13,15 +14,15 @@ import LiveSupportChat from '@/components/live-support-chat';
 import { FeedProvider } from '@/contexts/feed-context';
 import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useAuth } from '@/contexts/auth-context'; // AuthContext's user is derived from useSession
+import { useAuth } from '@/contexts/auth-context';
 import { useFeed } from '@/contexts/feed-context';
 
 
 function CreatePostModal() {
   const { isCreatePostModalOpen, closeCreatePostModal, publishPost, isPublishingPost } = useFeed();
-  const { user } = useAuth(); // user from AuthContext is based on NextAuth session
+  const { user } = useAuth();
 
-  if (!user) return null; 
+  if (!user) return null;
 
   const handleModalPostCreated = (newPostData: {content: string; mediaUrl?: string; mediaType?: "image" | "gif"}) => {
     publishPost(newPostData);
@@ -49,36 +50,38 @@ export default function MainLayout({
 }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const toggleChat = () => setIsChatOpen(!isChatOpen);
-  const router = useRouter();
-  const { data: session, status } = useSession();
+  // const router = useRouter();
+  // const { data: session, status } = useSession();
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
-    }
-  }, [status, router]);
+  // useEffect(() => {
+  //   // This logic is bypassed for dev mode (always admin logged in)
+  //   // if (status === 'unauthenticated') {
+  //   //   router.push('/login');
+  //   // }
+  // }, [status, router]);
 
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading application...</p>
-      </div>
-    );
-  }
+  // if (status === 'loading') {
+  //   // This can be removed or simplified as AuthContext provides a static admin
+  //   return (
+  //     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+  //       <Loader2 className="h-12 w-12 animate-spin text-primary" />
+  //       <p className="mt-4 text-muted-foreground">Loading application...</p>
+  //     </div>
+  //   );
+  // }
 
-  if (status === 'unauthenticated') {
-    // While router.push is async, rendering null prevents children from attempting to render.
-    return null; 
-  }
+  // if (status === 'unauthenticated') {
+  //   // This is bypassed
+  //   return null;
+  // }
 
-  // Only render the main layout if authenticated
+  // Always render the main layout with the default admin user
   return (
     <FeedProvider>
       <SidebarProvider>
         <div className="flex min-h-screen flex-col">
           <Header toggleChat={toggleChat} />
-          <div className="flex flex-1 pt-16"> 
+          <div className="flex flex-1 pt-16">
             <Sidebar collapsible="icon">
               <SidebarContent>
                 <SidebarNav />

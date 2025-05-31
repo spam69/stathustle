@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useState } from 'react'; 
+import { useState } from 'react';
 import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,26 +20,28 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useFeed } from '@/contexts/feed-context';
-import { signOut } from 'next-auth/react'; // Import signOut directly
+// import { signOut } from 'next-auth/react'; // Not used in dev mode
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation'; // For simulated logout
 
 interface HeaderProps {
   toggleChat: () => void;
 }
 
 export default function Header({ toggleChat }: HeaderProps) {
-  const { user, loading: authContextLoading } = useAuth(); // Get user from AuthContext
+  const { user, loading: authContextLoading } = useAuth();
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
 
-  const currentUser = user; 
+  const currentUser = user;
 
-  const getInitials = (name: string = "") => { 
+  const getInitials = (name: string = "") => {
     return name
       .split(' ')
       .map((n) => n[0])
@@ -48,9 +50,12 @@ export default function Header({ toggleChat }: HeaderProps) {
   };
 
   const handleLogout = async () => {
-    await signOut({ callbackUrl: '/login', redirect: true }); // Redirect to login after sign out
-    toast({ title: "Logged Out", description: "You have been successfully logged out."});
-    queryClient.clear(); // Clear react-query cache on logout
+    // In dev mode with always-logged-in admin, "logout" can be a no-op or simulate by redirecting
+    toast({ title: "Logout (Dev Mode)", description: "Admin user is always logged in. Refresh to simulate session clear."});
+    // Optionally, redirect to a non-auth page or refresh to clear some client state if needed
+    // For now, just a toast. If you want to go to login, we can add:
+    // router.push('/login'); // but login page itself is bypassed
+    // queryClient.clear(); // Could be disruptive if not truly logging out
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -72,7 +77,7 @@ export default function Header({ toggleChat }: HeaderProps) {
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
         <span className="font-headline text-lg font-semibold tracking-tight">StatHustle</span>
       </Link>
-      
+
       <div className="flex flex-1 items-center justify-end gap-1 md:gap-2">
         <form className="ml-auto hidden sm:flex flex-1 sm:flex-initial">
           <div className="relative">
@@ -112,6 +117,7 @@ export default function Header({ toggleChat }: HeaderProps) {
           <span className="sr-only">Live Support</span>
         </Button>
 
+        {/* In dev mode with always-logged-in admin, currentUser will always be true if AuthContext is set up */}
         {authContextLoading ? (
           <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
         ) : currentUser ? (
@@ -157,11 +163,12 @@ export default function Header({ toggleChat }: HeaderProps) {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Log out
+                Log out (Dev Mode)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
+          // This block should not be reached in dev mode if admin is always logged in
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild>
               <Link href="/login">
@@ -176,7 +183,7 @@ export default function Header({ toggleChat }: HeaderProps) {
           </div>
         )}
       </div>
-      
+
       <Dialog open={isSearchModalOpen} onOpenChange={setIsSearchModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -194,7 +201,7 @@ export default function Header({ toggleChat }: HeaderProps) {
               autoFocus
             />
             <Button type="submit" size="icon" aria-label="Submit search">
-              <Search className="h-4 w-4" /> 
+              <Search className="h-4 w-4" />
             </Button>
           </form>
         </DialogContent>
