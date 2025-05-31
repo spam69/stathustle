@@ -11,6 +11,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  password?: string; // Added for mock authentication
   profilePictureUrl?: string;
   bannerImageUrl?: string;
   socialLinks?: { platform: string; url: string }[];
@@ -92,11 +93,3 @@ export interface PlayerChatMessage {
   message: string;
   createdAt: string;
 }
-
-// This was previously defined as an extension of User, but now it's a distinct type.
-// export interface Identity extends User {
-//   isIdentity: true;
-//   // teamMembers?: User[]; // Future
-//   // permissions?: any; // Future
-// }
-

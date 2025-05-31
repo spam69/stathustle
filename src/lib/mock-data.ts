@@ -6,6 +6,7 @@ let mockUser1Data: User = {
   id: 'user1',
   username: 'FantasyFanatic',
   email: 'fanatic@stathustle.com',
+  password: 'password123', // Added mock password
   profilePictureUrl: 'https://placehold.co/200x200.png',
   bannerImageUrl: 'https://placehold.co/1200x300.png',
   socialLinks: [
@@ -25,6 +26,7 @@ let mockUser2Data: User = {
   id: 'user2',
   username: 'AnalystProUser',
   email: 'pro@stathustle.com',
+  password: 'password456', // Added mock password
   profilePictureUrl: 'https://placehold.co/200x200.png',
   bannerImageUrl: 'https://placehold.co/1200x300.png',
   sportInterests: [
@@ -40,7 +42,7 @@ const mockAdminUserData: User = {
   id: 'admin-user',
   username: 'admin',
   email: 'admin@email.com',
-  // password: 'admin', // Passwords are not stored directly in the user object for NextAuth
+  password: 'admin', // Added mock password
   profilePictureUrl: 'https://placehold.co/200x200.png?text=Admin',
   bannerImageUrl: 'https://placehold.co/1200x300.png?text=AdminBanner',
   sportInterests: [

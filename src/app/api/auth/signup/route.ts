@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       username,
       email,
-      // In a real app, password would be hashed and stored securely
+      password: password, // Store plain password for mock purposes
       sportInterests: sportInterests || [],
       profilePictureUrl: profilePictureUrl || mockUser1.profilePictureUrl, // Use default from mockUser1 if not provided
       bannerImageUrl: bannerImageUrl || mockUser1.bannerImageUrl,
@@ -33,11 +33,11 @@ export async function POST(request: Request) {
 
     mockUsers.push(newUser); // Add to in-memory array
 
-    return NextResponse.json(newUser, { status: 201 });
+    // Return the user object, but omit password for security best practice, even in mock
+    const { password: _, ...userToReturn } = newUser;
+    return NextResponse.json(userToReturn, { status: 201 });
   } catch (error) {
     console.error('Signup API error:', error);
     return NextResponse.json({ message: 'An unexpected error occurred' }, { status: 500 });
   }
 }
-
-    
