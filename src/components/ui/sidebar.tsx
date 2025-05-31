@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -26,7 +26,7 @@ const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
-const HEADER_HEIGHT = "4rem"; // Assuming h-16 for header translates to 4rem
+const HEADER_HEIGHT = "4rem"; 
 
 type SidebarContext = {
   state: "expanded" | "collapsed"
@@ -131,6 +131,7 @@ const SidebarProvider = React.forwardRef<
               {
                 "--sidebar-width": SIDEBAR_WIDTH,
                 "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+                "--header-height": HEADER_HEIGHT, 
                 ...style,
               } as React.CSSProperties
             }
@@ -176,11 +177,9 @@ const Sidebar = React.forwardRef<
         <div
           className={cn(
             "flex flex-col bg-sidebar text-sidebar-foreground",
-            // Ensure it starts below the header
-            "mt-16 h-[calc(100svh_-_var(--header-height))] w-[--sidebar-width]",
+            "mt-[var(--header-height)] h-[calc(100svh_-_var(--header-height))] w-[--sidebar-width]",
             className
           )}
-          style={{ '--header-height': HEADER_HEIGHT } as React.CSSProperties}
           ref={ref}
           {...props}
         >
@@ -195,16 +194,18 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden" // Sheet's X button will handle close
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-                // Mobile sidebar can be full height from top if desired, or also start below header
-                // For now, keeping it full height assuming it overlays
               } as React.CSSProperties
             }
             side={side}
           >
+            <SheetHeader className="p-4 border-b border-sidebar-border">
+              <SheetTitle className="font-headline text-lg">Navigation Menu</SheetTitle>
+              <SheetDescription className="sr-only">Main navigation for StatHustle.</SheetDescription>
+            </SheetHeader>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
         </Sheet>
@@ -220,24 +221,23 @@ const Sidebar = React.forwardRef<
         data-variant={variant}
         data-side={side}
       >
+        {/* This div acts as a spacer when the sidebar is fixed */}
         <div
           className={cn(
             "duration-200 relative w-[--sidebar-width] bg-transparent transition-[width] ease-linear",
-            // Position below header
-            "mt-16 h-[calc(100svh_-_var(--header-height))]", 
+            "mt-[var(--header-height)] h-[calc(100svh_-_var(--header-height))]",
             "group-data-[collapsible=offcanvas]:w-0",
             "group-data-[side=right]:rotate-180",
             variant === "floating" || variant === "inset"
               ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
               : "group-data-[collapsible=icon]:w-[--sidebar-width-icon]"
           )}
-           style={{ '--header-height': HEADER_HEIGHT } as React.CSSProperties}
         />
+        {/* This is the actual fixed sidebar panel */}
         <div
           className={cn(
             "duration-200 fixed z-20 hidden transition-[left,right,width] ease-linear md:flex",
-            // Position below header and set correct height
-            "top-16 bottom-0 h-[calc(100svh_-_var(--header-height))]", 
+            "top-[var(--header-height)] bottom-0 h-[calc(100svh_-_var(--header-height))]",
             "w-[--sidebar-width]",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
@@ -247,7 +247,6 @@ const Sidebar = React.forwardRef<
               : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
             className
           )}
-          style={{ '--header-height': HEADER_HEIGHT } as React.CSSProperties}
           {...props}
         >
           <div
@@ -305,8 +304,7 @@ const SidebarRail = React.forwardRef<
       title="Toggle Sidebar"
       className={cn(
         "absolute z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex",
-        // Position below header
-        "top-16 h-[calc(100svh_-_var(--header-height))]",
+        "top-[var(--header-height)] h-[calc(100svh_-_var(--header-height))]",
         "[[data-side=left]_&]:cursor-w-resize [[data-side=right]_&]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full group-data-[collapsible=offcanvas]:hover:bg-sidebar",
@@ -314,7 +312,6 @@ const SidebarRail = React.forwardRef<
         "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
         className
       )}
-      style={{ '--header-height': HEADER_HEIGHT } as React.CSSProperties}
       {...props}
     />
   )
@@ -326,23 +323,19 @@ const SidebarInset = React.forwardRef<
   React.ComponentProps<"main">
 >(({ className, ...props }, ref) => {
   return (
-    // This main element is now inside a div with pt-16 in MainLayout, so its own min-h-svh is fine.
-    // Its effective height starts below the header.
     <main
       ref={ref}
       className={cn(
-        "relative flex flex-1 flex-col bg-background", // Removed min-h-svh as parent div handles it
+        "relative flex flex-1 flex-col bg-background",
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4)-var(--header-height))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         className
       )}
-      style={{ '--header-height': HEADER_HEIGHT } as React.CSSProperties}
       {...props}
     />
   )
 })
 SidebarInset.displayName = "SidebarInset"
 
-// ... rest of the Sidebar components (SidebarInput, SidebarHeader, etc.) remain unchanged ...
 const SidebarInput = React.forwardRef<
   React.ElementRef<typeof Input>,
   React.ComponentProps<typeof Input>
