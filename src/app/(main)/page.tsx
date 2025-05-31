@@ -4,25 +4,22 @@
 import { useEffect, useState } from 'react';
 import CreatePostForm from '@/components/create-post-form';
 import PostCard from '@/components/post-card';
-import type { Post as PostType, User, Comment as CommentType } from '@/types';
+import type { Post as PostType, User, Comment as CommentType, Identity } from '@/types';
 import { useAuth } from '@/contexts/auth-context';
 import { mockPosts } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
-import { Loader2, RefreshCw } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FeedProvider, useFeed } from '@/contexts/feed-context';
+// Dialog imports removed
 
 function SocialFeedContent() {
   const { user } = useAuth();
   const [posts, setPosts] = useState<PostType[]>(mockPosts);
-  const [visiblePostsCount, setVisiblePostsCount] = useState(5); // For pagination
-  const { isCreatePostModalOpen, closeCreatePostModal, publishPost: publishPostViaContext } = useFeed();
+  const [visiblePostsCount, setVisiblePostsCount] = useState(5); 
+  // useFeed related state removed
 
-  const handlePostCreatedForForm = (newPost: PostType) => {
-    // This function is passed to CreatePostForm
-    // It will call the context's publishPost, which updates state and closes modal
-    publishPostViaContext(newPost);
+  const handlePostCreated = (newPost: PostType) => {
+    setPosts(prevPosts => 
+      [newPost, ...prevPosts].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    );
   };
 
   const handleCommentAdded = (postId: string, commentText: string, parentId?: string) => {
@@ -30,7 +27,7 @@ function SocialFeedContent() {
 
     const newComment: CommentType = {
       id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      author: user, 
+      author: user as User | Identity, // Ensure type compatibility
       content: commentText,
       createdAt: new Date().toISOString(),
       likes: 0,
@@ -88,15 +85,8 @@ function SocialFeedContent() {
     <div className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-bold mb-6 font-headline text-primary">Social Feed</h1>
       
-      {/* Create Post Modal controlled by FeedContext */}
-      <Dialog open={isCreatePostModalOpen} onOpenChange={(isOpen) => !isOpen && closeCreatePostModal()}>
-        <DialogContent className="sm:max-w-[625px]">
-          <DialogHeader>
-            <DialogTitle className="font-headline text-lg">Create Post</DialogTitle>
-          </DialogHeader>
-          <CreatePostForm onPostCreated={handlePostCreatedForForm} />
-        </DialogContent>
-      </Dialog>
+      {/* Create Post Form rendered directly */}
+      <CreatePostForm onPostCreated={handlePostCreated} />
       
       <h2 className="text-xl font-semibold mt-8 mb-3 font-headline">Recent Posts</h2>
       {displayedPosts.length > 0 ? (
@@ -125,12 +115,8 @@ function SocialFeedContent() {
 }
 
 export default function SocialFeedPage() {
-  // Need to manage posts state here to pass to FeedProvider
-  const [posts, setPosts] = useState<PostType[]>(mockPosts);
-
+  // FeedProvider and its props removed
   return (
-    <FeedProvider initialPosts={posts} setInitialPosts={setPosts}>
       <SocialFeedContent />
-    </FeedProvider>
   );
 }
