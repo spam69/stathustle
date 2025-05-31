@@ -1,3 +1,4 @@
+
 export type SportInterestLevel = 'very interested' | 'somewhat interested' | 'no interest';
 
 export interface SportInterest {
@@ -17,22 +18,29 @@ export interface User {
   bio?: string;
 }
 
+export interface Comment {
+  id: string;
+  author: User;
+  content: string;
+  createdAt: string;
+}
+
 export interface Post {
   id: string;
   author: User;
   content: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'gif';
-  teamSnapshot?: any; 
-  tags?: string[]; 
-  createdAt: string; 
+  teamSnapshot?: any;
+  tags?: string[];
+  createdAt: string;
   reactions: number;
   shares: number;
-  repliesCount: number;
-  // replies?: Reply[]; // For detailed view
+  repliesCount: number; // This will represent the number of comments
+  comments?: Comment[];
 }
 
-export interface Reply {
+export interface Reply { // This type is currently unused but kept for potential future nested replies
   id: string;
   author: User;
   content: string;
@@ -44,7 +52,7 @@ export interface Blog {
   author: User; // Or Identity
   title: string;
   slug: string;
-  content: string; 
+  content: string;
   excerpt?: string;
   coverImageUrl?: string;
   createdAt: string;

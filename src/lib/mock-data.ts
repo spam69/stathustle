@@ -1,4 +1,5 @@
-import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest } from '@/types';
+
+import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment } from '@/types';
 
 export const mockUser1: User = {
   id: 'user1',
@@ -34,6 +35,20 @@ export const mockUser2: User = {
 
 export const mockUsers: User[] = [mockUser1, mockUser2];
 
+const mockComment1: Comment = {
+  id: 'comment1',
+  author: mockUser2,
+  content: 'Great point about sleeper picks! I am keeping an eye on Player Z.',
+  createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
+};
+
+const mockComment2: Comment = {
+  id: 'comment2',
+  author: mockUser1,
+  content: 'Thanks! Player Z is a good call, solid potential.',
+  createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 mins ago
+};
+
 export const mockPosts: Post[] = [
   {
     id: 'post1',
@@ -43,6 +58,7 @@ export const mockPosts: Post[] = [
     reactions: 15,
     shares: 3,
     repliesCount: 2,
+    comments: [mockComment1, mockComment2],
     mediaUrl: 'https://placehold.co/600x400.png',
     mediaType: 'image',
     tags: ['@FantasyPlayerX', '#FantasyBasketball']
@@ -54,7 +70,8 @@ export const mockPosts: Post[] = [
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
     reactions: 42,
     shares: 10,
-    repliesCount: 5,
+    repliesCount: 0,
+    comments: [],
     teamSnapshot: { teamName: 'GridironGurus', players: ['QB1', 'RB1', 'WR1'] },
     tags: ['#NFLAnalysis', '#FantasyFootball']
   },
@@ -66,7 +83,15 @@ export const mockPosts: Post[] = [
     reactions: 22,
     shares: 1,
     repliesCount: 1,
-    mediaUrl: 'https://placehold.co/400x225.png', // GIF placeholder
+    comments: [
+      {
+        id: 'comment3',
+        author: mockUser2,
+        content: 'That game was epic! Still buzzing from it.',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString(), // 23 hours ago
+      }
+    ],
+    mediaUrl: 'https://placehold.co/400x225.png', 
     mediaType: 'gif',
     tags: ['#Hockey']
   },
