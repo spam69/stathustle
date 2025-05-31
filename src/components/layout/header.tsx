@@ -2,6 +2,7 @@
 "use client";
 
 import Link from 'next/link';
+import { useState } from 'react'; // Added for modal state
 import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"; // Added Dialog
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -27,6 +29,7 @@ export default function Header({ toggleChat }: HeaderProps) {
   const { user, logout, loading } = useAuth();
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false); // State for search modal
 
   const getInitials = (name: string) => {
     return name
@@ -34,6 +37,13 @@ export default function Header({ toggleChat }: HeaderProps) {
       .map((n) => n[0])
       .join('')
       .toUpperCase();
+  };
+
+  const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    // TODO: Implement actual search logic
+    console.log("Search submitted from modal with value:", event.currentTarget.searchQuery.value);
+    setIsSearchModalOpen(false);
   };
 
   return (
@@ -50,7 +60,8 @@ export default function Header({ toggleChat }: HeaderProps) {
       </Link>
       
       <div className="flex flex-1 items-center justify-end gap-1 md:gap-2">
-        <form className="ml-auto hidden flex-1 sm:flex-initial md:flex">
+        {/* Search Form (visible sm and up) */}
+        <form className="ml-auto hidden sm:flex flex-1 sm:flex-initial">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -61,7 +72,15 @@ export default function Header({ toggleChat }: HeaderProps) {
           </div>
         </form>
 
-        {user && ( /* Button is now visible on all screen sizes if user is logged in */
+        {/* Search Icon Button (visible on screens smaller than sm) */}
+        <div className="ml-auto sm:hidden"> {/* Wrapper to apply ml-auto */}
+          <Button variant="ghost" size="icon" onClick={() => setIsSearchModalOpen(true)}>
+            <Search className="h-5 w-5" />
+            <span className="sr-only">Open search</span>
+          </Button>
+        </div>
+
+        {user && (
           <Button variant="ghost" size="icon" onClick={openCreatePostModal} aria-label="Create Post">
             <PlusSquare className="h-5 w-5" />
           </Button>
@@ -103,7 +122,7 @@ export default function Header({ toggleChat }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {isMobile && ( /* Still keeping this for mobile as an alternative access */
+              {isMobile && (
                 <DropdownMenuItem onClick={openCreatePostModal}>
                   <PlusSquare className="mr-2 h-4 w-4" />
                   Create Post
@@ -143,6 +162,30 @@ export default function Header({ toggleChat }: HeaderProps) {
           </div>
         )}
       </div>
+      
+      {/* Search Modal */}
+      <Dialog open={isSearchModalOpen} onOpenChange={setIsSearchModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Search StatHustle</DialogTitle>
+            <DialogDescription>
+              Find players, posts, blogs, or users.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 mt-4">
+            <Input
+              name="searchQuery" // Added name for form submission access
+              type="search"
+              placeholder="Search..."
+              className="flex-1"
+              autoFocus
+            />
+            <Button type="submit" size="icon" aria-label="Submit search">
+              <Search className="h-4 w-4" /> 
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
