@@ -12,25 +12,25 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Image as ImageIcon, Film, Users, Paperclip, Smile } from "lucide-react";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-// Post type removed as it's not strictly needed for form values
+import { useFeed } from '@/contexts/feed-context';
+
 
 const postSchema = z.object({
   content: z.string().min(1, "Post cannot be empty.").max(1000, "Post too long."),
-  // mediaUrl and mediaType could be added here if managed by react-hook-form
-  // For simplicity, we'll handle them outside the form schema for now.
 });
 
 type PostFormValues = z.infer<typeof postSchema>;
 
 interface CreatePostFormProps {
-  onPostCreated: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }) => void;
+  onPostCreated?: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }) => void; // Made optional for modal usage
+  isModal?: boolean; // To differentiate styling or behavior if needed
 }
 
-export default function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
+export default function CreatePostForm({ onPostCreated, isModal = false }: CreatePostFormProps) {
   const { user } = useAuth();
-  const { toast } = useToast(); // Toast can still be used for form-specific feedback
+  const { toast } = useToast();
+  const { publishPost, closeCreatePostModal } = useFeed(); // Get publishPost from context
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Mock state for media, in a real app this would involve file inputs/upload logic
   const [mediaUrl, setMediaUrl] = useState<string | undefined>(undefined);
   const [mediaType, setMediaType] = useState<'image' | 'gif' | undefined>(undefined);
 
@@ -49,32 +49,36 @@ export default function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
     }
     setIsSubmitting(true);
 
-    // Simulate API call or processing
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 300)); // Simulate API call
 
-    onPostCreated({
+    const postData = {
       content: data.content,
-      // In a real app, mediaUrl and mediaType would come from file upload handling
-      mediaUrl: mediaUrl, 
+      mediaUrl: mediaUrl,
       mediaType: mediaType,
-    });
+    };
+
+    if (onPostCreated) { // If prop is provided (typically for inline form)
+      onPostCreated(postData);
+    } else { // Otherwise, use context function (typically for modal)
+      publishPost(postData.content, postData.mediaUrl, postData.mediaType);
+      toast({ title: "Success", description: "Your post has been published!" });
+      if (isModal) closeCreatePostModal();
+    }
     
     form.reset();
-    setMediaUrl(undefined); // Reset media after post
+    setMediaUrl(undefined);
     setMediaType(undefined);
     setIsSubmitting(false);
-    // Toast for successful submission can be handled by the caller of onPostCreated
   };
   
-  const getInitials = (name: string) => {
+  const getInitials = (name: string = "") => {
     return name
       .split(' ')
       .map((n) => n[0])
       .join('')
-      .toUpperCase();
+      .toUpperCase() || 'U';
   };
 
-  // Mock function to add an image
   const handleAddImageMock = () => {
     setMediaUrl("https://placehold.co/600x300.png?text=MockImage");
     setMediaType("image");
@@ -87,30 +91,29 @@ export default function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
     toast({ title: "GIF Added (Mock)", description: "A placeholder GIF has been attached."});
   };
 
-
-  if (!user) {
-    // This component might be rendered conditionally by its parent,
-    // but this check is a safeguard if used directly.
+  if (!user && !isModal) { // Don't show login prompt if it's in a modal (parent controls visibility)
     return (
       <Card className="mb-6 p-4 text-center">
         <p className="text-muted-foreground">Please <a href="/login" className="underline text-primary">login</a> to create a post.</p>
       </Card>
     );
   }
+  
+  if (!user && isModal) return null; // Don't render anything if in modal and no user
 
   return (
-    <Card className="mb-6 shadow-lg">
+    <Card className={`mb-6 shadow-lg ${isModal ? 'shadow-none border-0' : ''}`}>
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <CardContent className="p-4">
           <div className="flex gap-4 items-start">
             <Avatar className="h-10 w-10 border">
-              <AvatarImage src={user.profilePictureUrl} alt={user.username} />
-              <AvatarFallback>{getInitials(user.username)}</AvatarFallback>
+              <AvatarImage src={user?.profilePictureUrl} alt={user?.username} data-ai-hint="person avatar"/>
+              <AvatarFallback>{getInitials(user?.username)}</AvatarFallback>
             </Avatar>
             <Textarea
               {...form.register("content")}
-              placeholder={`What's on your mind, ${user.username}?`}
-              className="min-h-[80px] flex-1 resize-none border-0 shadow-none focus-visible:ring-0 p-0"
+              placeholder={`What's on your mind, ${user?.username}?`}
+              className="min-h-[80px] flex-1 resize-none border-0 shadow-none focus-visible:ring-0"
               maxLength={1000}
             />
           </div>
@@ -120,7 +123,7 @@ export default function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
           {mediaUrl && (
             <div className="ml-14 mt-2 border rounded-md p-2 max-w-xs">
               <p className="text-xs text-muted-foreground">Attached {mediaType}:</p>
-              <img src={mediaUrl} alt="Selected media" className="rounded max-h-24" />
+              <img src={mediaUrl} alt="Selected media" className="rounded max-h-24" data-ai-hint="uploaded media" />
               <Button variant="link" size="sm" className="p-0 h-auto text-xs text-destructive" onClick={() => {setMediaUrl(undefined); setMediaType(undefined)}}>
                 Remove
               </Button>
@@ -128,7 +131,7 @@ export default function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
           )}
         </CardContent>
         <CardFooter className="flex justify-between items-center p-4 pt-0 border-t">
-          <div className="flex gap-1">
+          <div className="flex gap-2"> {/* Increased gap from gap-1 to gap-2 */}
             <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Add Image" onClick={handleAddImageMock} disabled={!!mediaUrl && mediaType !== 'image'}>
               <ImageIcon className="h-5 w-5" />
             </Button>
