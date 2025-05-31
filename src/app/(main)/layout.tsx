@@ -1,27 +1,30 @@
 
 "use client";
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Header from '@/components/layout/header';
 import SidebarNav from '@/components/layout/sidebar-nav';
 import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { LifeBuoy } from 'lucide-react';
+import { LifeBuoy, Loader2 } from 'lucide-react';
 import LiveSupportChat from '@/components/live-support-chat';
-import { FeedProvider, useFeed } from '@/contexts/feed-context';
+import { FeedProvider } from '@/contexts/feed-context';
 import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/contexts/auth-context'; // AuthContext's user is derived from useSession
+import { useFeed } from '@/contexts/feed-context';
+
 
 function CreatePostModal() {
   const { isCreatePostModalOpen, closeCreatePostModal, publishPost, isPublishingPost } = useFeed();
-  const { user } = useAuth();
+  const { user } = useAuth(); // user from AuthContext is based on NextAuth session
 
   if (!user) return null; 
 
   const handleModalPostCreated = (newPostData: {content: string; mediaUrl?: string; mediaType?: "image" | "gif"}) => {
-    publishPost(newPostData); // publishPost from context now takes this object
-    // Toast is handled within the mutation's onSuccess in FeedContext
+    publishPost(newPostData);
   };
 
   return (
@@ -33,7 +36,7 @@ function CreatePostModal() {
             Share your thoughts, analysis, or attach your fantasy team.
           </DialogDescription>
         </DialogHeader>
-        <CreatePostForm onPostCreated={handleModalPostCreated} isSubmitting={isPublishingPost} />
+        <CreatePostForm onPostCreated={handleModalPostCreated} isSubmitting={isPublishingPost} isModal={true}/>
       </DialogContent>
     </Dialog>
   );
@@ -46,9 +49,32 @@ export default function MainLayout({
 }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const toggleChat = () => setIsChatOpen(!isChatOpen);
+  const router = useRouter();
+  const { data: session, status } = useSession();
 
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
+
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Loading application...</p>
+      </div>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    // While router.push is async, rendering null prevents children from attempting to render.
+    return null; 
+  }
+
+  // Only render the main layout if authenticated
   return (
-    <FeedProvider> {/* FeedProvider now fetches its own initial data */}
+    <FeedProvider>
       <SidebarProvider>
         <div className="flex min-h-screen flex-col">
           <Header toggleChat={toggleChat} />
@@ -82,5 +108,3 @@ export default function MainLayout({
     </FeedProvider>
   );
 }
-
-    
