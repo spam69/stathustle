@@ -8,7 +8,6 @@ import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/compon
 import { Button } from '@/components/ui/button';
 import { LifeBuoy } from 'lucide-react';
 import LiveSupportChat from '@/components/live-support-chat';
-// FeedProvider removed
 
 export default function MainLayout({
   children,
@@ -20,18 +19,19 @@ export default function MainLayout({
   const toggleChat = () => setIsChatOpen(!isChatOpen);
 
   return (
-    // FeedProvider removed
       <SidebarProvider>
         <div className="flex min-h-screen flex-col">
           <Header toggleChat={toggleChat} />
-          <div className="flex flex-1 pt-16"> {/* Added pt-16 to account for sticky header */}
-            <Sidebar collapsible="icon" className="fixed top-16 bottom-0 z-20 h-[calc(100vh_-_4rem)]"> {/* Added className for positioning */}
+          {/* Removed pt-16 from this div, and fixed positioning from Sidebar component */}
+          <div className="flex flex-1"> 
+            <Sidebar collapsible="icon"> {/* Removed className for fixed positioning */}
               <SidebarContent>
                 <SidebarNav />
               </SidebarContent>
             </Sidebar>
-            <SidebarInset> {/* This will now correctly be offset by the sidebar */}
-              <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto h-[calc(100vh_-_4rem)]">
+            <SidebarInset>
+              {/* Removed explicit height and overflow from main element */}
+              <main className="flex-1 p-4 md:p-6 lg:p-8">
                 {children}
               </main>
             </SidebarInset>
@@ -50,6 +50,5 @@ export default function MainLayout({
           <LiveSupportChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
         </div>
       </SidebarProvider>
-    // FeedProvider removed
   );
 }
