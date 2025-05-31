@@ -60,11 +60,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     id: session.user.id,
     username: session.user.username,
     email: session.user.email ?? '', 
-    profilePictureUrl: session.user.image ?? undefined, 
+    // Attempt to get these from mockUsers if session doesn't have them directly
+    // In a real app, these would ideally be part of the session/JWT token
+    // or fetched separately after login.
+    profilePictureUrl: session.user.image ?? mockUsers.find(u => u.id === session.user.id)?.profilePictureUrl,
+    bannerImageUrl: mockUsers.find(u => u.id === session.user.id)?.bannerImageUrl,
+    bio: mockUsers.find(u => u.id === session.user.id)?.bio,
+    sportInterests: mockUsers.find(u => u.id === session.user.id)?.sportInterests,
+    themePreference: mockUsers.find(u => u.id === session.user.id)?.themePreference || 'system',
+    isIdentity: false, // Assuming NextAuth session user is not an Identity by default here
   } as (AppUser & { id: string; username: string }) : null;
 
 
-  const login = async (credentials: {emailOrUsername: string; password: string}) => {
+  const login = async (credentials: { emailOrUsername: string; password: string }) => {
     const result = await signIn('credentials', {
       redirect: false, 
       emailOrUsername: credentials.emailOrUsername,
@@ -72,12 +80,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     if (result?.error) {
-      toast({ title: "Login Failed", description: result.error, variant: "destructive" });
+      console.error("NextAuth SignIn Error:", result.error);
+      toast({ title: "Login Failed", description: result.error === "CredentialsSignin" ? "Invalid credentials." : result.error, variant: "destructive" });
       return false;
     }
     if (result?.ok) {
       toast({ title: "Login Successful", description: `Welcome back!`});
       queryClient.invalidateQueries({ queryKey: ['posts'] }); 
+      queryClient.invalidateQueries({ queryKey: ['profile', credentials.emailOrUsername] }); // also invalidate profile
       return true;
     }
     return false;
@@ -91,9 +101,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signupMutation = useMutation<AppUser, Error, Omit<AppUser, 'id' | 'themePreference' | 'isIdentity'> & { password: string }>({
     mutationFn: signupUser,
-    // onSuccess toast is now handled by the main signup function for a combined flow message
     onError: (error) => {
-      toast({ title: "Signup Failed", description: error.message, variant: "destructive" });
+      // This specific error is handled by the main signup function's try/catch as well,
+      // but direct API errors will be caught here.
+      toast({ title: "Signup API Failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -107,21 +118,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           description: "Logging you in automatically...",
         });
         
-        // Attempt to log in with the new credentials
-        // The login function handles its own success/failure toasts.
-        await login({ 
+        const loginSuccess = await login({ 
           emailOrUsername: signedUpUser.email, 
-          password: signupData.password,  // Password from the original signup form
+          password: signupData.password,
         });
 
-        // Return the user object if API signup was successful.
-        // The SignupPage will redirect based on this.
+        // The login function handles its own success/failure toasts.
+        // If login was not successful, the user might still be "signed up" but not logged in.
+        // The page redirection should still occur based on signup success.
         return signedUpUser; 
       }
-      return null; // Should not be reached if mutateAsync succeeds and returns a user
-    } catch (error) {
-      // Errors from signupUser API call are handled by signupMutation.onError.
-      // This catch is for other potential errors during the process.
+      return null;
+    } catch (error: any) {
+      // Catch errors from signupUser (if not already handled by mutation's onError, e.g. network issues before API call)
+      // Or other issues in this flow.
+       if (!signupMutation.isError) { // Avoid double-toasting if mutation already caught it
+         toast({ title: "Signup Process Failed", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+       }
       return null;
     }
   };
@@ -133,7 +146,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     },
     onSuccess: (data) => {
       toast({ title: "Settings Updated", description: "Your profile information has been saved." });
+      // Update the session or refetch if necessary, or rely on next refetch of profile data
       queryClient.invalidateQueries({ queryKey: ['profile', data.username] });
+      queryClient.invalidateQueries({ queryKey: ['session'] }); // Invalidate NextAuth session to pick up changes if any were made to session-relevant fields
     },
     onError: (error) => {
       toast({ title: "Update Failed", description: error.message, variant: "destructive" });
@@ -149,6 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const updatedUser = await updateSettingsMutation.mutateAsync(settings);
       return updatedUser;
     } catch(e) {
+      // error already handled by mutation's onError
       return null;
     }
   }, [appUserFromSession, updateSettingsMutation, toast, queryClient]);
@@ -178,3 +194,8 @@ export const useAuth = () => {
   }
   return context;
 };
+
+// Helper to get mockUsers, ensure it's available for AuthContext
+// This is a bit of a workaround because client components can't directly import server-only data easily
+// In a real app, these details would come from the session/JWT or an API call.
+import { mockUsers } from '@/lib/mock-data';
