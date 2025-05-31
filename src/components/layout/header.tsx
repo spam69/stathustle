@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
-import { useSidebar } from '@/components/ui/sidebar'; 
+import { useSidebar } from '@/components/ui/sidebar';
 import { useFeed } from '@/contexts/feed-context';
 
 interface HeaderProps {
@@ -25,7 +25,7 @@ interface HeaderProps {
 
 export default function Header({ toggleChat }: HeaderProps) {
   const { user, logout, loading } = useAuth();
-  const { toggleSidebar, isMobile } = useSidebar(); 
+  const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
 
   const getInitials = (name: string) => {
@@ -61,7 +61,7 @@ export default function Header({ toggleChat }: HeaderProps) {
           </div>
         </form>
 
-        {user && !isMobile && (
+        {user && ( /* Button is now visible on all screen sizes if user is logged in */
           <Button variant="ghost" size="icon" onClick={openCreatePostModal} aria-label="Create Post">
             <PlusSquare className="h-5 w-5" />
           </Button>
@@ -103,7 +103,7 @@ export default function Header({ toggleChat }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {isMobile && (
+              {isMobile && ( /* Still keeping this for mobile as an alternative access */
                 <DropdownMenuItem onClick={openCreatePostModal}>
                   <PlusSquare className="mr-2 h-4 w-4" />
                   Create Post
