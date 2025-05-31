@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
-import type { Player, Post } from '@/types';
+import type { Player, Post, Comment } from '@/types';
 import { mockPlayers, mockPosts } from '@/lib/mock-data';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,9 +13,11 @@ import PlayerChat from '@/components/player-chat';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, Shirt, Target, Trophy } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function PlayerPage() {
   const params = useParams();
+  const { user } = useAuth();
   const sport = params.sport as string;
   const playerNameSlug = params.playerName as string; // e.g., "luka_doncic"
 
@@ -55,6 +58,29 @@ export default function PlayerPage() {
       }, 500);
     }
   }, [sport, playerNameSlug]);
+
+  const handleCommentAddedOnPlayerPage = (postId: string, commentText: string) => {
+    if (!user) return;
+
+    const newComment: Comment = {
+      id: `comment-${Date.now()}`,
+      author: user,
+      content: commentText,
+      createdAt: new Date().toISOString(),
+    };
+
+    setTaggedPosts(prevPosts =>
+      prevPosts.map(post =>
+        post.id === postId
+          ? {
+              ...post,
+              comments: [...(post.comments || []), newComment].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+              repliesCount: (post.comments?.length || 0) + 1,
+            }
+          : post
+      )
+    );
+  };
 
   if (loading) {
     return (
@@ -122,7 +148,7 @@ export default function PlayerPage() {
         <h2 className="text-2xl font-bold mb-4 font-headline">Activity for {player.name}</h2>
         {taggedPosts.length > 0 ? (
           taggedPosts.map(post => (
-            <PostCard key={post.id} post={post} />
+            <PostCard key={post.id} post={post} onCommentAdded={handleCommentAddedOnPlayerPage} />
           ))
         ) : (
           <p className="text-muted-foreground text-center py-8">No posts found mentioning {player.name} yet.</p>
