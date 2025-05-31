@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu } from 'lucide-react';
+import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -18,7 +18,11 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar'; 
 
-export default function Header() {
+interface HeaderProps {
+  toggleChat: () => void;
+}
+
+export default function Header({ toggleChat }: HeaderProps) {
   const { user, logout, loading } = useAuth();
   const { toggleSidebar, isMobile } = useSidebar(); 
 
@@ -44,7 +48,7 @@ export default function Header() {
         <span className="font-headline text-lg font-semibold tracking-tight">StatHustle</span>
       </Link>
       
-      <div className="flex flex-1 items-center justify-end gap-4">
+      <div className="flex flex-1 items-center justify-end gap-2 md:gap-4">
         <form className="ml-auto hidden flex-1 sm:flex-initial md:flex">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -56,13 +60,17 @@ export default function Header() {
           </div>
         </form>
         <ThemeSwitcher />
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
           <Bell className="h-5 w-5" />
           <span className="absolute -top-1 -right-1 flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
             <span className="relative inline-flex rounded-full h-3 w-3 bg-accent"></span>
           </span>
           <span className="sr-only">Notifications</span>
+        </Button>
+        <Button variant="ghost" size="icon" onClick={toggleChat} aria-label="Open Live Support Chat">
+          <MessageSquare className="h-5 w-5" />
+          <span className="sr-only">Live Support</span>
         </Button>
 
         {loading ? (

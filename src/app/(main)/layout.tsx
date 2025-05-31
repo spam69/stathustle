@@ -29,7 +29,7 @@ export default function MainLayout({
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        <Header />
+        <Header toggleChat={toggleChat} />
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
           {children}
         </main>
