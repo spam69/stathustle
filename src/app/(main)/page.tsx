@@ -6,7 +6,7 @@ import CreatePostForm from '@/components/create-post-form';
 import PostCard from '@/components/post-card';
 import type { Post as PostType, User, Comment as CommentType } from '@/types';
 import { useAuth } from '@/contexts/auth-context';
-import { mockPosts, mockUser1 } from '@/lib/mock-data'; // Assuming mockUser1 can be the current user for new comments
+import { mockPosts } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,14 +20,16 @@ export default function SocialFeedPage() {
     setPosts(prevPosts => [newPost, ...prevPosts].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
   };
 
-  const handleCommentAdded = (postId: string, commentText: string) => {
-    if (!user) return; // Should be handled by PostCard, but good to double check
+  const handleCommentAdded = (postId: string, commentText: string, parentId?: string) => {
+    if (!user) return; 
 
     const newComment: CommentType = {
-      id: `comment-${Date.now()}`,
-      author: user, // Use the currently logged-in user
+      id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      author: user, 
       content: commentText,
       createdAt: new Date().toISOString(),
+      likes: 0,
+      ...(parentId && { parentId }),
     };
 
     setPosts(prevPosts =>
@@ -35,9 +37,37 @@ export default function SocialFeedPage() {
         post.id === postId
           ? {
               ...post,
-              comments: [...(post.comments || []), newComment],
-              repliesCount: (post.comments?.length || 0) + 1, // Update repliesCount
+              comments: [...(post.comments || []), newComment].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()), // Keep flat list sorted by creation for now
+              repliesCount: (post.repliesCount || 0) + 1,
             }
+          : post
+      )
+    );
+  };
+  
+  const handleLikeComment = (postId: string, commentId: string) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            comments: (post.comments || []).map(comment => 
+              comment.id === commentId 
+                ? { ...comment, likes: (comment.likes || 0) + 1 }
+                : comment
+            )
+          };
+        }
+        return post;
+      })
+    );
+  };
+
+  const handleLikePost = (postId: string) => {
+    setPosts(prevPosts =>
+      prevPosts.map(post =>
+        post.id === postId
+          ? { ...post, reactions: (post.reactions || 0) + 1 }
           : post
       )
     );
@@ -59,7 +89,13 @@ export default function SocialFeedPage() {
       <h2 className="text-xl font-semibold mt-8 mb-3 font-headline">Recent Posts</h2>
       {displayedPosts.length > 0 ? (
         displayedPosts.map(post => (
-          <PostCard key={post.id} post={post} onCommentAdded={handleCommentAdded} />
+          <PostCard 
+            key={post.id} 
+            post={post} 
+            onCommentAdded={handleCommentAdded}
+            onLikeComment={handleLikeComment}
+            onLikePost={handleLikePost}
+          />
         ))
       ) : (
         <p className="text-muted-foreground text-center py-8">No posts yet. Be the first to share!</p>

@@ -35,19 +35,49 @@ export const mockUser2: User = {
 
 export const mockUsers: User[] = [mockUser1, mockUser2];
 
-const mockComment1: Comment = {
-  id: 'comment1',
+const mockComment1_post1: Comment = {
+  id: 'comment1-post1',
   author: mockUser2,
   content: 'Great point about sleeper picks! I am keeping an eye on Player Z.',
   createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
+  likes: 5,
 };
 
-const mockComment2: Comment = {
-  id: 'comment2',
+const mockReply1_to_comment1_post1: Comment = {
+  id: 'reply1-to-comment1-post1',
   author: mockUser1,
   content: 'Thanks! Player Z is a good call, solid potential.',
   createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 mins ago
+  parentId: 'comment1-post1',
+  likes: 2,
 };
+
+const mockReply2_to_comment1_post1: Comment = {
+  id: 'reply2-to-comment1-post1',
+  author: mockUser2,
+  content: 'Definitely! Watched some film on him, looks promising.',
+  createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(), // 10 mins ago
+  parentId: 'comment1-post1',
+  likes: 1,
+};
+
+const mockComment2_post1: Comment = {
+  id: 'comment2-post1',
+  author: mockUser1,
+  content: 'Any thoughts on Player X? Seems a bit overrated to me this year.',
+  createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(), // 25 mins ago
+  likes: 3,
+};
+
+
+const mockComment1_post3: Comment = {
+  id: 'comment1-post3',
+  author: mockUser2,
+  content: 'That game was epic! Still buzzing from it.',
+  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString(), // 23 hours ago
+  likes: 10,
+};
+
 
 export const mockPosts: Post[] = [
   {
@@ -57,8 +87,9 @@ export const mockPosts: Post[] = [
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
     reactions: 15,
     shares: 3,
-    repliesCount: 2,
-    comments: [mockComment1, mockComment2],
+    // Total comments and replies for post1: mockComment1_post1, mockReply1_to_comment1_post1, mockReply2_to_comment1_post1, mockComment2_post1 = 4
+    repliesCount: 4, 
+    comments: [mockComment1_post1, mockReply1_to_comment1_post1, mockReply2_to_comment1_post1, mockComment2_post1],
     mediaUrl: 'https://placehold.co/600x400.png',
     mediaType: 'image',
     tags: ['@FantasyPlayerX', '#FantasyBasketball']
@@ -82,15 +113,8 @@ export const mockPosts: Post[] = [
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
     reactions: 22,
     shares: 1,
-    repliesCount: 1,
-    comments: [
-      {
-        id: 'comment3',
-        author: mockUser2,
-        content: 'That game was epic! Still buzzing from it.',
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString(), // 23 hours ago
-      }
-    ],
+    repliesCount: 1, // mockComment1_post3
+    comments: [mockComment1_post3],
     mediaUrl: 'https://placehold.co/400x225.png', 
     mediaType: 'gif',
     tags: ['#Hockey']

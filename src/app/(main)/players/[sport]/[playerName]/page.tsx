@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
-import type { Player, Post, Comment } from '@/types';
+import type { Player, Post, Comment as CommentType } from '@/types'; // Renamed Comment to CommentType
 import { mockPlayers, mockPosts } from '@/lib/mock-data';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,7 @@ export default function PlayerPage() {
   const params = useParams();
   const { user } = useAuth();
   const sport = params.sport as string;
-  const playerNameSlug = params.playerName as string; // e.g., "luka_doncic"
+  const playerNameSlug = params.playerName as string; 
 
   const [player, setPlayer] = useState<Player | null>(null);
   const [taggedPosts, setTaggedPosts] = useState<Post[]>([]);
@@ -36,7 +36,6 @@ export default function PlayerPage() {
   useEffect(() => {
     if (sport && playerNameSlug) {
       setLoading(true);
-      // Simulate API call
       setTimeout(() => {
         const foundPlayer = mockPlayers.find(
           p => p.sport.toLowerCase() === sport.toLowerCase() && 
@@ -45,11 +44,10 @@ export default function PlayerPage() {
         
         if (foundPlayer) {
           setPlayer(foundPlayer);
-          // Filter posts that tag this player (mock logic)
           const postsForPlayer = mockPosts.filter(post => 
             post.tags?.some(tag => tag.toLowerCase() === `@${foundPlayer.name.toLowerCase().replace(/\s+/g, '')}`) ||
             post.content.toLowerCase().includes(foundPlayer.name.toLowerCase())
-          );
+          ).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
           setTaggedPosts(postsForPlayer);
         } else {
           setPlayer(null);
@@ -59,14 +57,16 @@ export default function PlayerPage() {
     }
   }, [sport, playerNameSlug]);
 
-  const handleCommentAddedOnPlayerPage = (postId: string, commentText: string) => {
+  const handleCommentAddedOnPlayerPage = (postId: string, commentText: string, parentId?: string) => {
     if (!user) return;
 
-    const newComment: Comment = {
-      id: `comment-${Date.now()}`,
+    const newComment: CommentType = {
+      id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       author: user,
       content: commentText,
       createdAt: new Date().toISOString(),
+      likes: 0,
+      ...(parentId && { parentId }),
     };
 
     setTaggedPosts(prevPosts =>
@@ -74,13 +74,42 @@ export default function PlayerPage() {
         post.id === postId
           ? {
               ...post,
-              comments: [...(post.comments || []), newComment].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-              repliesCount: (post.comments?.length || 0) + 1,
+              comments: [...(post.comments || []), newComment].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+              repliesCount: (post.repliesCount || 0) + 1,
             }
           : post
       )
     );
   };
+
+  const handleLikeCommentOnPlayerPage = (postId: string, commentId: string) => {
+    setTaggedPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            comments: (post.comments || []).map(comment => 
+              comment.id === commentId 
+                ? { ...comment, likes: (comment.likes || 0) + 1 }
+                : comment
+            )
+          };
+        }
+        return post;
+      })
+    );
+  };
+
+  const handleLikePostOnPlayerPage = (postId: string) => {
+    setTaggedPosts(prevPosts =>
+      prevPosts.map(post =>
+        post.id === postId
+          ? { ...post, reactions: (post.reactions || 0) + 1 }
+          : post
+      )
+    );
+  };
+
 
   if (loading) {
     return (
@@ -112,7 +141,6 @@ export default function PlayerPage() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-6">
-      {/* Left Column: Player Info & Chat */}
       <div className="lg:col-span-1 space-y-6">
         <Card className="shadow-lg">
           <CardHeader className="items-center text-center p-6">
@@ -134,7 +162,6 @@ export default function PlayerPage() {
                 <Target className="h-4 w-4 mr-2 text-primary" /> Position: <span className="ml-1 font-medium text-foreground">{player.position}</span>
               </div>
             )}
-            {/* Placeholder for more stats */}
             <div className="flex items-center text-muted-foreground">
                 <Trophy className="h-4 w-4 mr-2 text-primary" /> Projections: <span className="ml-1 font-medium text-foreground">View Analyst Projections (mock)</span>
             </div>
@@ -143,12 +170,17 @@ export default function PlayerPage() {
         <PlayerChat player={player} />
       </div>
 
-      {/* Right Column: Tagged Posts */}
       <div className="lg:col-span-2">
         <h2 className="text-2xl font-bold mb-4 font-headline">Activity for {player.name}</h2>
         {taggedPosts.length > 0 ? (
           taggedPosts.map(post => (
-            <PostCard key={post.id} post={post} onCommentAdded={handleCommentAddedOnPlayerPage} />
+            <PostCard 
+              key={post.id} 
+              post={post} 
+              onCommentAdded={handleCommentAddedOnPlayerPage}
+              onLikeComment={handleLikeCommentOnPlayerPage}
+              onLikePost={handleLikePostOnPlayerPage}
+            />
           ))
         ) : (
           <p className="text-muted-foreground text-center py-8">No posts found mentioning {player.name} yet.</p>

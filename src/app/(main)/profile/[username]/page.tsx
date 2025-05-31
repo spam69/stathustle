@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import type { User, Post, Comment } from '@/types';
+import type { User, Post, Comment as CommentType } from '@/types'; // Renamed Comment
 import { mockUsers, mockPosts } from '@/lib/mock-data';
 import PostCard from '@/components/post-card';
 import UserProfileCard from '@/components/user-profile-card';
@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/auth-context';
 
 export default function UserProfilePage() {
   const params = useParams();
-  const { user: currentUser } = useAuth(); // Renamed to currentUser to avoid conflict with profileUser
+  const { user: currentUser } = useAuth(); 
   const username = params.username as string;
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
@@ -22,29 +22,32 @@ export default function UserProfilePage() {
   useEffect(() => {
     if (username) {
       setLoading(true);
-      // Simulate API call
       setTimeout(() => {
         const foundUser = mockUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
         if (foundUser) {
           setProfileUser(foundUser);
-          const postsByUser = mockPosts.filter(p => p.author.id === foundUser.id);
+          const postsByUser = mockPosts
+            .filter(p => p.author.id === foundUser.id)
+            .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
           setUserPosts(postsByUser);
         } else {
-          setProfileUser(null); // User not found
+          setProfileUser(null); 
         }
         setLoading(false);
       }, 500);
     }
   }, [username]);
 
-  const handleCommentAddedOnProfilePage = (postId: string, commentText: string) => {
+  const handleCommentAddedOnProfilePage = (postId: string, commentText: string, parentId?: string) => {
     if (!currentUser) return;
 
-    const newComment: Comment = {
-      id: `comment-${Date.now()}`,
+    const newComment: CommentType = {
+      id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       author: currentUser,
       content: commentText,
       createdAt: new Date().toISOString(),
+      likes: 0,
+      ...(parentId && { parentId }),
     };
 
     setUserPosts(prevPosts =>
@@ -52,9 +55,37 @@ export default function UserProfilePage() {
         post.id === postId
           ? {
               ...post,
-              comments: [...(post.comments || []), newComment].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-              repliesCount: (post.comments?.length || 0) + 1,
+              comments: [...(post.comments || []), newComment].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+              repliesCount: (post.repliesCount || 0) + 1,
             }
+          : post
+      )
+    );
+  };
+
+  const handleLikeCommentOnProfilePage = (postId: string, commentId: string) => {
+    setUserPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            comments: (post.comments || []).map(comment => 
+              comment.id === commentId 
+                ? { ...comment, likes: (comment.likes || 0) + 1 }
+                : comment
+            )
+          };
+        }
+        return post;
+      })
+    );
+  };
+
+  const handleLikePostOnProfilePage = (postId: string) => {
+    setUserPosts(prevPosts =>
+      prevPosts.map(post =>
+        post.id === postId
+          ? { ...post, reactions: (post.reactions || 0) + 1 }
           : post
       )
     );
@@ -88,7 +119,13 @@ export default function UserProfilePage() {
       <h2 className="text-2xl font-bold mt-8 mb-4 font-headline">Posts by {profileUser.username}</h2>
       {userPosts.length > 0 ? (
         userPosts.map(post => (
-          <PostCard key={post.id} post={post} onCommentAdded={handleCommentAddedOnProfilePage} />
+          <PostCard 
+            key={post.id} 
+            post={post} 
+            onCommentAdded={handleCommentAddedOnProfilePage}
+            onLikeComment={handleLikeCommentOnProfilePage}
+            onLikePost={handleLikePostOnProfilePage}
+          />
         ))
       ) : (
         <p className="text-muted-foreground text-center py-8">@{profileUser.username} hasn't posted anything yet.</p>

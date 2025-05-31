@@ -23,6 +23,8 @@ export interface Comment {
   author: User;
   content: string;
   createdAt: string;
+  parentId?: string; // ID of the comment this is a reply to
+  likes?: number;
 }
 
 export interface Post {
@@ -34,10 +36,10 @@ export interface Post {
   teamSnapshot?: any;
   tags?: string[];
   createdAt: string;
-  reactions: number;
+  reactions: number; // Reactions on the post itself
   shares: number;
-  repliesCount: number; // This will represent the number of comments
-  comments?: Comment[];
+  repliesCount: number; // Total number of comments and replies on the post
+  comments?: Comment[]; // Flat list of all comments and replies for this post
 }
 
 export interface Reply { // This type is currently unused but kept for potential future nested replies
@@ -52,7 +54,7 @@ export interface Blog {
   author: User; // Or Identity
   title: string;
   slug: string;
-  content: string;
+  content:string;
   excerpt?: string;
   coverImageUrl?: string;
   createdAt: string;
@@ -80,3 +82,4 @@ export interface Identity extends User {
   // teamMembers?: User[]; // Future
   // permissions?: any; // Future
 }
+
