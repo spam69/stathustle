@@ -20,26 +20,37 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useFeed } from '@/contexts/feed-context';
+import { signOut } from 'next-auth/react'; // Import signOut directly
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface HeaderProps {
   toggleChat: () => void;
 }
 
 export default function Header({ toggleChat }: HeaderProps) {
-  const { user, logout, loading: authContextLoading, session } = useAuth(); // Get user from new AuthContext
+  const { user, loading: authContextLoading } = useAuth(); // Get user from AuthContext
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // The user object from useAuth is now derived from NextAuth's session
-  const currentUser = user; // This user already has id, username from our AuthContext mapping
 
-  const getInitials = (name: string = "") => { // Added default empty string
+  const currentUser = user; 
+
+  const getInitials = (name: string = "") => { 
     return name
       .split(' ')
       .map((n) => n[0])
       .join('')
       .toUpperCase() || (name ? name[0]?.toUpperCase() : 'U');
+  };
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/login', redirect: true }); // Redirect to login after sign out
+    toast({ title: "Logged Out", description: "You have been successfully logged out."});
+    queryClient.clear(); // Clear react-query cache on logout
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -144,7 +155,7 @@ export default function Header({ toggleChat }: HeaderProps) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => logout()}>
+              <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Log out
               </DropdownMenuItem>

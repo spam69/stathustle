@@ -10,8 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useAuth } from '@/contexts/auth-context';
+import { signIn } from 'next-auth/react'; // Import signIn directly
+import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 const loginSchema = z.object({
   emailOrUsername: z.string().min(1, { message: "Email or Username is required." }),
@@ -22,8 +24,9 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth(); // Use login from new AuthContext
-  const [isLoading, setIsLoading] = useState(false); // Local loading state for the form
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -35,16 +38,30 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
-    const success = await login({
-      emailOrUsername: data.emailOrUsername,
-      password: data.password,
-    });
-    setIsLoading(false);
-    if (success) {
-      router.push('/'); // Redirect to home on successful login
-      router.refresh(); // Force refresh to update session state if necessary
+    try {
+      const result = await signIn('credentials', {
+        redirect: false,
+        emailOrUsername: data.emailOrUsername,
+        password: data.password,
+      });
+
+      if (result?.error) {
+        toast({ title: "Login Failed", description: result.error === "CredentialsSignin" ? "Invalid credentials." : result.error, variant: "destructive" });
+      } else if (result?.ok) {
+        toast({ title: "Login Successful", description: `Welcome back!`});
+        // Invalidate queries that depend on auth state
+        await queryClient.invalidateQueries({ queryKey: ['session'] }); // For useSession updates
+        await queryClient.invalidateQueries({ queryKey: ['posts'] }); // Example, if posts depend on user
+        router.push('/');
+        router.refresh(); // Force refresh to ensure layout reflects new auth state
+      } else {
+        toast({ title: "Login Attempt Failed", description: "An unexpected error occurred. Please try again.", variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Login Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
-    // Error toast is handled by AuthContext (via NextAuth signIn result)
   };
 
   return (
