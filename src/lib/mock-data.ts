@@ -36,7 +36,25 @@ let mockUser2Data: User = {
   isIdentity: false,
 };
 
-export let mockUsers: User[] = [mockUser1Data, mockUser2Data];
+const mockAdminUserData: User = {
+  id: 'admin-user',
+  username: 'admin',
+  email: 'admin@email.com',
+  // password: 'admin', // Passwords are not stored directly in the user object for NextAuth
+  profilePictureUrl: 'https://placehold.co/200x200.png?text=Admin',
+  bannerImageUrl: 'https://placehold.co/1200x300.png?text=AdminBanner',
+  sportInterests: [
+    { sport: 'Basketball', level: 'very interested' },
+    { sport: 'Football', level: 'very interested' },
+    { sport: 'Baseball', level: 'very interested' },
+    { sport: 'Hockey', level: 'very interested' },
+  ],
+  themePreference: 'system',
+  bio: 'Administrator account for StatHustle.',
+  isIdentity: false,
+};
+
+export let mockUsers: User[] = [mockUser1Data, mockUser2Data, mockAdminUserData];
 
 export let mockIdentityAnalystProData: Identity = {
   id: 'identity1',
@@ -194,7 +212,31 @@ export const mockPlayerShoheiData: Player = {
   position: 'Pitcher/Designated Hitter',
 };
 
-export let mockPlayers: Player[] = [mockPlayerLukaData, mockPlayerShoheiData];
+export const mockPlayerPatrickMahomesData: Player = {
+  id: 'player3',
+  name: 'Patrick Mahomes',
+  sport: 'Football',
+  profilePictureUrl: 'https://placehold.co/200x200.png',
+  team: 'Kansas City Chiefs',
+  position: 'Quarterback',
+};
+
+export const mockPlayerConnorMcDavidData: Player = {
+  id: 'player4',
+  name: 'Connor McDavid',
+  sport: 'Hockey',
+  profilePictureUrl: 'https://placehold.co/200x200.png',
+  team: 'Edmonton Oilers',
+  position: 'Center',
+};
+
+
+export let mockPlayers: Player[] = [
+    mockPlayerLukaData, 
+    mockPlayerShoheiData,
+    mockPlayerPatrickMahomesData,
+    mockPlayerConnorMcDavidData
+];
 
 export let mockPlayerChatMessages: PlayerChatMessage[] = [
   {
@@ -219,6 +261,7 @@ export const sportInterestLevels: SportInterestLevel[] = ['very interested', 'so
 // Expose the original mockUser1 and mockUser2 for AuthContext default or other direct uses if needed.
 export const mockUser1 = mockUser1Data;
 export const mockUser2 = mockUser2Data;
+export const mockAdminUser = mockAdminUserData; // Export the admin user as well
 export const mockIdentityAnalystPro = mockIdentityAnalystProData;
 export const mockIdentityFanaticBrand = mockIdentityFanaticBrandData;
 
