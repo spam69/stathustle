@@ -29,7 +29,8 @@ const getInitials = (name: string = "") => {
 
 export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, onLikeComment, currentUser }: CommentsModalProps) {
   const [newCommentText, setNewCommentText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<{ commentId: string; username: string } | null>(null);
+  // replyingTo will store the ID of the top-level comment and the username of the direct comment being replied to
+  const [replyingTo, setReplyingTo] = useState<{ topLevelCommentId: string; displayUsername: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -51,15 +52,17 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
     setIsSubmitting(true);
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 300));
-    onCommentSubmit(post.id, newCommentText.trim(), replyingTo?.commentId);
+    // If replyingTo is set, use its topLevelCommentId as the parentId. Otherwise, it's a new top-level comment.
+    onCommentSubmit(post.id, newCommentText.trim(), replyingTo?.topLevelCommentId);
     setNewCommentText('');
     setReplyingTo(null);
     setIsSubmitting(false);
     toast({ title: "Success", description: replyingTo ? "Reply posted!" : "Comment posted!"});
   };
 
-  const startReply = (commentId: string, username: string) => {
-    setReplyingTo({ commentId, username });
+  // Start reply: topLevelId is the ID of the original comment. username is the author of the comment being directly replied to.
+  const startReply = (topLevelId: string, username: string) => {
+    setReplyingTo({ topLevelCommentId: topLevelId, displayUsername: username });
     // Focus the textarea - might need a ref
   };
 
@@ -68,9 +71,14 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
     setNewCommentText(''); // Optionally clear text when cancelling reply focus
   };
 
-  const renderCommentAndReplies = (comment: CommentType, allComments: CommentType[], depth = 0) => {
-    const replies = allComments.filter(c => c.parentId === comment.id)
+  // originalCommentId is the ID of the top-level comment in this thread
+  const renderCommentAndReplies = (comment: CommentType, allComments: CommentType[], originalCommentId: string, depth = 0) => {
+    const replies = allComments.filter(c => c.parentId === comment.id) // Direct replies to *this* comment
                                .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    // For display purposes, we only visually nest direct replies.
+    // However, when the user clicks "Reply" on any comment (top-level or reply),
+    // the new comment will always be a child of `originalCommentId`.
     return (
       <div key={comment.id} className={`py-3 ${depth > 0 ? 'ml-6 pl-4 border-l border-muted/50' : ''}`}>
         <div className="flex items-start gap-3">
@@ -95,20 +103,21 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
                 <Heart className={`h-3.5 w-3.5 ${comment.likes && comment.likes > 0 ? 'text-red-500 fill-red-500' : ''}`} />
                 <span className="ml-1">{comment.likes || 0}</span>
               </Button>
-              <Button variant="ghost" size="xs" className="p-1 h-auto" onClick={() => startReply(comment.id, comment.author.username)} disabled={!currentUser}>
+              <Button variant="ghost" size="xs" className="p-1 h-auto" onClick={() => startReply(originalCommentId, comment.author.username)} disabled={!currentUser}>
                 <MessageSquare className="h-3.5 w-3.5" />
                 <span className="ml-1">Reply</span>
               </Button>
             </div>
           </div>
         </div>
-        {replies.map(reply => renderCommentAndReplies(reply, allComments, depth + 1))}
+        {/* Recursively render replies to this comment, passing the originalCommentId */}
+        {replies.map(reply => renderCommentAndReplies(reply, allComments, originalCommentId, depth + 1))}
       </div>
     );
   };
   
   const topLevelComments = (post.comments || [])
-    .filter(comment => !comment.parentId)
+    .filter(comment => !comment.parentId) // Only comments without a parentId are top-level
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
 
@@ -117,12 +126,12 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
       <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col p-0">
         <DialogHeader className="p-4 border-b">
           <DialogTitle className="font-headline">Comments on {post.author.username}'s post</DialogTitle>
-          {/* Optional: Post snippet <DialogDescription className="text-xs truncate">{post.content.substring(0,100)}...</DialogDescription> */}
         </DialogHeader>
         
         <ScrollArea className="flex-grow overflow-y-auto px-4">
             {topLevelComments.length > 0 ? (
-              topLevelComments.map(comment => renderCommentAndReplies(comment, post.comments || []))
+              // For each top-level comment, pass its own ID as the originalCommentId
+              topLevelComments.map(comment => renderCommentAndReplies(comment, post.comments || [], comment.id))
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">No comments yet. Be the first!</p>
             )}
@@ -133,7 +142,7 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
             <form onSubmit={handleMainSubmit} className="w-full space-y-2">
               {replyingTo && (
                 <div className="text-xs text-muted-foreground flex justify-between items-center">
-                  <span>Replying to <span className="font-semibold">@{replyingTo.username}</span></span>
+                  <span>Replying to <span className="font-semibold">@{replyingTo.displayUsername}</span></span>
                   <Button variant="ghost" size="xs" onClick={cancelReply} type="button" className="p-1 h-auto text-muted-foreground hover:text-destructive">
                     <X className="h-3 w-3 mr-1"/> Cancel
                   </Button>
@@ -145,7 +154,7 @@ export default function CommentsModal({ post, isOpen, onClose, onCommentSubmit, 
                   <AvatarFallback>{getInitials(currentUser.username)}</AvatarFallback>
                 </Avatar>
                 <Textarea
-                  placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : "Write a comment..."}
+                  placeholder={replyingTo ? `Reply to @${replyingTo.displayUsername}...` : "Write a comment..."}
                   value={newCommentText}
                   onChange={(e) => setNewCommentText(e.target.value)}
                   className="min-h-[60px] flex-1"
@@ -177,3 +186,4 @@ declare module '@/components/ui/button' {
         size?: 'default' | 'sm' | 'lg' | 'icon' | 'xs';
     }
 }
+
