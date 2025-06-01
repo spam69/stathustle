@@ -8,22 +8,21 @@ import * as z from 'zod';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"; // Added CardHeader, CardTitle
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Image as ImageIcon, Film, Users, Paperclip, Smile, X } from "lucide-react";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import type { Post } from '@/types'; // Import Post type
+import type { Post } from '@/types';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import Image from 'next/image'; // For displaying media in shared post preview
+import Image from 'next/image';
 
-// Schema allows content to be empty if a sharedOriginalPostId is present
 const postSchema = z.object({
   content: z.string().max(1000, "Post too long.").optional(),
   sharedOriginalPostId: z.string().optional(),
 }).refine(data => data.content || data.sharedOriginalPostId, {
   message: "Post cannot be empty unless you are sharing something.",
-  path: ["content"], // Point error to content field
+  path: ["content"],
 });
 
 
@@ -33,12 +32,22 @@ interface CreatePostFormProps {
   onPostCreated: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string }) => void;
   isSubmitting: boolean;
   isModal?: boolean;
-  postToShare?: Post | null; // Post to be shared, passed from modal context
-  onCancelShare?: () => void; // Callback to cancel sharing from within the form
+  postToShare?: Post | null;
+  onCancelShare?: () => void;
 }
 
-// A mini card to display the post being shared
 const SharedPostPreviewCard = ({ post }: { post: Post }) => {
+  // Guard against undefined post or post.author
+  if (!post || !post.author) {
+    return (
+      <Card className="mt-3 mb-2 border-border/70 shadow-sm bg-muted/30">
+        <CardContent className="p-3">
+          <p className="text-xs text-muted-foreground">Author information is unavailable for the shared post.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const authorDisplayName = 'isIdentity' in post.author && post.author.displayName ? post.author.displayName : post.author.username;
   const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase() || 'S';
 
@@ -86,10 +95,8 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
   });
   
   useEffect(() => {
-    // Update sharedOriginalPostId in form if postToShare changes (e.g. modal opens with new share)
     form.setValue('sharedOriginalPostId', postToShare?.id);
-     if(postToShare) { // If there's a post to share, content can be optional. Resetting might clear user's partial caption.
-        // form.reset({ content: "", sharedOriginalPostId: postToShare.id });
+     if(postToShare) {
      } else {
         form.reset({ content: "", sharedOriginalPostId: undefined });
      }
@@ -103,19 +110,19 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     }
 
     const postData = {
-      content: data.content || "", // Ensure content is string, even if empty
+      content: data.content || "",
       mediaUrl: mediaUrl,
       mediaType: mediaType,
-      sharedOriginalPostId: postToShare?.id, // Always take from postToShare prop if available
+      sharedOriginalPostId: postToShare?.id,
     };
 
     onPostCreated(postData);
     
     if (!isSubmitting) {
-        form.reset({ content: "", sharedOriginalPostId: undefined }); // Reset sharedId too
+        form.reset({ content: "", sharedOriginalPostId: undefined });
         setMediaUrl(undefined);
         setMediaType(undefined);
-        if (onCancelShare) onCancelShare(); // Clear postToShare from context if modal
+        if (onCancelShare) onCancelShare();
     }
   };
   
@@ -181,7 +188,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
             </div>
           )}
 
-          {mediaUrl && !postToShare && ( // Only show media uploader if not sharing a post (to avoid confusion)
+          {mediaUrl && !postToShare && (
             <div className="ml-14 mt-2 border rounded-md p-2 max-w-xs">
               <p className="text-xs text-muted-foreground">Attached {mediaType}:</p>
               <img src={mediaUrl} alt="Selected media" className="rounded max-h-24" data-ai-hint="uploaded media" />
@@ -193,7 +200,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
         </CardContent>
         <CardFooter className="flex justify-between items-center p-4 pt-0 border-t">
           <div className="flex gap-1 sm:gap-2">
-            {!postToShare && ( // Don't show media buttons if we are in "share" mode
+            {!postToShare && (
               <>
                 <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Add Image" onClick={handleAddImageMock} disabled={!!mediaUrl && mediaType !== 'image'}>
                   <ImageIcon className="h-5 w-5" />
