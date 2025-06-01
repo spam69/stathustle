@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Image as ImageIcon, Film, Users, Paperclip, Smile, X, BarChart3, CalendarClock } from "lucide-react";
+import { Image as ImageIcon, Film, Users, Paperclip, Smile, X, BarChart3, CalendarClock, Loader2 } from "lucide-react";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Post } from '@/types';
@@ -27,12 +27,11 @@ const postSchema = z.object({
   path: ["content"],
 });
 
-
 type PostFormValues = z.infer<typeof postSchema>;
 
 interface CreatePostFormProps {
   onPostCreated: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string }) => void;
-  isSubmitting: boolean;
+  isSubmitting: boolean; // This is the context's submitting state (after R2 upload if any)
   isModal?: boolean;
   postToShare?: Post | null;
   onCancelShare?: () => void;
@@ -80,13 +79,15 @@ const SharedPostPreviewCard = ({ post }: { post: Post }) => {
   );
 };
 
-
 export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = false, postToShare, onCancelShare }: CreatePostFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [mediaUrl, setMediaUrl] = useState<string | undefined>(undefined);
-  const [mediaType, setMediaType] = useState<'image' | 'gif' | undefined>(undefined);
+  
+  const [imageToUpload, setImageToUpload] = useState<{ file: File, localPreviewUrl: string } | null>(null);
+  const [gifUrl, setGifUrl] = useState<string | undefined>(undefined);
   const [isGiphyModalOpen, setIsGiphyModalOpen] = useState(false);
+  const [isUploadingToR2, setIsUploadingToR2] = useState(false); // For R2 upload loading state
+
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<PostFormValues>({
@@ -101,41 +102,100 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     if (postToShare && postToShare.id) {
       form.setValue('sharedOriginalPostId', postToShare.id);
       form.setValue('content', ""); 
-      setMediaUrl(undefined); // Clear any existing media when sharing
-      setMediaType(undefined);
+      setImageToUpload(null);
+      setGifUrl(undefined);
     } else {
       form.reset({ content: "", sharedOriginalPostId: undefined });
-       // Don't clear media if not in share mode and postToShare is just null
-      if (postToShare === null) { // Explicitly null means reset
-        setMediaUrl(undefined);
-        setMediaType(undefined);
+      if (postToShare === null) { // Explicitly null means reset all media
+        setImageToUpload(null);
+        setGifUrl(undefined);
       }
     }
   }, [postToShare, form]);
 
+  const uploadImageToR2 = async (file: File): Promise<string | null> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64DataUri = reader.result as string;
+        try {
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileData: base64DataUri, // Send the full Data URI
+              fileName: file.name,
+              fileType: file.type,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Upload to R2 failed');
+          }
+          resolve(result.url);
+        } catch (error) {
+          console.error("R2 Upload error:", error);
+          reject(error);
+        }
+      };
+      reader.onerror = (error) => {
+        console.error("FileReader error:", error);
+        reject(new Error("Failed to read file for upload."));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
 
-  const onSubmit = (data: PostFormValues) => {
+  const onSubmit = async (data: PostFormValues) => {
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to post.", variant: "destructive" });
       return;
     }
-    if (!data.content && !mediaUrl && !data.sharedOriginalPostId) {
+    if (!data.content && !imageToUpload && !gifUrl && !data.sharedOriginalPostId) {
       toast({ title: "Error", description: "Post cannot be empty.", variant: "destructive" });
       return;
     }
 
+    let finalMediaUrl: string | undefined = gifUrl;
+    let finalMediaType: 'image' | 'gif' | undefined = gifUrl ? 'gif' : undefined;
+
+    if (imageToUpload) {
+      setIsUploadingToR2(true);
+      try {
+        const r2Url = await uploadImageToR2(imageToUpload.file);
+        if (r2Url) {
+          finalMediaUrl = r2Url;
+          finalMediaType = 'image';
+        } else {
+          toast({ title: "Upload Failed", description: "Could not upload image to storage. Please try again.", variant: "destructive" });
+          setIsUploadingToR2(false);
+          return; // Stop post creation if R2 upload fails
+        }
+      } catch (error: any) {
+        toast({ title: "Upload Error", description: error.message || "An unexpected error occurred during image upload.", variant: "destructive" });
+        setIsUploadingToR2(false);
+        return; // Stop post creation
+      }
+      setIsUploadingToR2(false);
+    }
+
     const postData = {
       content: data.content || "",
-      mediaUrl: mediaUrl,
-      mediaType: mediaType,
+      mediaUrl: finalMediaUrl,
+      mediaType: finalMediaType,
       sharedOriginalPostId: postToShare && postToShare.id ? postToShare.id : undefined,
     };
 
-    onPostCreated(postData);
+    onPostCreated(postData); // This will trigger the FeedContext's mutation
     
-    form.reset({ content: "", sharedOriginalPostId: undefined });
-    setMediaUrl(undefined);
-    setMediaType(undefined);
+    // Resetting form should ideally happen after FeedContext mutation.onSuccess,
+    // but for now, we reset optimistically or it's handled by modal close.
+    // If not a modal, we need to reset here.
+    if (!isModal) {
+        form.reset({ content: "", sharedOriginalPostId: undefined });
+        setImageToUpload(null);
+        setGifUrl(undefined);
+    }
   };
   
   const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
@@ -157,30 +217,29 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setMediaUrl(reader.result as string);
-        setMediaType("image");
-        toast({ title: "Image Added", description: "Image ready for posting."});
+        setImageToUpload({ file, localPreviewUrl: reader.result as string });
+        setGifUrl(undefined); // Clear any selected GIF
+        toast({ title: "Image Selected", description: "Image ready for posting."});
       };
       reader.onerror = () => {
         toast({ title: "Error Reading File", description: "Could not read the selected image.", variant: "destructive"});
       }
       reader.readAsDataURL(file);
     }
-    // Reset file input value to allow selecting the same file again if removed then re-added
-    if(event.target) event.target.value = '';
+    if(event.target) event.target.value = ''; // Allow re-selecting the same file
   };
   
   const handleGifSelect = (gif: IGif) => {
-    const gifUrl = gif.images.downsized_medium?.url || gif.images.original.url;
-    setMediaUrl(gifUrl);
-    setMediaType("gif");
+    const selectedGifUrl = gif.images.downsized_medium?.url || gif.images.original.url;
+    setGifUrl(selectedGifUrl);
+    setImageToUpload(null); // Clear any selected image
     setIsGiphyModalOpen(false);
     toast({ title: "GIF Added", description: "GIF attached from GIPHY."});
   };
 
   const removeMedia = () => {
-    setMediaUrl(undefined);
-    setMediaType(undefined);
+    setImageToUpload(null);
+    setGifUrl(undefined);
   }
 
   if (!user && !isModal) {
@@ -194,10 +253,11 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
   if (!user && isModal) return null;
 
   const isSharingMode = !!(postToShare && postToShare.id);
+  const hasMediaSelected = !!(imageToUpload || gifUrl);
 
   return (
     <>
-      <Card className={`mb-6 ${isModal ? 'shadow-none border-0' : 'shadow-md border border-border'}`}>
+      <Card className={`mb-6 ${isModal ? 'shadow-none border-0' : 'border border-border'}`}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardContent className={`p-4 ${isModal ? 'pb-0' : ''}`}>
             <div className="flex gap-3 items-start">
@@ -210,6 +270,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
                 placeholder={isSharingMode ? "Add your thoughts..." : `What's happening, ${user?.username}?`}
                 className="min-h-[70px] flex-1 resize-none shadow-none focus-visible:ring-0 border-0 bg-transparent p-1 text-base"
                 maxLength={1000}
+                disabled={isUploadingToR2 || isSubmitting}
               />
             </div>
             {form.formState.errors.content && (
@@ -227,6 +288,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
                           className="absolute top-1 right-1 h-7 w-7 text-muted-foreground hover:text-destructive"
                           onClick={onCancelShare}
                           title="Cancel share"
+                          disabled={isUploadingToR2 || isSubmitting}
                       >
                           <X className="h-4 w-4" />
                       </Button>
@@ -234,19 +296,28 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
               </div>
             )}
 
-            {mediaUrl && !isSharingMode && (
+            {!isSharingMode && (imageToUpload?.localPreviewUrl || gifUrl) && (
               <div className="ml-14 mt-2 border border-border rounded-md p-2 max-w-xs bg-card/50 relative">
-                <p className="text-xs text-muted-foreground mb-1">Attached {mediaType}:</p>
+                <p className="text-xs text-muted-foreground mb-1">Attached {imageToUpload ? 'image' : 'GIF'}:</p>
                 <Image 
-                    src={mediaUrl} 
+                    src={imageToUpload ? imageToUpload.localPreviewUrl : gifUrl!} 
                     alt="Selected media" 
                     width={200} 
-                    height={mediaType === 'gif' ? 120 : 150} // Adjust height for different media types
-                    objectFit={mediaType === 'gif' ? 'contain' : 'cover'}
-                    className="rounded max-h-40 w-auto" data-ai-hint="uploaded media" 
+                    height={gifUrl ? 120 : 150}
+                    objectFit={gifUrl ? 'contain' : 'cover'}
+                    className="rounded max-h-40 w-auto" 
+                    data-ai-hint="uploaded media" 
+                    unoptimized={!!imageToUpload} // unoptimize for base64 previews
                 />
-                {mediaType === 'gif' && <p className="text-[10px] text-muted-foreground mt-0.5">via GIPHY</p>}
-                <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6 text-destructive/70 hover:text-destructive" onClick={removeMedia} title="Remove media">
+                {gifUrl && <p className="text-[10px] text-muted-foreground mt-0.5">via GIPHY</p>}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute top-1 right-1 h-6 w-6 text-destructive/70 hover:text-destructive" 
+                  onClick={removeMedia} 
+                  title="Remove media"
+                  disabled={isUploadingToR2 || isSubmitting}
+                >
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -256,31 +327,32 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
             <div className="flex gap-0">
               {!isSharingMode && (
                 <>
-                  <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add Image" onClick={handleImageUploadClick} disabled={!!mediaUrl}>
+                  <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add Image" onClick={handleImageUploadClick} disabled={hasMediaSelected || isUploadingToR2 || isSubmitting}>
                     <ImageIcon className="h-5 w-5" />
                   </Button>
                   <input type="file" ref={imageInputRef} onChange={handleImageFileChange} accept="image/*" className="hidden" />
-                  <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add GIF" onClick={() => setIsGiphyModalOpen(true)} disabled={!!mediaUrl}>
+                  <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add GIF" onClick={() => setIsGiphyModalOpen(true)} disabled={hasMediaSelected || isUploadingToR2 || isSubmitting}>
                     <Film className="h-5 w-5" />
                   </Button>
                 </>
               )}
-              <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Poll (mock)">
+              <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Poll (mock)" disabled={isUploadingToR2 || isSubmitting}>
                 <BarChart3 className="h-5 w-5" />
               </Button>
-              <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Emoji (mock)">
+              <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Emoji (mock)" disabled={isUploadingToR2 || isSubmitting}>
                 <Smile className="h-5 w-5" />
               </Button>
-               <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Schedule (mock)">
+               <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Schedule (mock)" disabled={isUploadingToR2 || isSubmitting}>
                 <CalendarClock className="h-5 w-5" />
               </Button>
             </div>
             <Button 
               type="submit" 
-              disabled={isSubmitting || (!form.getValues("content") && !mediaUrl && !isSharingMode) || (!form.formState.isValid && form.formState.isSubmitted)}
+              disabled={isUploadingToR2 || isSubmitting || (!form.getValues("content") && !imageToUpload && !gifUrl && !isSharingMode) || (!form.formState.isValid && form.formState.isSubmitted)}
               className="font-headline rounded-full px-6"
             >
-              {isSubmitting ? "Posting..." : (isSharingMode ? "Share" : "Post")}
+              {isUploadingToR2 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isUploadingToR2 ? "Uploading..." : (isSubmitting ? (isSharingMode ? "Sharing..." : "Posting...") : (isSharingMode ? "Share" : "Post"))}
             </Button>
           </CardFooter>
         </form>
@@ -293,6 +365,3 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     </>
   );
 }
-
-
-    
