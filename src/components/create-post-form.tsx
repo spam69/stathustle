@@ -90,16 +90,17 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     resolver: zodResolver(postSchema),
     defaultValues: {
       content: "",
-      sharedOriginalPostId: postToShare?.id,
+      sharedOriginalPostId: undefined, // Always initialize to undefined
     },
   });
   
   useEffect(() => {
-    form.setValue('sharedOriginalPostId', postToShare?.id);
-     if(postToShare) {
-     } else {
-        form.reset({ content: "", sharedOriginalPostId: undefined });
-     }
+    if (postToShare && postToShare.id) { // If it's a valid post to share
+      form.setValue('sharedOriginalPostId', postToShare.id);
+      form.setValue('content', ""); // Clear content field when starting a share
+    } else { // Not sharing, or postToShare is invalid/null
+      form.reset({ content: "", sharedOriginalPostId: undefined });
+    }
   }, [postToShare, form]);
 
 
@@ -113,17 +114,18 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
       content: data.content || "",
       mediaUrl: mediaUrl,
       mediaType: mediaType,
-      sharedOriginalPostId: postToShare?.id,
+      // Ensure sharedOriginalPostId is only set if postToShare was valid
+      sharedOriginalPostId: postToShare && postToShare.id ? postToShare.id : undefined,
     };
 
     onPostCreated(postData);
     
-    if (!isSubmitting) {
-        form.reset({ content: "", sharedOriginalPostId: undefined });
-        setMediaUrl(undefined);
-        setMediaType(undefined);
-        if (onCancelShare) onCancelShare();
-    }
+    // Reset form fields more comprehensively after submission
+    form.reset({ content: "", sharedOriginalPostId: undefined });
+    setMediaUrl(undefined);
+    setMediaType(undefined);
+    // If this form is in a modal, the modal's close handler (via FeedContext) will clear postToShare in the context.
+    // If `onCancelShare` is provided (typically for modal close button), it's handled by the parent.
   };
   
   const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
@@ -150,6 +152,9 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
   
   if (!user && isModal) return null;
 
+  // Determine if we are in "share" mode based on a valid postToShare object with an ID
+  const isSharingMode = !!(postToShare && postToShare.id);
+
   return (
     <Card className={`mb-6 shadow-lg ${isModal ? 'shadow-none border-0' : ''}`}>
       <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -161,7 +166,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
             </Avatar>
             <Textarea
               {...form.register("content")}
-              placeholder={postToShare ? "Add your thoughts..." : `What's on your mind, ${user?.username}?`}
+              placeholder={isSharingMode ? "Add your thoughts..." : `What's on your mind, ${user?.username}?`}
               className="min-h-[80px] flex-1 resize-none shadow-none focus-visible:ring-0"
               maxLength={1000}
             />
@@ -170,7 +175,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
             <p className="text-xs text-destructive mt-1 ml-14">{form.formState.errors.content.message}</p>
           )}
 
-          {postToShare && (
+          {isSharingMode && postToShare && ( // Only render SharedPostPreviewCard if in valid sharing mode
             <div className="ml-14 mt-2 relative">
                 <SharedPostPreviewCard post={postToShare} />
                 {isModal && onCancelShare && (
@@ -188,7 +193,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
             </div>
           )}
 
-          {mediaUrl && !postToShare && (
+          {mediaUrl && !isSharingMode && ( // Only show media preview if not sharing (media on shares not implemented)
             <div className="ml-14 mt-2 border rounded-md p-2 max-w-xs">
               <p className="text-xs text-muted-foreground">Attached {mediaType}:</p>
               <img src={mediaUrl} alt="Selected media" className="rounded max-h-24" data-ai-hint="uploaded media" />
@@ -200,7 +205,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
         </CardContent>
         <CardFooter className="flex justify-between items-center p-4 pt-0 border-t">
           <div className="flex gap-1 sm:gap-2">
-            {!postToShare && (
+            {!isSharingMode && ( // Media buttons only if not sharing
               <>
                 <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Add Image" onClick={handleAddImageMock} disabled={!!mediaUrl && mediaType !== 'image'}>
                   <ImageIcon className="h-5 w-5" />
@@ -222,13 +227,15 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
           </div>
           <Button 
             type="submit" 
-            disabled={isSubmitting || (!form.formState.isDirty && !mediaUrl && !postToShare) || (!form.formState.isValid && form.formState.isSubmitted)} 
+            disabled={isSubmitting || (!form.getValues("content") && !isSharingMode && !mediaUrl) || (!form.formState.isValid && form.formState.isSubmitted)}
             className="font-headline"
           >
-            {isSubmitting ? "Posting..." : (postToShare ? "Share Post" : "Post")}
+            {isSubmitting ? "Posting..." : (isSharingMode ? "Share Post" : "Post")}
           </Button>
         </CardFooter>
       </form>
     </Card>
   );
 }
+
+    
