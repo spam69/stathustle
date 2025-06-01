@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2 } from 'lucide-react';
+import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2 } from 'lucide-react'; // MessageSquare potentially removed if only for support chat
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -29,9 +29,10 @@ import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import type { Notification } from '@/types';
 
-interface HeaderProps {
-  toggleChat: () => void;
-}
+// HeaderProps interface removed or toggleChat removed from it
+// interface HeaderProps {
+//   toggleChat: () => void;
+// }
 
 const NotificationItem = ({
   notification,
@@ -87,8 +88,8 @@ const NotificationItem = ({
 };
 
 
-export default function Header({ toggleChat }: HeaderProps) {
-  const { user: currentUser, logout, loading: authContextLoading } = useAuth(); // Use logout from useAuth
+export default function Header() { // toggleChat prop removed
+  const { user: currentUser, logout, loading: authContextLoading } = useAuth(); 
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
@@ -128,7 +129,7 @@ export default function Header({ toggleChat }: HeaderProps) {
   };
 
   const handleLogout = () => {
-    logout(); // Call logout from AuthContext
+    logout(); 
     toast({ title: "Logged Out", description: "You have been successfully logged out."});
   };
 
@@ -204,7 +205,7 @@ export default function Header({ toggleChat }: HeaderProps) {
 
         <ThemeSwitcher />
 
-        {currentUser && ( // Only show notifications if user is logged in
+        {currentUser && ( 
           <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0 && currentUser) fetchInitialNotifications() }}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
@@ -278,10 +279,11 @@ export default function Header({ toggleChat }: HeaderProps) {
           </DropdownMenu>
         )}
 
-        <Button variant="ghost" size="icon" onClick={toggleChat} aria-label="Open Live Support Chat">
+        {/* Live Support Chat Button removed */}
+        {/* <Button variant="ghost" size="icon" onClick={toggleChat} aria-label="Open Live Support Chat">
           <MessageSquare className="h-5 w-5" />
           <span className="sr-only">Live Support</span>
-        </Button>
+        </Button> */}
 
         {authContextLoading ? (
           <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />

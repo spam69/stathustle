@@ -4,11 +4,11 @@ import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
 import Header from '@/components/layout/header';
 import SidebarNav from '@/components/layout/sidebar-nav';
-import RightSidebar from '@/components/layout/right-sidebar'; // Import RightSidebar
+import RightSidebar from '@/components/layout/right-sidebar'; 
 import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { LifeBuoy, Loader2 } from 'lucide-react';
-import LiveSupportChat from '@/components/live-support-chat';
+// LiveSupportChat import removed
 import { FeedProvider } from '@/contexts/feed-context';
 import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -64,15 +64,13 @@ export default function MainLayout({
 }: {
   children: ReactNode;
 }) {
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const toggleChat = () => setIsChatOpen(!isChatOpen);
-
+  // isChatOpen and toggleChat state and function removed
 
   return (
     <FeedProvider>
       <SidebarProvider>
         <div className="flex min-h-screen flex-col bg-background">
-          <Header toggleChat={toggleChat} />
+          <Header /> {/* toggleChat prop removed */}
           <div className="flex flex-1 pt-16"> {/* pt-16 to offset fixed header */}
             <Sidebar collapsible="icon"> {/* Left Sidebar */}
               <SidebarContent>
@@ -92,17 +90,8 @@ export default function MainLayout({
             </div>
           </div>
 
-          <Button
-            variant="default"
-            size="icon"
-            className="fixed bottom-4 left-4 h-12 w-12 rounded-full shadow-lg z-40"
-            onClick={toggleChat}
-            aria-label="Toggle Live Support Chat"
-          >
-            <LifeBuoy className="h-6 w-6" />
-          </Button>
-
-          <LiveSupportChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+          {/* Live Support Chat Toggle Button removed */}
+          {/* LiveSupportChat component rendering removed */}
           <CreatePostModal />
           <NotificationDisplayModal />
         </div>
