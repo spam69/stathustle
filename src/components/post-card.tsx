@@ -171,6 +171,9 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
               ) : null}
             </div>
           )}
+          {targetPost.mediaType === 'gif' && !isEmbedded && (
+            <p className="text-[10px] text-muted-foreground mt-1 ml-1">via GIPHY</p>
+          )}
         </CardContent>
       </>
     );

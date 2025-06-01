@@ -16,6 +16,8 @@ import type { Post } from '@/types';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
+import GiphyPickerModal from './giphy-picker-modal'; // Import GiphyPickerModal
+import type { IGif } from '@giphy/js-types';
 
 const postSchema = z.object({
   content: z.string().max(1000, "Post too long.").optional(),
@@ -39,7 +41,7 @@ interface CreatePostFormProps {
 const SharedPostPreviewCard = ({ post }: { post: Post }) => {
   if (!post || !post.author) {
     return (
-      <Card className="mt-3 mb-2 border-border/70 shadow-sm bg-card/80"> {/* Updated background */}
+      <Card className="mt-3 mb-2 border-border/70 shadow-sm bg-card/80">
         <CardContent className="p-3">
           <p className="text-xs text-muted-foreground">Author information is unavailable for the shared post.</p>
         </CardContent>
@@ -51,7 +53,7 @@ const SharedPostPreviewCard = ({ post }: { post: Post }) => {
   const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase() || 'S';
 
   return (
-    <Card className="mt-3 mb-2 border border-border/50 shadow-sm bg-card/60 rounded-xl"> {/* Rounded corners */}
+    <Card className="mt-3 mb-2 border border-border/50 shadow-sm bg-card/60 rounded-xl">
       <CardHeader className="flex flex-row items-start gap-3 p-3">
         <Avatar className="h-8 w-8 border">
           <AvatarImage src={post.author.profilePictureUrl} alt={authorDisplayName} data-ai-hint="person avatar" />
@@ -84,6 +86,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
   const { toast } = useToast();
   const [mediaUrl, setMediaUrl] = useState<string | undefined>(undefined);
   const [mediaType, setMediaType] = useState<'image' | 'gif' | undefined>(undefined);
+  const [isGiphyModalOpen, setIsGiphyModalOpen] = useState(false);
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
@@ -131,10 +134,14 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     toast({ title: "Image Added (Mock)", description: "A placeholder image has been attached."});
   };
   
-  const handleAddGifMock = () => {
-    setMediaUrl("https://placehold.co/400x200.png?text=MockGIF");
+  const handleGifSelect = (gif: IGif) => {
+    // Giphy SDK provides multiple image formats. Use `images.original.url` or a suitable rendition.
+    // For simplicity, using `images.downsized_medium.url` or `images.original.url`
+    const gifUrl = gif.images.downsized_medium?.url || gif.images.original.url;
+    setMediaUrl(gifUrl);
     setMediaType("gif");
-    toast({ title: "GIF Added (Mock)", description: "A placeholder GIF has been attached."});
+    setIsGiphyModalOpen(false);
+    toast({ title: "GIF Added", description: "GIF attached from GIPHY."});
   };
 
   if (!user && !isModal) {
@@ -150,84 +157,92 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
   const isSharingMode = !!(postToShare && postToShare.id);
 
   return (
-    <Card className={`mb-6 ${isModal ? 'shadow-none border-0' : 'shadow-md border border-border'}`}>
-      <form onSubmit={form.handleSubmit(onSubmit)}>
-        <CardContent className={`p-4 ${isModal ? 'pb-0' : ''}`}>
-          <div className="flex gap-3 items-start">
-            <Avatar className="h-10 w-10 border border-border">
-              <AvatarImage src={user?.profilePictureUrl} alt={user?.username} data-ai-hint="person avatar"/>
-              <AvatarFallback>{getInitials(user?.username)}</AvatarFallback>
-            </Avatar>
-            <Textarea
-              {...form.register("content")}
-              placeholder={isSharingMode ? "Add your thoughts..." : `What's happening, ${user?.username}?`}
-              className="min-h-[70px] flex-1 resize-none shadow-none focus-visible:ring-0 border-0 bg-transparent p-1 text-base"
-              maxLength={1000}
-            />
-          </div>
-          {form.formState.errors.content && (
-            <p className="text-xs text-destructive mt-1 ml-14">{form.formState.errors.content.message}</p>
-          )}
-
-          {isSharingMode && postToShare && (
-            <div className="ml-14 mt-2 relative">
-                <SharedPostPreviewCard post={postToShare} />
-                {isModal && onCancelShare && (
-                    <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="icon" 
-                        className="absolute top-1 right-1 h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={onCancelShare}
-                        title="Cancel share"
-                    >
-                        <X className="h-4 w-4" />
-                    </Button>
-                )}
+    <>
+      <Card className={`mb-6 ${isModal ? 'shadow-none border-0' : 'shadow-md border border-border'}`}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <CardContent className={`p-4 ${isModal ? 'pb-0' : ''}`}>
+            <div className="flex gap-3 items-start">
+              <Avatar className="h-10 w-10 border border-border">
+                <AvatarImage src={user?.profilePictureUrl} alt={user?.username} data-ai-hint="person avatar"/>
+                <AvatarFallback>{getInitials(user?.username)}</AvatarFallback>
+              </Avatar>
+              <Textarea
+                {...form.register("content")}
+                placeholder={isSharingMode ? "Add your thoughts..." : `What's happening, ${user?.username}?`}
+                className="min-h-[70px] flex-1 resize-none shadow-none focus-visible:ring-0 border-0 bg-transparent p-1 text-base"
+                maxLength={1000}
+              />
             </div>
-          )}
+            {form.formState.errors.content && (
+              <p className="text-xs text-destructive mt-1 ml-14">{form.formState.errors.content.message}</p>
+            )}
 
-          {mediaUrl && !isSharingMode && (
-            <div className="ml-14 mt-2 border border-border rounded-md p-2 max-w-xs bg-card/50">
-              <p className="text-xs text-muted-foreground">Attached {mediaType}:</p>
-              <img src={mediaUrl} alt="Selected media" className="rounded max-h-24" data-ai-hint="uploaded media" />
-              <Button variant="link" size="sm" className="p-0 h-auto text-xs text-destructive" onClick={() => {setMediaUrl(undefined); setMediaType(undefined)}}>
-                Remove
+            {isSharingMode && postToShare && (
+              <div className="ml-14 mt-2 relative">
+                  <SharedPostPreviewCard post={postToShare} />
+                  {isModal && onCancelShare && (
+                      <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className="absolute top-1 right-1 h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={onCancelShare}
+                          title="Cancel share"
+                      >
+                          <X className="h-4 w-4" />
+                      </Button>
+                  )}
+              </div>
+            )}
+
+            {mediaUrl && !isSharingMode && (
+              <div className="ml-14 mt-2 border border-border rounded-md p-2 max-w-xs bg-card/50">
+                <p className="text-xs text-muted-foreground">Attached {mediaType}:</p>
+                <img src={mediaUrl} alt="Selected media" className="rounded max-h-24" data-ai-hint="uploaded media" />
+                {mediaType === 'gif' && <p className="text-[10px] text-muted-foreground mt-0.5">via GIPHY</p>}
+                <Button variant="link" size="sm" className="p-0 h-auto text-xs text-destructive" onClick={() => {setMediaUrl(undefined); setMediaType(undefined)}}>
+                  Remove
+                </Button>
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className={`flex justify-between items-center p-4 ${isModal ? 'pt-2' : 'pt-2 border-t border-border'}`}>
+            <div className="flex gap-0">
+              {!isSharingMode && (
+                <>
+                  <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add Image" onClick={handleAddImageMock} disabled={!!mediaUrl && mediaType !== 'image'}>
+                    <ImageIcon className="h-5 w-5" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add GIF" onClick={() => setIsGiphyModalOpen(true)} disabled={!!mediaUrl && mediaType !== 'gif'}>
+                    <Film className="h-5 w-5" />
+                  </Button>
+                </>
+              )}
+              <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Poll (mock)">
+                <BarChart3 className="h-5 w-5" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Emoji (mock)">
+                <Smile className="h-5 w-5" />
+              </Button>
+               <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Schedule (mock)">
+                <CalendarClock className="h-5 w-5" />
               </Button>
             </div>
-          )}
-        </CardContent>
-        <CardFooter className={`flex justify-between items-center p-4 ${isModal ? 'pt-2' : 'pt-2 border-t border-border'}`}>
-          <div className="flex gap-0">
-            {!isSharingMode && (
-              <>
-                <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add Image" onClick={handleAddImageMock} disabled={!!mediaUrl && mediaType !== 'image'}>
-                  <ImageIcon className="h-5 w-5" />
-                </Button>
-                <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add GIF" onClick={handleAddGifMock} disabled={!!mediaUrl && mediaType !== 'gif'}>
-                  <Film className="h-5 w-5" />
-                </Button>
-              </>
-            )}
-            <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Poll (mock)">
-              <BarChart3 className="h-5 w-5" />
+            <Button 
+              type="submit" 
+              disabled={isSubmitting || (!form.getValues("content") && !isSharingMode && !mediaUrl) || (!form.formState.isValid && form.formState.isSubmitted)}
+              className="font-headline rounded-full px-6"
+            >
+              {isSubmitting ? "Posting..." : (isSharingMode ? "Share" : "Post")}
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Emoji (mock)">
-              <Smile className="h-5 w-5" />
-            </Button>
-             <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Schedule (mock)">
-              <CalendarClock className="h-5 w-5" />
-            </Button>
-          </div>
-          <Button 
-            type="submit" 
-            disabled={isSubmitting || (!form.getValues("content") && !isSharingMode && !mediaUrl) || (!form.formState.isValid && form.formState.isSubmitted)}
-            className="font-headline rounded-full px-6"
-          >
-            {isSubmitting ? "Posting..." : (isSharingMode ? "Share" : "Post")}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+          </CardFooter>
+        </form>
+      </Card>
+      <GiphyPickerModal
+        isOpen={isGiphyModalOpen}
+        onClose={() => setIsGiphyModalOpen(false)}
+        onGifSelect={handleGifSelect}
+      />
+    </>
   );
 }
