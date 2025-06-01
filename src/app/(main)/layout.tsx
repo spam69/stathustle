@@ -2,10 +2,9 @@
 "use client";
 import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
-// import { useRouter } from 'next/navigation';
-// import { useSession } from 'next-auth/react';
 import Header from '@/components/layout/header';
 import SidebarNav from '@/components/layout/sidebar-nav';
+import RightSidebar from '@/components/layout/right-sidebar'; // Import RightSidebar
 import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { LifeBuoy, Loader2 } from 'lucide-react';
@@ -15,7 +14,7 @@ import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/auth-context';
 import { useFeed } from '@/contexts/feed-context';
-import NotificationDisplayModal from '@/components/notification-display-modal'; // Import the new modal
+import NotificationDisplayModal from '@/components/notification-display-modal';
 
 
 function CreatePostModal() {
@@ -72,19 +71,25 @@ export default function MainLayout({
   return (
     <FeedProvider>
       <SidebarProvider>
-        <div className="flex min-h-screen flex-col">
+        <div className="flex min-h-screen flex-col bg-background">
           <Header toggleChat={toggleChat} />
-          <div className="flex flex-1 pt-16">
-            <Sidebar collapsible="icon">
+          <div className="flex flex-1 pt-16"> {/* pt-16 to offset fixed header */}
+            <Sidebar collapsible="icon"> {/* Left Sidebar */}
               <SidebarContent>
                 <SidebarNav />
               </SidebarContent>
             </Sidebar>
-            <SidebarInset>
-              <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto h-[calc(100vh_-_4rem)]">
+            
+            <SidebarInset> {/* Main Content Area */}
+              <main className="flex-1 p-0 md:p-0 lg:p-0 overflow-y-auto h-[calc(100vh_-_4rem)]"> {/* Removed padding, handled by child or page */}
                 {children}
               </main>
             </SidebarInset>
+
+            {/* Right Sidebar - shown on larger screens */}
+            <div className="hidden lg:block h-[calc(100vh_-_4rem)] sticky top-16">
+              <RightSidebar />
+            </div>
           </div>
 
           <Button
@@ -99,7 +104,7 @@ export default function MainLayout({
 
           <LiveSupportChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
           <CreatePostModal />
-          <NotificationDisplayModal /> {/* Add the NotificationDisplayModal here */}
+          <NotificationDisplayModal />
         </div>
       </SidebarProvider>
     </FeedProvider>
