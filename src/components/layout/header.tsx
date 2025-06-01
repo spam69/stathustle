@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare, CheckCheck, CircleSlash } from 'lucide-react';
+import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -33,15 +33,31 @@ interface HeaderProps {
   toggleChat: () => void;
 }
 
-const NotificationItem = ({ notification, onNotificationClick }: { notification: Notification, onNotificationClick: (notification: Notification) => void }) => {
+const NotificationItem = ({ 
+  notification, 
+  onNotificationClick,
+  onDeleteNotification,
+  isDeleting,
+}: { 
+  notification: Notification, 
+  onNotificationClick: (notification: Notification) => void,
+  onDeleteNotification: (notificationId: string) => void,
+  isDeleting: boolean,
+}) => {
   const actorDisplayName = notification.actor.isIdentity ? (notification.actor as any).displayName || notification.actor.username : notification.actor.username;
   const timeAgo = formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true });
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent dropdown item click
+    onDeleteNotification(notification.id);
+  };
+
   return (
     <DropdownMenuItem
-      className={`flex items-start gap-3 p-3 hover:bg-accent/50 cursor-pointer ${!notification.isRead ? 'bg-accent/20' : ''}`}
+      className={`flex items-start gap-3 p-3 hover:bg-accent/50 cursor-pointer relative group ${!notification.isRead ? 'bg-accent/20' : ''}`}
       onClick={() => onNotificationClick(notification)}
       style={{whiteSpace: 'normal', height: 'auto', lineHeight: 'normal'}}
+      aria-disabled={isDeleting}
     >
       <Avatar className="h-8 w-8 mt-1">
         <AvatarImage src={notification.actor.profilePictureUrl} alt={actorDisplayName} data-ai-hint="person avatar"/>
@@ -54,8 +70,18 @@ const NotificationItem = ({ notification, onNotificationClick }: { notification:
         <p className={`text-xs mt-1 ${!notification.isRead ? 'text-primary font-medium' : 'text-muted-foreground'}`}>{timeAgo}</p>
       </div>
       {!notification.isRead && (
-        <div className="h-2 w-2 rounded-full bg-primary self-center ml-2 shrink-0" title="Unread"></div>
+        <div className="h-2 w-2 rounded-full bg-primary self-center ml-1 shrink-0" title="Unread"></div>
       )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-1 right-1 h-6 w-6 p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive focus:opacity-100"
+        onClick={handleDelete}
+        disabled={isDeleting}
+        aria-label="Delete notification"
+      >
+        <CloseIcon className="h-3.5 w-3.5" />
+      </Button>
     </DropdownMenuItem>
   );
 };
@@ -68,11 +94,22 @@ export default function Header({ toggleChat }: HeaderProps) {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
-  const { notifications, unreadCount, markOneAsRead, markAllAsRead, fetchNotifications } = useNotifications();
+  const { 
+    notifications, 
+    unreadCount, 
+    markOneAsRead, 
+    markAllAsRead, 
+    fetchNotifications,
+    deleteNotification,
+    isDeletingNotification,
+    deleteReadNotifications,
+    isDeletingReadNotifications,
+    isLoading: isLoadingNotifications,
+  } = useNotifications();
 
   useEffect(() => {
     if (currentUser) {
-      fetchNotifications(); // Fetch initially when header mounts and user is available
+      fetchNotifications(); 
     }
   }, [currentUser, fetchNotifications]);
 
@@ -97,34 +134,48 @@ export default function Header({ toggleChat }: HeaderProps) {
   };
   
   const handleNotificationClick = async (notification: Notification) => {
+    if (isDeletingNotification) return; // Don't process click if delete is in progress
     if (!notification.isRead) {
       await markOneAsRead(notification.id);
     }
-    // For now, all notification links go to the post page if postId exists.
-    // Or to the actor's profile if no specific content link.
+    
     const defaultLink = `/profile/${notification.actor.username}`;
     let targetLink = notification.link || defaultLink;
 
     if (notification.postId) {
-        const postAuthorUsername = notifications.find(n => n.id === notification.id)?.actor.username || 'unknown'; // simplified
-        targetLink = `/blogs/${postAuthorUsername}/${notification.postId}`; // Assuming slug is postId. This needs a robust way to get actual blog slug
-        // For actual posts, it would be /profile/username/posts/postId or similar
-        // The current link structure in mock-data is simplified.
+        // This needs a robust way to get actual blog/post slug or path
+        // For now, simplifying to a generic path or profile fallback
+        const foundPost = notifications.find(n => n.id === notification.id)?.postId; // Placeholder
+        targetLink = `/blogs/placeholder-user/placeholder-slug`; // Example - needs real data
+        // targetLink = `/profile/${currentUser?.username || ''}/posts/${notification.postId}`; // More specific example
     }
     
-    // A more robust linking strategy is needed here, for now, basic navigation:
     if(notification.link && notification.link.startsWith('/')) {
         router.push(notification.link);
     } else {
         console.warn("Notification link is not a relative path or is missing:", notification.link);
-        // Fallback, perhaps to user profile or feed
         router.push(`/profile/${currentUser?.username || ''}`);
     }
-
   };
 
   const handleMarkAllRead = async () => {
+    if (isDeletingReadNotifications || isDeletingNotification) return;
     await markAllAsRead();
+  };
+
+  const handleDeleteRead = async () => {
+    if (isDeletingReadNotifications || isDeletingNotification) return;
+    await deleteReadNotifications();
+  };
+
+  const handleRefreshNotifications = () => {
+    if (isLoadingNotifications || isDeletingNotification || isDeletingReadNotifications) return;
+    fetchNotifications();
+    toast({ title: "Notifications", description: "Refreshing notifications list..."});
+  };
+  
+  const handleDeleteNotification = async (notificationId: string) => {
+     await deleteNotification(notificationId);
   };
 
   return (
@@ -167,7 +218,7 @@ export default function Header({ toggleChat }: HeaderProps) {
 
         <ThemeSwitcher />
         
-        <DropdownMenu onOpenChange={(isOpen) => isOpen && fetchNotifications()}>
+        <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingNotifications) fetchNotifications() }}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
               <Bell className="h-5 w-5" />
@@ -185,29 +236,46 @@ export default function Header({ toggleChat }: HeaderProps) {
           <DropdownMenuContent className="w-80 sm:w-96 p-0" align="end">
             <div className="flex items-center justify-between p-3 border-b">
               <DropdownMenuLabel className="p-0 font-headline text-base">Notifications</DropdownMenuLabel>
-              {notifications.length > 0 && unreadCount > 0 && (
-                <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="text-xs h-auto p-1">
-                  <CheckCheck className="h-3.5 w-3.5 mr-1" /> Mark all read
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" onClick={handleRefreshNotifications} className="h-7 w-7" disabled={isLoadingNotifications || isDeletingNotification || isDeletingReadNotifications} title="Refresh notifications">
+                   <RefreshCw className={`h-4 w-4 ${isLoadingNotifications ? 'animate-spin' : ''}`} />
                 </Button>
-              )}
+                {notifications.length > 0 && unreadCount > 0 && (
+                  <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="text-xs h-auto p-1" disabled={isDeletingNotification || isDeletingReadNotifications}>
+                    <CheckCheck className="h-3.5 w-3.5 mr-1" /> Mark all read
+                  </Button>
+                )}
+              </div>
             </div>
-            <ScrollArea className="max-h-[60vh]">
-              {notifications.length === 0 ? (
+            <ScrollArea className="max-h-[calc(80vh_-_120px)]"> {/* Adjusted max height */}
+              {isLoadingNotifications && notifications.length === 0 ? (
+                 <div className="p-4 text-center text-sm text-muted-foreground">Loading notifications...</div>
+              ) : notifications.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   <CircleSlash className="mx-auto h-8 w-8 mb-2 text-muted-foreground/50"/>
                   No notifications yet.
                 </div>
               ) : (
                 notifications.map(notif => (
-                  <NotificationItem key={notif.id} notification={notif} onNotificationClick={handleNotificationClick} />
+                  <NotificationItem 
+                    key={notif.id} 
+                    notification={notif} 
+                    onNotificationClick={handleNotificationClick}
+                    onDeleteNotification={handleDeleteNotification}
+                    isDeleting={isDeletingNotification}
+                  />
                 ))
               )}
             </ScrollArea>
-             {notifications.length > 0 && (
-                <DropdownMenuItem className="justify-center text-sm text-primary hover:underline p-2 border-t" asChild>
-                    <Link href="/notifications">View all notifications</Link>
+            <DropdownMenuSeparator />
+            <div className="p-2 flex justify-between items-center">
+                <Button variant="outline" size="sm" onClick={handleDeleteRead} disabled={isDeletingReadNotifications || isDeletingNotification || notifications.filter(n => n.isRead).length === 0} className="text-xs">
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Read
+                </Button>
+                 <DropdownMenuItem className="justify-center text-sm text-primary hover:underline p-1" asChild>
+                    <Link href="/notifications">View all</Link>
                 </DropdownMenuItem>
-            )}
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -266,7 +334,6 @@ export default function Header({ toggleChat }: HeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          // This block should not be reached in dev mode if admin is always logged in
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild>
               <Link href="/login">

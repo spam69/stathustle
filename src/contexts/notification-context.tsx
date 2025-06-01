@@ -15,6 +15,10 @@ interface NotificationContextType {
   fetchNotifications: () => void;
   markOneAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotification: (notificationId: string) => Promise<void>;
+  isDeletingNotification: boolean;
+  deleteReadNotifications: () => Promise<void>;
+  isDeletingReadNotifications: boolean;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -40,6 +44,29 @@ const markNotificationAsReadAPI = async (notificationId?: string): Promise<{ mes
   return response.json();
 };
 
+const deleteNotificationAPI = async (notificationId: string): Promise<{ message: string }> => {
+  const response = await fetch(`/api/notifications/${notificationId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to delete notification');
+  }
+  return response.json();
+};
+
+const deleteReadNotificationsAPI = async (): Promise<{ message: string }> => {
+  const response = await fetch('/api/notifications/delete-read', {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to delete read notifications');
+  }
+  return response.json();
+};
+
+
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -48,8 +75,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const { data: notifications = [], isLoading, error, refetch } = useQuery<Notification[], Error>({
     queryKey: ['notifications', user?.id],
     queryFn: fetchNotificationsAPI,
-    enabled: !!user, // Only fetch if user is logged in
-    refetchInterval: 60000, // Refetch every 60 seconds
+    enabled: !!user, 
+    refetchInterval: 60000, 
     staleTime: 30000,
   });
 
@@ -66,21 +93,41 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     },
   });
 
+  const deleteNotificationMutation = useMutation< { message: string }, Error, { notificationId: string } >({
+    mutationFn: ({ notificationId }) => deleteNotificationAPI(notificationId),
+    onSuccess: (data, variables) => {
+      toast({ title: "Notification Deleted", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteReadNotificationsMutation = useMutation< { message: string }, Error, void >({
+    mutationFn: () => deleteReadNotificationsAPI(),
+    onSuccess: (data) => {
+      toast({ title: "Notifications Cleared", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+
   const markOneAsRead = useCallback(async (notificationId: string) => {
-    // Optimistically update UI
     queryClient.setQueryData<Notification[]>(['notifications', user?.id], (oldNotifications) =>
       oldNotifications?.map(n => n.id === notificationId ? { ...n, isRead: true } : n) || []
     );
     try {
       await markAsReadMutation.mutateAsync({ notificationId });
     } catch (e) {
-      // Revert optimistic update on error if needed, though invalidateQueries will refetch
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
     }
   }, [user?.id, queryClient, markAsReadMutation]);
 
   const markAllAsRead = useCallback(async () => {
-     // Optimistically update UI
     queryClient.setQueryData<Notification[]>(['notifications', user?.id], (oldNotifications) =>
       oldNotifications?.map(n => ({ ...n, isRead: true })) || []
     );
@@ -97,6 +144,22 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user, refetch]);
 
+  const deleteNotification = useCallback(async (notificationId: string) => {
+    try {
+      await deleteNotificationMutation.mutateAsync({ notificationId });
+    } catch (e) {
+      // Error is handled by mutation's onError
+    }
+  }, [deleteNotificationMutation]);
+
+  const deleteReadNotifications = useCallback(async () => {
+    try {
+      await deleteReadNotificationsMutation.mutateAsync();
+    } catch (e) {
+      // Error is handled by mutation's onError
+    }
+  }, [deleteReadNotificationsMutation]);
+
 
   return (
     <NotificationContext.Provider value={{
@@ -107,6 +170,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       fetchNotifications,
       markOneAsRead,
       markAllAsRead,
+      deleteNotification,
+      isDeletingNotification: deleteNotificationMutation.isPending,
+      deleteReadNotifications,
+      isDeletingReadNotifications: deleteReadNotificationsMutation.isPending,
     }}>
       {children}
     </NotificationContext.Provider>
