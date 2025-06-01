@@ -7,7 +7,7 @@ let mockUser1Data: User = {
   id: 'user1',
   username: 'FantasyFanatic',
   email: 'fanatic@stathustle.com',
-  password: 'password123',
+  password: 'password123', // Added password
   profilePictureUrl: 'https://placehold.co/200x200.png',
   bannerImageUrl: 'https://placehold.co/1200x300.png',
   socialLinks: [
@@ -27,7 +27,7 @@ let mockUser2Data: User = {
   id: 'user2',
   username: 'AnalystProUser',
   email: 'pro@stathustle.com',
-  password: 'password456',
+  password: 'password456', // Added password
   profilePictureUrl: 'https://placehold.co/200x200.png',
   bannerImageUrl: 'https://placehold.co/1200x300.png',
   sportInterests: [
@@ -43,7 +43,7 @@ const mockAdminUserData: User = {
   id: 'admin-user',
   username: 'admin',
   email: 'admin@email.com',
-  password: 'admin',
+  password: 'admin', // Added password
   profilePictureUrl: 'https://placehold.co/200x200.png?text=Admin',
   bannerImageUrl: 'https://placehold.co/1200x300.png?text=AdminBanner',
   sportInterests: [
@@ -112,7 +112,7 @@ const mockReply1_to_comment1_post1: Comment = {
 
 const mockReply2_to_comment1_post1: Comment = {
   id: 'reply2-to-comment1-post1',
-  author: mockUser2Data, // Changed to User2Data to test reply notifications
+  author: mockAdminUserData, 
   content: 'Definitely! Watched some film on him, looks promising.',
   createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
   parentId: 'comment1-post1',
@@ -121,7 +121,7 @@ const mockReply2_to_comment1_post1: Comment = {
 
 const mockComment2_post1: Comment = {
   id: 'comment2-post1',
-  author: mockAdminUserData, // Admin comments on User1's post
+  author: mockAdminUserData, 
   content: 'Any thoughts on Player X? Seems a bit overrated to me this year.',
   createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
   detailedReactions: [
@@ -142,7 +142,7 @@ const mockComment1_post3: Comment = {
 
 const originalPostForSharing1: Post = {
   id: 'original-post-1',
-  author: mockUser1Data, // User 1
+  author: mockUser1Data, 
   content: 'This is an original post by FantasyFanatic about the importance of weekly waiver wire pickups. Never underestimate them! #FantasyStrategy',
   createdAt: new Date(Date.now() - 1000 * 60 * 60 * 100).toISOString(), 
   detailedReactions: [{ userId: mockUser2Data.id, reactionType: 'like', createdAt: new Date().toISOString() }],
@@ -160,7 +160,7 @@ const originalPostForSharing1: Post = {
 
 const originalPostForSharing2: Post = {
   id: 'original-post-2',
-  author: mockIdentityAnalystProData, // Identity 1 (owned by User 2)
+  author: mockIdentityAnalystProData, 
   content: 'Just published a new blog on breakout candidates for the second half of the MLB season. Check it out on my profile! ⚾️ #MLB #FantasyBaseball @AnalystPro',
   createdAt: new Date(Date.now() - 1000 * 60 * 60 * 70).toISOString(),
   detailedReactions: [
@@ -177,7 +177,7 @@ const originalPostForSharing2: Post = {
 
 const adminPost1: Post = {
   id: 'admin-post-1',
-  author: mockAdminUserData, // Admin User
+  author: mockAdminUserData, 
   content: 'Exciting new features coming soon to StatHustle! Stay tuned for updates. #PlatformNews',
   createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
   detailedReactions: [
@@ -185,18 +185,26 @@ const adminPost1: Post = {
       { userId: mockUser2Data.id, reactionType: 'wow', createdAt: new Date().toISOString() }
   ],
   shares: 2,
-  repliesCount: 0,
-  comments: [],
+  repliesCount: 1, // Updated to reflect mock comment
+  comments: [
+    {
+        id: 'comment-ap1',
+        author: mockUser1Data,
+        content: 'Looking forward to the updates, Admin!',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+        detailedReactions: []
+    }
+  ],
 };
 
 
 export let mockPosts: Post[] = [
   originalPostForSharing1,
   originalPostForSharing2,
-  adminPost1, // Add admin's post
+  adminPost1, 
   {
     id: 'post1',
-    author: mockUser1Data, // User 1
+    author: mockUser1Data, 
     content: 'Just drafted my fantasy basketball team! Feeling good about this season. 🏀 Who do you think is a sleeper pick this year? #FantasyBasketball #NBA',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
     detailedReactions: [
@@ -204,15 +212,15 @@ export let mockPosts: Post[] = [
         { userId: mockAdminUserData.id, reactionType: 'love', createdAt: new Date().toISOString() }
     ],
     shares: 3,
-    repliesCount: 4,
-    comments: [mockComment1_post1, mockReply1_to_comment1_post1, mockReply2_to_comment1_post1, mockComment2_post1],
+    repliesCount: 3, // Adjusted count
+    comments: [mockComment1_post1, mockReply1_to_comment1_post1, mockComment2_post1], // mockReply2_to_comment1_post1 removed as it was by admin
     mediaUrl: 'https://placehold.co/600x400.png',
     mediaType: 'image',
     tags: ['@FantasyPlayerX', '#FantasyBasketball']
   },
   {
     id: 'post2',
-    author: mockIdentityAnalystProData, // Identity 1 (owned by User 2)
+    author: mockIdentityAnalystProData, 
     content: "<b>Deep Dive Analysis (posted as @AnalystPro)</b>: Top 5 NFL quarterbacks to watch for MVP contention. My projections are looking interesting! 🏈 <i>Full blog post coming soon!</i>",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
     detailedReactions: [],
@@ -224,7 +232,7 @@ export let mockPosts: Post[] = [
   },
   {
     id: 'post3',
-    author: mockUser1Data, // User 1
+    author: mockUser1Data, 
     content: "Anyone else catch that amazing hockey game last night? The overtime goal was insane! 🏒🥅 #NHL #HockeyHighlights",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     detailedReactions: [
@@ -239,7 +247,7 @@ export let mockPosts: Post[] = [
   },
   {
     id: 'share-post-1',
-    author: mockUser2Data, // User2 is sharing originalPostForSharing1 (by User1)
+    author: mockUser2Data, 
     content: 'Absolutely crucial advice from @FantasyFanatic! Everyone should read this.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(), 
     detailedReactions: [{ userId: mockAdminUserData.id, reactionType: 'like', createdAt: new Date().toISOString() }],
@@ -250,7 +258,7 @@ export let mockPosts: Post[] = [
   },
   {
     id: 'share-post-2',
-    author: mockAdminUserData, // Admin is sharing originalPostForSharing2 (by Identity1/User2)
+    author: mockAdminUserData, 
     content: 'Top-notch MLB insights from @AnalystPro as always. Highly recommend their work!',
     createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
     detailedReactions: [{ userId: mockUser1Data.id, reactionType: 'love', createdAt: new Date().toISOString() }],
@@ -262,7 +270,7 @@ export let mockPosts: Post[] = [
   },
   {
     id: 'share-post-3-no-preload',
-    author: mockUser1Data, // User1 sharing originalPostForSharing2 (by Identity1/User2)
+    author: mockUser1Data, 
     content: 'Checking out this great MLB analysis by @AnalystPro!',
     createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
     detailedReactions: [],
@@ -290,7 +298,7 @@ export let mockPosts: Post[] = [
     author: mockIdentityFanaticBrandData,
     content: 'Just posted as FanaticInsights: My weekly NFL player rankings are up! Who is too high, who is too low? Let me know! #NFLRankings #FantasyFootball',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 15).toISOString(),
-    detailedReactions: [], shares: 3, repliesCount: 0, comments: [],
+    detailedReactions: [{userId: mockAdminUserData.id, reactionType: "like", createdAt: new Date().toISOString()}], shares: 3, repliesCount: 0, comments: [],
   },
   {
     id: 'post-extra-4',
@@ -393,12 +401,10 @@ export const sportInterestLevels: SportInterestLevel[] = ['very interested', 'so
 
 export let mockNotifications: Notification[] = [];
 
-// Helper to generate actor display name
 const getActorDisplayName = (actor: User | Identity) => {
   return actor.isIdentity ? (actor as Identity).displayName || actor.username : actor.username;
 };
 
-// Helper function to create and add notifications
 export const createNotification = (
   type: NotificationType,
   actor: User | Identity,
@@ -407,10 +413,10 @@ export const createNotification = (
   comment?: Comment,
   originalComment?: Comment 
 ): void => {
-  if (actor.id === recipientUserId) return; // Don't notify user for their own actions
+  if (actor.id === recipientUserId) return; 
 
   let message = '';
-  let link = `/profile/${recipientUserId}`; // Default link, should be overridden
+  let link = `/profile/${recipientUserId}`; 
 
   const actorName = `<strong>${getActorDisplayName(actor)}</strong>`;
   const postContentPreview = post?.content ? `"${post.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : 'your post';
@@ -421,8 +427,7 @@ export const createNotification = (
   switch (type) {
     case 'new_reaction_post':
       message = `${actorName} reacted to ${postContentPreview}.`;
-      // For now, a simple link. This needs to be more robust.
-      if (post) link = `/profile/${post.author.username}`; // Simplistic link, needs to go to the post
+      if (post) link = `/profile/${post.author.username}`; // Simplified link
       break;
     case 'new_comment':
       message = `${actorName} commented on ${postContentPreview}: ${commentContentPreview}`;
@@ -430,13 +435,11 @@ export const createNotification = (
       break;
     case 'new_reply':
       message = `${actorName} replied to ${originalCommentContentPreview}: ${commentContentPreview}`;
-      if (post && originalComment) link = `/profile/${post.author.username}`;
-      else if (post) link = `/profile/${post.author.username}`;
+      if (post) link = `/profile/${post.author.username}`;
       break;
     case 'new_reaction_comment':
       message = `${actorName} reacted to your comment: ${commentContentPreview}`;
-      if (post && comment) link = `/profile/${post.author.username}`;
-      else if (post) link = `/profile/${post.author.username}`;
+      if (post) link = `/profile/${post.author.username}`;
       break;
   }
 
@@ -453,7 +456,8 @@ export const createNotification = (
     createdAt: new Date().toISOString(),
     isRead: false,
   };
-  const existingNotification = mockNotifications.find(n => 
+  
+  const existingNotificationIndex = mockNotifications.findIndex(n => 
     n.type === type && 
     n.actor.id === actor.id && 
     n.recipientUserId === recipientUserId &&
@@ -462,38 +466,63 @@ export const createNotification = (
     n.originalCommentId === originalComment?.id
   );
 
-  if (!existingNotification) {
-    mockNotifications.unshift(newNotification); // Add to beginning only if not a duplicate action
+  if (existingNotificationIndex === -1) {
+    mockNotifications.unshift(newNotification); 
+  } else {
+    // Optional: update timestamp of existing similar notification
+    // mockNotifications[existingNotificationIndex].createdAt = new Date().toISOString();
+    // mockNotifications[existingNotificationIndex].isRead = false; // Mark as unread again
+    // mockNotifications.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 };
 
-// --- Initialize some mock notifications ---
-const postForAdminReaction = adminPost1; // Admin's post
-const commentForAdminReply = mockComment2_post1; // Admin's comment on post1 (owned by user1)
 
-// Ensure related posts/comments exist before creating notifications
-if (postForAdminReaction) {
-    createNotification('new_reaction_post', mockUser1Data, mockAdminUserData.id, postForAdminReaction);
-    createNotification('new_comment', mockUser2Data, mockAdminUserData.id, postForAdminReaction, {
-        id: `mockcomment-${Date.now()}`,
+// --- Initialize some mock notifications for admin-user ---
+const postForAdminReactionNotif = mockPosts.find(p => p.id === 'admin-post-1'); // Admin's post
+const commentForAdminReactionNotif = mockPosts.find(p => p.id === 'post1')?.comments?.find(c => c.id === 'comment2-post1'); // Admin's comment
+const postForAdminCommentNotif = mockPosts.find(p => p.id === 'admin-post-1'); // Admin's post
+const commentForAdminReplyNotif = mockPosts.find(p => p.id === 'post1')?.comments?.find(c => c.id === 'comment1-post1'); // User2's comment for Admin to reply to
+const post1 = mockPosts.find(p => p.id === 'post1');
+
+
+if (postForAdminReactionNotif) {
+    createNotification('new_reaction_post', mockUser1Data, mockAdminUserData.id, postForAdminReactionNotif);
+}
+if (commentForAdminReactionNotif && post1) {
+    createNotification('new_reaction_comment', mockUser1Data, mockAdminUserData.id, post1, commentForAdminReactionNotif);
+}
+if (postForAdminCommentNotif) {
+    createNotification('new_comment', mockUser2Data, mockAdminUserData.id, postForAdminCommentNotif, {
+        id: `mockcomment-for-admin-${Date.now()}`,
         author: mockUser2Data,
-        content: 'This is a great update for admin!',
-        createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+        content: 'This is a fresh comment on admin\'s post!',
+        createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
         detailedReactions: [],
     });
 }
 
-if (commentForAdminReply && mockPosts.find(p => p.id === 'post1')) {
-    const parentPostForReply = mockPosts.find(p => p.id === 'post1')!;
-    createNotification('new_reply', mockIdentityAnalystProData, mockAdminUserData.id, parentPostForReply, {
-        id: `mockreply-${Date.now()}`,
+if (commentForAdminReplyNotif && post1) {
+    createNotification('new_reply', mockIdentityAnalystProData, mockAdminUserData.id, post1, {
+        id: `mockreply-on-admins-comment-${Date.now()}`,
         author: mockIdentityAnalystProData,
-        content: 'Insightful point on Player X, admin.',
+        content: 'Replying to admin\'s insight on Player X.',
+        createdAt: new Date(Date.now() - 1000 * 60 * 1).toISOString(),
+        detailedReactions: [],
+        parentId: 'comment2-post1', // Assuming this is ID of an admin's comment
+    }, mockPosts.find(p => p.id === 'post1')?.comments?.find(c => c.id === 'comment2-post1') );
+}
+
+// Add a few more for variety
+const anotherAdminPost = mockPosts.find(p => p.id === 'post-extra-4'); // Another of Admin's posts
+if(anotherAdminPost) {
+    createNotification('new_reaction_post', mockUser2Data, mockAdminUserData.id, anotherAdminPost);
+    createNotification('new_comment', mockIdentityFanaticBrandData, mockAdminUserData.id, anotherAdminPost, {
+        id: `mockcomment-another-${Date.now()}`,
+        author: mockIdentityFanaticBrandData,
+        content: 'Great to be here!',
         createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
         detailedReactions: [],
-        parentId: commentForAdminReply.id,
-    }, commentForAdminReply);
-    createNotification('new_reaction_comment', mockUser1Data, mockAdminUserData.id, parentPostForReply, commentForAdminReply);
+    });
 }
 // --- End of initializing mock notifications ---
 
@@ -503,3 +532,4 @@ export const mockUser2 = mockUser2Data;
 export const mockAdminUser = mockAdminUserData;
 export const mockIdentityAnalystPro = mockIdentityAnalystProData;
 export const mockIdentityFanaticBrand = mockIdentityFanaticBrandData;
+    

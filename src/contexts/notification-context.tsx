@@ -7,7 +7,7 @@ import { useAuth } from './auth-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
-const NOTIFICATIONS_PER_PAGE_CLIENT = 10;
+const NOTIFICATIONS_PAGE_SIZE = 5; // Number of notifications to fetch per page
 
 interface PaginatedNotificationsResponse {
   items: Notification[];
@@ -20,11 +20,12 @@ interface PaginatedNotificationsResponse {
 interface NotificationContextType {
   displayedNotifications: Notification[];
   unreadCount: number;
+  totalServerNotificationsCount: number;
   isLoadingInitial: boolean;
   isFetchingMore: boolean;
   hasMoreNotifications: boolean;
   error: Error | null;
-  fetchInitialNotifications: () => void; // Renamed for clarity
+  fetchInitialNotifications: () => void; 
   loadMoreNotifications: () => void;
   markOneAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
@@ -36,7 +37,7 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const fetchNotificationsAPI = async (page: number = 1, limit: number = NOTIFICATIONS_PER_PAGE_CLIENT): Promise<PaginatedNotificationsResponse> => {
+const fetchNotificationsAPI = async (page: number = 1, limit: number = NOTIFICATIONS_PAGE_SIZE): Promise<PaginatedNotificationsResponse> => {
   const response = await fetch(`/api/notifications?page=${page}&limit=${limit}`);
   if (!response.ok) {
     throw new Error('Failed to fetch notifications');
@@ -86,32 +87,33 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   const [displayedNotifications, setDisplayedNotifications] = useState<Notification[]>([]);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [hasMoreNotifications, setHasMoreNotifications] = useState<boolean>(true);
+  const [currentPage, setCurrentPage] = useState<number>(0); // Start at 0, first fetch will be page 1
+  const [totalServerNotificationsCount, setTotalServerNotificationsCount] = useState<number>(0);
   
   const queryKey = ['notifications', user?.id, 'initial'];
 
   const { isLoading: isLoadingInitial, error, refetch: fetchInitialNotifications } = useQuery<PaginatedNotificationsResponse, Error>({
     queryKey: queryKey,
-    queryFn: () => fetchNotificationsAPI(1, NOTIFICATIONS_PER_PAGE_CLIENT),
+    queryFn: () => fetchNotificationsAPI(1, NOTIFICATIONS_PAGE_SIZE), // Fetch page 1 initially
     enabled: !!user,
-    refetchInterval: 60000, // Keep periodic refetch for the first page
+    refetchInterval: 60000, 
     staleTime: 30000,
     onSuccess: (data) => {
       setDisplayedNotifications(data.items);
       setCurrentPage(data.currentPage);
-      setHasMoreNotifications(data.hasMore);
+      setTotalServerNotificationsCount(data.totalItems);
     },
   });
 
   const unreadCount = displayedNotifications.filter(n => !n.isRead).length;
+  const hasMoreNotifications = displayedNotifications.length < totalServerNotificationsCount;
 
   const loadMoreMutation = useMutation<PaginatedNotificationsResponse, Error, void>({
-    mutationFn: () => fetchNotificationsAPI(currentPage + 1, NOTIFICATIONS_PER_PAGE_CLIENT),
+    mutationFn: () => fetchNotificationsAPI(currentPage + 1, NOTIFICATIONS_PAGE_SIZE),
     onSuccess: (data) => {
       setDisplayedNotifications(prev => [...prev, ...data.items]);
       setCurrentPage(data.currentPage);
-      setHasMoreNotifications(data.hasMore);
+      // totalServerNotificationsCount is set by initial fetch and assumed not to change during load more
     },
     onError: (error) => {
       toast({ title: "Error", description: `Could not load more notifications: ${error.message}`, variant: "destructive" });
@@ -122,16 +124,13 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     mutationFn: ({ notificationId }) => markNotificationAsReadAPI(notificationId),
     onSuccess: (data, variables) => {
       toast({ title: "Notifications Updated", description: data.message });
-      // Optimistically update local state
       setDisplayedNotifications(prev => 
         prev.map(n => {
           if (variables.notificationId && n.id === variables.notificationId) return { ...n, isRead: true };
-          if (!variables.notificationId) return { ...n, isRead: true }; // Mark all as read
+          if (!variables.notificationId) return { ...n, isRead: true }; 
           return n;
         })
       );
-      // Invalidate initial query or refetch if needed for other counts, but local update is faster for UI
-      // queryClient.invalidateQueries({ queryKey: queryKey }); 
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -143,6 +142,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: (data, variables) => {
       toast({ title: "Notification Deleted", description: data.message });
       setDisplayedNotifications(prev => prev.filter(n => n.id !== variables.notificationId));
+      setTotalServerNotificationsCount(prev => Math.max(0, prev -1)); // Adjust total count
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -153,7 +153,9 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     mutationFn: () => deleteReadNotificationsAPI(),
     onSuccess: (data) => {
       toast({ title: "Notifications Cleared", description: data.message });
+      const readCount = displayedNotifications.filter(n => n.isRead).length;
       setDisplayedNotifications(prev => prev.filter(n => !n.isRead));
+      setTotalServerNotificationsCount(prev => Math.max(0, prev - readCount)); // Adjust total count
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -162,19 +164,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
 
   const markOneAsRead = useCallback(async (notificationId: string) => {
-    try {
-      await markAsReadMutation.mutateAsync({ notificationId });
-    } catch (e) {
-      // Error handled by mutation's onError
-    }
+    await markAsReadMutation.mutateAsync({ notificationId });
   }, [markAsReadMutation]);
 
   const markAllAsRead = useCallback(async () => {
-    try {
-      await markAsReadMutation.mutateAsync({});
-    } catch (e) {
-       // Error handled by mutation's onError
-    }
+    await markAsReadMutation.mutateAsync({});
   }, [markAsReadMutation]);
   
   const loadMoreNotifications = useCallback(() => {
@@ -188,6 +182,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     <NotificationContext.Provider value={{
       displayedNotifications,
       unreadCount,
+      totalServerNotificationsCount,
       isLoadingInitial,
       isFetchingMore: loadMoreMutation.isPending,
       hasMoreNotifications,
@@ -213,3 +208,4 @@ export const useNotifications = () => {
   }
   return context;
 };
+    

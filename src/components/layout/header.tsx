@@ -108,13 +108,14 @@ export default function Header({ toggleChat }: HeaderProps) {
     isFetchingMore,
     hasMoreNotifications,
     loadMoreNotifications,
+    totalServerNotificationsCount, // get total count
   } = useNotifications();
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) { // only fetch if no notifications and total is 0
       fetchInitialNotifications(); 
     }
-  }, [currentUser, fetchInitialNotifications]);
+  }, [currentUser, fetchInitialNotifications, isLoadingInitial, displayedNotifications.length, totalServerNotificationsCount]);
 
 
   const getInitials = (name: string = "") => {
@@ -137,7 +138,7 @@ export default function Header({ toggleChat }: HeaderProps) {
   };
   
   const handleNotificationClick = async (notification: Notification) => {
-    if (isDeletingNotification) return; // Don't process click if delete is in progress
+    if (isDeletingNotification) return; 
     if (!notification.isRead) {
       await markOneAsRead(notification.id);
     }
@@ -213,7 +214,7 @@ export default function Header({ toggleChat }: HeaderProps) {
 
         <ThemeSwitcher />
         
-        <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingInitial && displayedNotifications.length === 0) fetchInitialNotifications() }}>
+        <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) fetchInitialNotifications() }}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
               <Bell className="h-5 w-5" />
@@ -242,10 +243,10 @@ export default function Header({ toggleChat }: HeaderProps) {
                 )}
               </div>
             </div>
-            <ScrollArea className="max-h-[calc(80vh_-_180px)]"> {/* Adjusted max height for Load More button */}
+            <ScrollArea className="max-h-[calc(80vh_-_180px)]"> 
               {isLoadingInitial && displayedNotifications.length === 0 ? (
                  <div className="p-4 text-center text-sm text-muted-foreground">Loading notifications...</div>
-              ) : displayedNotifications.length === 0 ? (
+              ) : !isLoadingInitial && displayedNotifications.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   <CircleSlash className="mx-auto h-8 w-8 mb-2 text-muted-foreground/50"/>
                   No notifications yet.
@@ -262,7 +263,7 @@ export default function Header({ toggleChat }: HeaderProps) {
                 ))
               )}
             </ScrollArea>
-            {hasMoreNotifications && !isLoadingInitial && (
+            {hasMoreNotifications && !isLoadingInitial && displayedNotifications.length > 0 && (
               <div className="p-2 text-center border-t">
                 <Button
                   variant="link"
@@ -277,7 +278,7 @@ export default function Header({ toggleChat }: HeaderProps) {
               </div>
             )}
             <DropdownMenuSeparator />
-            <div className="p-2 flex justify-end items-center"> {/* Changed from justify-between */}
+            <div className="p-2 flex justify-end items-center"> 
                 <Button variant="outline" size="sm" onClick={handleDeleteRead} disabled={isDeletingReadNotifications || isDeletingNotification || displayedNotifications.filter(n => n.isRead).length === 0} className="text-xs">
                     <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Read
                 </Button>
@@ -380,3 +381,4 @@ export default function Header({ toggleChat }: HeaderProps) {
     </header>
   );
 }
+    
