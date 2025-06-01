@@ -135,6 +135,8 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
   const openCreatePostModal = useCallback((postForSharing?: Post) => {
     if (postForSharing) {
       setPostToShare(postForSharing);
+    } else {
+      setPostToShare(null); // Explicitly set to null if no post is being shared
     }
     setIsCreatePostModalOpen(true);
   }, []);
@@ -266,3 +268,4 @@ export const useFeed = () => {
   }
   return context;
 };
+
