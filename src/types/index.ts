@@ -106,7 +106,8 @@ export type NotificationType =
   | 'new_reaction_post' 
   | 'new_comment' 
   | 'new_reply' 
-  | 'new_reaction_comment';
+  | 'new_reaction_comment'
+  | 'new_follower'; // Added new_follower
 
 export interface Notification {
   id: string;
@@ -121,3 +122,4 @@ export interface Notification {
   createdAt: string;
   isRead: boolean;
 }
+

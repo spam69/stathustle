@@ -7,7 +7,7 @@ import { useAuth } from './auth-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
-const NOTIFICATIONS_PAGE_SIZE = 5; // Number of notifications to fetch per page
+const NOTIFICATIONS_PAGE_SIZE = 5; 
 
 interface PaginatedNotificationsResponse {
   items: Notification[];
@@ -33,6 +33,12 @@ interface NotificationContextType {
   isDeletingNotification: boolean;
   deleteReadNotifications: () => Promise<void>;
   isDeletingReadNotifications: boolean;
+
+  // For Modal
+  isNotificationModalOpen: boolean;
+  activeNotification: Notification | null;
+  openNotificationInModal: (notification: Notification) => void;
+  closeNotificationModal: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -89,6 +95,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [displayedNotifications, setDisplayedNotifications] = useState<Notification[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(0); 
   const [totalServerNotificationsCount, setTotalServerNotificationsCount] = useState<number>(0);
+
+  // Modal State
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [activeNotification, setActiveNotification] = useState<Notification | null>(null);
   
   const queryKey = ['notifications', user?.id]; 
 
@@ -114,8 +124,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
   const loadMoreMutation = useMutation<PaginatedNotificationsResponse, Error, void>({
     mutationFn: () => {
-        if (!hasMoreNotifications || currentPage === 0) { // currentPage === 0 means initial load hasn't completed fully or failed
-             console.log("[NotificationContext] Load more skipped, no more or initial load pending/failed.", {hasMoreNotifications, currentPage});
+        if (!hasMoreNotifications || currentPage === 0) { 
+             // console.log("[NotificationContext] Load more skipped, no more or initial load pending/failed.", {hasMoreNotifications, currentPage});
              return Promise.reject(new Error("No more notifications to load or initial load pending."));
         }
         // console.log(`[NotificationContext] Loading more notifications, current page: ${currentPage}, requesting page: ${currentPage + 1}`);
@@ -128,20 +138,19 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         return [...prev, ...newItems];
       });
       setCurrentPage(data.currentPage);
-      // totalServerNotificationsCount is set by initial fetch
     },
     onError: (error) => {
       if (error.message !== "No more notifications to load or initial load pending.") {
         toast({ title: "Error", description: `Could not load more notifications: ${error.message}`, variant: "destructive" });
       }
-      console.error('[NotificationContext] Load more error:', error);
+      // console.error('[NotificationContext] Load more error:', error);
     }
   });
 
   const markAsReadMutation = useMutation< { message: string }, Error, { notificationId?: string } >({
     mutationFn: ({ notificationId }) => markNotificationAsReadAPI(notificationId),
     onSuccess: (data, variables) => {
-      toast({ title: "Notifications Updated", description: data.message });
+      // toast({ title: "Notifications Updated", description: data.message }); // Can be noisy, consider removing for individual read
       setDisplayedNotifications(prev => 
         prev.map(n => {
           if (variables.notificationId && n.id === variables.notificationId && !n.isRead) return { ...n, isRead: true };
@@ -201,9 +210,22 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   }, [hasMoreNotifications, loadMoreMutation, currentPage]);
   
   const fetchInitialNotifications = useCallback(() => {
-    // console.log("[NotificationContext] Manual fetchInitialNotifications called.");
     fetchInitialNotificationsQuery();
   }, [fetchInitialNotificationsQuery]);
+
+  const openNotificationInModal = useCallback((notification: Notification) => {
+    setActiveNotification(notification);
+    setIsNotificationModalOpen(true);
+    // Also mark as read when opened in modal
+    if (!notification.isRead) {
+      markOneAsRead(notification.id);
+    }
+  }, [markOneAsRead]);
+
+  const closeNotificationModal = useCallback(() => {
+    setIsNotificationModalOpen(false);
+    setActiveNotification(null);
+  }, []);
 
 
   return (
@@ -223,6 +245,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       isDeletingNotification: deleteNotificationMutation.isPending,
       deleteReadNotifications: async () => { await deleteReadNotificationsMutation.mutateAsync(); },
       isDeletingReadNotifications: deleteReadNotificationsMutation.isPending,
+      // Modal
+      isNotificationModalOpen,
+      activeNotification,
+      openNotificationInModal,
+      closeNotificationModal,
     }}>
       {children}
     </NotificationContext.Provider>
@@ -236,3 +263,4 @@ export const useNotifications = () => {
   }
   return context;
 };
+

@@ -48,7 +48,7 @@ const NotificationItem = ({
   const timeAgo = formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true });
 
   const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent dropdown item click
+    e.stopPropagation(); 
     onDeleteNotification(notification.id);
   };
 
@@ -93,7 +93,7 @@ export default function Header({ toggleChat }: HeaderProps) {
   const { openCreatePostModal } = useFeed();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
+  const router = useRouter(); // Still needed if modal links out
   const { 
     displayedNotifications,
     unreadCount, 
@@ -108,11 +108,12 @@ export default function Header({ toggleChat }: HeaderProps) {
     isFetchingMore,
     hasMoreNotifications,
     loadMoreNotifications,
-    totalServerNotificationsCount, // get total count
+    totalServerNotificationsCount,
+    openNotificationInModal, // Use this from context
   } = useNotifications();
 
   useEffect(() => {
-    if (currentUser && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) { // only fetch if no notifications and total is 0
+    if (currentUser && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) { 
       fetchInitialNotifications(); 
     }
   }, [currentUser, fetchInitialNotifications, isLoadingInitial, displayedNotifications.length, totalServerNotificationsCount]);
@@ -139,19 +140,8 @@ export default function Header({ toggleChat }: HeaderProps) {
   
   const handleNotificationClick = async (notification: Notification) => {
     if (isDeletingNotification) return; 
-    if (!notification.isRead) {
-      await markOneAsRead(notification.id);
-    }
-    
-    const defaultLink = `/profile/${notification.actor.username}`;
-    let targetLink = notification.link || defaultLink;
-    
-    if(notification.link && notification.link.startsWith('/')) {
-        router.push(notification.link);
-    } else {
-        console.warn("Notification link is not a relative path or is missing:", notification.link);
-        router.push(`/profile/${currentUser?.username || ''}`);
-    }
+    // Mark as read is now handled by openNotificationInModal if needed
+    openNotificationInModal(notification);
   };
 
   const handleMarkAllRead = async () => {

@@ -1,3 +1,4 @@
+
 "use client";
 import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
@@ -14,6 +15,7 @@ import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/auth-context';
 import { useFeed } from '@/contexts/feed-context';
+import NotificationDisplayModal from '@/components/notification-display-modal'; // Import the new modal
 
 
 function CreatePostModal() {
@@ -22,8 +24,7 @@ function CreatePostModal() {
     closeCreatePostModal, 
     publishPost, 
     isPublishingPost,
-    postToShare, // Get the post to share from context
-    // clearPostToShare (this will be handled by closeCreatePostModal or form success)
+    postToShare, 
   } = useFeed();
   const { user } = useAuth();
 
@@ -31,11 +32,10 @@ function CreatePostModal() {
 
   const handleModalPostCreated = (newPostData: {content: string; mediaUrl?: string; mediaType?: "image" | "gif", sharedOriginalPostId?: string}) => {
     publishPost(newPostData);
-    // Modal closing and clearing postToShare is handled by publishPost success or closeCreatePostModal
   };
   
   const handleModalClose = () => {
-    closeCreatePostModal(); // This will also clear postToShare via its implementation in FeedContext
+    closeCreatePostModal(); 
   };
 
 
@@ -52,8 +52,8 @@ function CreatePostModal() {
             onPostCreated={handleModalPostCreated} 
             isSubmitting={isPublishingPost} 
             isModal={true}
-            postToShare={postToShare} // Pass postToShare to the form
-            onCancelShare={handleModalClose} // Allow form to trigger modal close/clear
+            postToShare={postToShare} 
+            onCancelShare={handleModalClose} 
         />
       </DialogContent>
     </Dialog>
@@ -67,30 +67,7 @@ export default function MainLayout({
 }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const toggleChat = () => setIsChatOpen(!isChatOpen);
-  // const router = useRouter();
-  // const { data: session, status } = useSession();
 
-  // useEffect(() => {
-  //   // This logic is bypassed for dev mode (always admin logged in)
-  //   // if (status === 'unauthenticated') {
-  //   //   router.push('/login');
-  //   // }
-  // }, [status, router]);
-
-  // if (status === 'loading') {
-  //   // This can be removed or simplified as AuthContext provides a static admin
-  //   return (
-  //     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-  //       <Loader2 className="h-12 w-12 animate-spin text-primary" />
-  //       <p className="mt-4 text-muted-foreground">Loading application...</p>
-  //     </div>
-  //   );
-  // }
-
-  // if (status === 'unauthenticated') {
-  //   // This is bypassed
-  //   return null;
-  // }
 
   return (
     <FeedProvider>
@@ -122,6 +99,7 @@ export default function MainLayout({
 
           <LiveSupportChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
           <CreatePostModal />
+          <NotificationDisplayModal /> {/* Add the NotificationDisplayModal here */}
         </div>
       </SidebarProvider>
     </FeedProvider>
