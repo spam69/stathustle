@@ -87,36 +87,54 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   const [displayedNotifications, setDisplayedNotifications] = useState<Notification[]>([]);
-  const [currentPage, setCurrentPage] = useState<number>(0); // Start at 0, first fetch will be page 1
+  const [currentPage, setCurrentPage] = useState<number>(0); 
   const [totalServerNotificationsCount, setTotalServerNotificationsCount] = useState<number>(0);
   
-  const queryKey = ['notifications', user?.id, 'initial'];
+  const queryKey = ['notifications', user?.id]; 
 
-  const { isLoading: isLoadingInitial, error, refetch: fetchInitialNotifications } = useQuery<PaginatedNotificationsResponse, Error>({
+  const { isLoading: isLoadingInitial, error, refetch: fetchInitialNotificationsQuery } = useQuery<PaginatedNotificationsResponse, Error>({
     queryKey: queryKey,
-    queryFn: () => fetchNotificationsAPI(1, NOTIFICATIONS_PAGE_SIZE), // Fetch page 1 initially
+    queryFn: () => fetchNotificationsAPI(1, NOTIFICATIONS_PAGE_SIZE),
     enabled: !!user,
     refetchInterval: 60000, 
     staleTime: 30000,
     onSuccess: (data) => {
+      // console.log('[NotificationContext] Initial fetch onSuccess data:', JSON.stringify(data, null, 2));
       setDisplayedNotifications(data.items);
       setCurrentPage(data.currentPage);
       setTotalServerNotificationsCount(data.totalItems);
     },
+    onError: (err) => {
+       console.error('[NotificationContext] Initial fetch error:', err);
+    }
   });
 
   const unreadCount = displayedNotifications.filter(n => !n.isRead).length;
   const hasMoreNotifications = displayedNotifications.length < totalServerNotificationsCount;
 
   const loadMoreMutation = useMutation<PaginatedNotificationsResponse, Error, void>({
-    mutationFn: () => fetchNotificationsAPI(currentPage + 1, NOTIFICATIONS_PAGE_SIZE),
+    mutationFn: () => {
+        if (!hasMoreNotifications || currentPage === 0) { // currentPage === 0 means initial load hasn't completed fully or failed
+             console.log("[NotificationContext] Load more skipped, no more or initial load pending/failed.", {hasMoreNotifications, currentPage});
+             return Promise.reject(new Error("No more notifications to load or initial load pending."));
+        }
+        // console.log(`[NotificationContext] Loading more notifications, current page: ${currentPage}, requesting page: ${currentPage + 1}`);
+        return fetchNotificationsAPI(currentPage + 1, NOTIFICATIONS_PAGE_SIZE);
+    },
     onSuccess: (data) => {
-      setDisplayedNotifications(prev => [...prev, ...data.items]);
+      // console.log('[NotificationContext] Load more onSuccess data:', JSON.stringify(data, null, 2));
+      setDisplayedNotifications(prev => {
+        const newItems = data.items.filter(item => !prev.find(pItem => pItem.id === item.id));
+        return [...prev, ...newItems];
+      });
       setCurrentPage(data.currentPage);
-      // totalServerNotificationsCount is set by initial fetch and assumed not to change during load more
+      // totalServerNotificationsCount is set by initial fetch
     },
     onError: (error) => {
-      toast({ title: "Error", description: `Could not load more notifications: ${error.message}`, variant: "destructive" });
+      if (error.message !== "No more notifications to load or initial load pending.") {
+        toast({ title: "Error", description: `Could not load more notifications: ${error.message}`, variant: "destructive" });
+      }
+      console.error('[NotificationContext] Load more error:', error);
     }
   });
 
@@ -126,8 +144,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Notifications Updated", description: data.message });
       setDisplayedNotifications(prev => 
         prev.map(n => {
-          if (variables.notificationId && n.id === variables.notificationId) return { ...n, isRead: true };
-          if (!variables.notificationId) return { ...n, isRead: true }; 
+          if (variables.notificationId && n.id === variables.notificationId && !n.isRead) return { ...n, isRead: true };
+          if (!variables.notificationId && !n.isRead) return { ...n, isRead: true }; 
           return n;
         })
       );
@@ -142,7 +160,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     onSuccess: (data, variables) => {
       toast({ title: "Notification Deleted", description: data.message });
       setDisplayedNotifications(prev => prev.filter(n => n.id !== variables.notificationId));
-      setTotalServerNotificationsCount(prev => Math.max(0, prev -1)); // Adjust total count
+      setTotalServerNotificationsCount(prev => Math.max(0, prev -1)); 
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -155,7 +173,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Notifications Cleared", description: data.message });
       const readCount = displayedNotifications.filter(n => n.isRead).length;
       setDisplayedNotifications(prev => prev.filter(n => !n.isRead));
-      setTotalServerNotificationsCount(prev => Math.max(0, prev - readCount)); // Adjust total count
+      setTotalServerNotificationsCount(prev => Math.max(0, prev - readCount)); 
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -164,18 +182,28 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
 
   const markOneAsRead = useCallback(async (notificationId: string) => {
-    await markAsReadMutation.mutateAsync({ notificationId });
-  }, [markAsReadMutation]);
+    const notification = displayedNotifications.find(n => n.id === notificationId);
+    if (notification && !notification.isRead) {
+      await markAsReadMutation.mutateAsync({ notificationId });
+    }
+  }, [markAsReadMutation, displayedNotifications]);
 
   const markAllAsRead = useCallback(async () => {
-    await markAsReadMutation.mutateAsync({});
-  }, [markAsReadMutation]);
+    if (unreadCount > 0) {
+        await markAsReadMutation.mutateAsync({});
+    }
+  }, [markAsReadMutation, unreadCount]);
   
   const loadMoreNotifications = useCallback(() => {
-    if (hasMoreNotifications && !loadMoreMutation.isPending) {
+    if (hasMoreNotifications && !loadMoreMutation.isPending && currentPage > 0) {
       loadMoreMutation.mutate();
     }
-  }, [hasMoreNotifications, loadMoreMutation]);
+  }, [hasMoreNotifications, loadMoreMutation, currentPage]);
+  
+  const fetchInitialNotifications = useCallback(() => {
+    // console.log("[NotificationContext] Manual fetchInitialNotifications called.");
+    fetchInitialNotificationsQuery();
+  }, [fetchInitialNotificationsQuery]);
 
 
   return (
@@ -208,4 +236,3 @@ export const useNotifications = () => {
   }
   return context;
 };
-    

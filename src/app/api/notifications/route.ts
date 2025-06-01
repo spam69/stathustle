@@ -11,13 +11,17 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || String(DEFAULT_NOTIFICATIONS_LIMIT), 10);
 
-    // In a real app, get userId from session
     const userId = mockAdminUser.id; 
+    // console.log(`[API/NOTIFICATIONS] Request for page ${page}, limit ${limit} for userId: ${userId}`);
+    // console.log(`[API/NOTIFICATIONS] Total mockNotifications available in mock-data: ${mockNotifications.length}`);
+
 
     const allUserNotifications = mockNotifications
       .filter(n => n.recipientUserId === userId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
+    // console.log(`[API/NOTIFICATIONS] Filtered ${allUserNotifications.length} notifications for user ${userId}`);
+
     const totalItems = allUserNotifications.length;
     
     const startIndex = (page - 1) * limit;
@@ -26,14 +30,15 @@ export async function GET(request: Request) {
     
     const hasMore = endIndex < totalItems;
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // console.log(`[API/NOTIFICATIONS] Returning ${paginatedNotifications.length} items. Total: ${totalItems}, HasMore: ${hasMore}`);
+
+    await new Promise(resolve => setTimeout(resolve, 200)); // Simulate network delay
 
     return NextResponse.json({
       items: paginatedNotifications,
       hasMore,
       currentPage: page,
-      totalItems, // Total count of notifications for this user
+      totalItems, 
       totalPages: Math.ceil(totalItems / limit),
     });
 
@@ -42,5 +47,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: 'An unexpected error occurred' }, { status: 500 });
   }
 }
-
-    

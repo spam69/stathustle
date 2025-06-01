@@ -8,8 +8,8 @@ let mockUser1Data: User = {
   username: 'FantasyFanatic',
   email: 'fanatic@stathustle.com',
   password: 'password123',
-  profilePictureUrl: 'https://placehold.co/200x200.png',
-  bannerImageUrl: 'https://placehold.co/1200x300.png',
+  profilePictureUrl: 'https://placehold.co/200x200.png?text=U1',
+  bannerImageUrl: 'https://placehold.co/1200x300.png?text=Banner1',
   socialLinks: [
     { platform: 'Twitter', url: 'https://twitter.com/fantasyfanatic' },
     { platform: 'Instagram', url: 'https://instagram.com/fantasyfanatic' },
@@ -28,8 +28,8 @@ let mockUser2Data: User = {
   username: 'AnalystProUser',
   email: 'pro@stathustle.com',
   password: 'password456',
-  profilePictureUrl: 'https://placehold.co/200x200.png',
-  bannerImageUrl: 'https://placehold.co/1200x300.png',
+  profilePictureUrl: 'https://placehold.co/200x200.png?text=U2',
+  bannerImageUrl: 'https://placehold.co/1200x300.png?text=Banner2',
   sportInterests: [
     { sport: 'Baseball', level: 'very interested' },
     { sport: 'Hockey', level: 'very interested' },
@@ -44,7 +44,7 @@ const mockAdminUserData: User = {
   username: 'admin',
   email: 'admin@email.com',
   password: 'admin',
-  profilePictureUrl: 'https://placehold.co/200x200.png?text=Admin',
+  profilePictureUrl: 'https://placehold.co/200x200.png?text=Adm',
   bannerImageUrl: 'https://placehold.co/1200x300.png?text=AdminBanner',
   sportInterests: [
     { sport: 'Basketball', level: 'very interested' },
@@ -64,8 +64,8 @@ export let mockIdentityAnalystProData: Identity = {
   username: 'AnalystPro',
   displayName: 'Pro Analysis Hub',
   email: 'contact@proanalysis.com',
-  profilePictureUrl: 'https://placehold.co/200x200.png?text=ProIdentity',
-  bannerImageUrl: 'https://placehold.co/1200x300.png?text=ProBanner',
+  profilePictureUrl: 'https://placehold.co/200x200.png?text=ID1',
+  bannerImageUrl: 'https://placehold.co/1200x300.png?text=IDBanner1',
   socialLinks: [{ platform: 'Website', url: 'https://proanalysis.com'}],
   bio: 'The official hub for AnalystPro\'s insights and articles. Follow for top-tier fantasy advice.',
   owner: mockUser2Data,
@@ -80,8 +80,8 @@ export let mockIdentityFanaticBrandData: Identity = {
   id: 'identity2',
   username: 'FanaticInsights',
   displayName: 'FantasyFanatic Insights',
-  profilePictureUrl: 'https://placehold.co/200x200.png?text=FFI',
-  bannerImageUrl: 'https://placehold.co/1200x300.png?text=FFIBanner',
+  profilePictureUrl: 'https://placehold.co/200x200.png?text=ID2',
+  bannerImageUrl: 'https://placehold.co/1200x300.png?text=IDBanner2',
   bio: 'Deep dives and hot takes from FantasyFanatic.',
   owner: mockUser1Data,
   isIdentity: true,
@@ -176,7 +176,7 @@ const adminPost1: Post = {
       { userId: mockUser2Data.id, reactionType: 'wow', createdAt: new Date().toISOString() }
   ],
   shares: 2,
-  repliesCount: 1, // Updated to reflect mock comment
+  repliesCount: 1, 
   comments: [
     {
         id: 'comment-ap1',
@@ -393,6 +393,7 @@ export const sportInterestLevels: SportInterestLevel[] = ['very interested', 'so
 export let mockNotifications: Notification[] = [];
 
 const getActorDisplayName = (actor: User | Identity) => {
+  if (!actor) return 'Unknown Actor';
   return actor.isIdentity ? (actor as Identity).displayName || actor.username : actor.username;
 };
 
@@ -401,10 +402,17 @@ export const createNotification = (
   actor: User | Identity,
   recipientUserId: string,
   post?: Post,
-  comment?: Comment, // For 'new_comment', this is the new comment. For 'new_reaction_comment', this is the comment being reacted to. For 'new_reply', this is the new reply.
-  originalComment?: Comment // For 'new_reply', this is the comment being replied to.
+  comment?: Comment, 
+  originalComment?: Comment 
 ): void => {
-  if (actor.id === recipientUserId) return;
+  if (!actor || !actor.id) {
+    console.warn('[MockData] createNotification called with invalid actor:', actor);
+    return; 
+  }
+  if (actor.id === recipientUserId && type !== 'new_comment' && type !== 'new_reply') { 
+    // Allow users to get notifs for their own comments/replies on their own posts for testing, but not self-reactions
+    if (type.startsWith('new_reaction')) return;
+  }
 
   const existingNotificationIndex = mockNotifications.findIndex(n =>
     n.type === type &&
@@ -420,18 +428,17 @@ export const createNotification = (
   }
 
   let message = '';
-  let link = `/profile/${recipientUserId}`;
+  let link = `/profile/${recipientUserId}`; // Default link
 
   const actorName = `<strong>${getActorDisplayName(actor)}</strong>`;
   const postContentPreview = post?.content ? `"${post.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : 'your post';
-
-  // Determine which comment's content to use for preview based on notification type
+  
   let relevantCommentContentPreview = '';
   if (type === 'new_comment' && comment) {
     relevantCommentContentPreview = comment.content ? `"${comment.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : 'a comment';
-  } else if (type === 'new_reply' && comment) { // 'comment' is the reply itself
+  } else if (type === 'new_reply' && comment) { 
     relevantCommentContentPreview = comment.content ? `"${comment.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : 'a reply';
-  } else if (type === 'new_reaction_comment' && comment) { // 'comment' is the one being reacted to
+  } else if (type === 'new_reaction_comment' && comment) { 
     relevantCommentContentPreview = comment.content ? `"${comment.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : 'your comment';
   } else {
     relevantCommentContentPreview = 'your comment';
@@ -443,21 +450,19 @@ export const createNotification = (
   switch (type) {
     case 'new_reaction_post':
       message = `${actorName} reacted to ${postContentPreview}.`;
-      if (post) link = `/profile/${post.author.username}#post-${post.id}`;
+      if (post) link = `/profile/${post.author.username}`; // Simplified link for now
       break;
     case 'new_comment':
       message = `${actorName} commented on ${postContentPreview}: ${relevantCommentContentPreview}`;
-      if (post && comment) link = `/profile/${post.author.username}#comment-${comment.id}`;
-      else if (post) link = `/profile/${post.author.username}#post-${post.id}`;
+      if (post) link = `/profile/${post.author.username}`;
       break;
     case 'new_reply':
       message = `${actorName} replied to ${originalCommentContentPreview}: ${relevantCommentContentPreview}`;
-      if (post && comment) link = `/profile/${post.author.username}#comment-${comment.id}`; // Link to the reply
-      else if (post && originalComment) link = `/profile/${post.author.username}#comment-${originalComment.id}`; // Fallback to original comment
+      if (post) link = `/profile/${post.author.username}`;
       break;
     case 'new_reaction_comment':
       message = `${actorName} reacted to ${relevantCommentContentPreview} on ${postContentPreview}.`;
-      if (post && comment) link = `/profile/${post.author.username}#comment-${comment.id}`;
+      if (post) link = `/profile/${post.author.username}`;
       break;
   }
 
@@ -471,8 +476,8 @@ export const createNotification = (
     originalCommentId: originalComment?.id,
     message,
     link,
-    createdAt: new Date(Date.now() - mockNotifications.length * 1000 * 60 * Math.random()*5).toISOString(),
-    isRead: Math.random() > 0.7,
+    createdAt: new Date(Date.now() - mockNotifications.length * 1000 * 60 * Math.random()*5).toISOString(), // Stagger time for realism
+    isRead: Math.random() > 0.7, // Randomly mark some as read
   };
 
   mockNotifications.unshift(newNotification);
@@ -480,10 +485,16 @@ export const createNotification = (
 
 
 // --- Initialize many mock notifications for admin-user ---
-const adminPostForNotifs = mockPosts.find(p => p.id === 'admin-post-1');
-const anotherAdminPostForNotifs = mockPosts.find(p => p.id === 'post-extra-4');
-const post1ForAdminComment = mockPosts.find(p => p.id === 'post1');
-const adminCommentOnPost1 = post1ForAdminComment?.comments?.find(c => c.id === 'admin-comment-post1');
+const adminP = mockPosts.find(p => p.id === 'admin-post-1');
+const anotherAdminP = mockPosts.find(p => p.id === 'post-extra-4');
+const post1ForAdminC = mockPosts.find(p => p.id === 'post1');
+const adminCommentOnP1 = post1ForAdminC?.comments?.find(c => c.id === 'admin-comment-post1');
+
+if (!adminP) console.error("[MOCK DATA ERROR] Could not find adminPostForNotifs ('admin-post-1')");
+if (!anotherAdminP) console.error("[MOCK DATA ERROR] Could not find anotherAdminPostForNotifs ('post-extra-4')");
+if (!post1ForAdminC) console.error("[MOCK DATA ERROR] Could not find post1ForAdminComment ('post1')");
+if (!adminCommentOnP1) console.error("[MOCK DATA ERROR] Could not find adminCommentOnPost1 ('admin-comment-post1')");
+
 
 const usersAndIdentities: (User | Identity)[] = [
   mockUser1Data,
@@ -494,71 +505,67 @@ const usersAndIdentities: (User | Identity)[] = [
 const reactionTypes: ReactionType[] = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
 
 // Generate notifications for adminPostForNotifs (authored by admin)
-if (adminPostForNotifs) {
-  for (let i = 0; i < 10; i++) {
+if (adminP) {
+  for (let i = 0; i < 7; i++) { // Reduced for brevity, increase for more
     const randomActor = usersAndIdentities[i % usersAndIdentities.length];
-    const randomReaction = reactionTypes[i % reactionTypes.length];
-
-    // Reaction to admin's post
-    if (i % 2 === 0) {
-      createNotification('new_reaction_post', randomActor, mockAdminUserData.id, adminPostForNotifs);
-    }
-    // Comment on admin's post
-    else {
-      const mockComment: Comment = {
-        id: `mockcomment-adminpost-${i}-${Date.now()}`,
-        author: randomActor,
-        content: `This is comment #${i+1} on admin's post by ${getActorDisplayName(randomActor)}. Testing long content here to see how it wraps or truncates in the notification message. Maybe it needs more text. Maybe it doesn't.`,
-        createdAt: new Date(Date.now() - (i * 1000 * 60 * 10)).toISOString(), // Stagger time
-        detailedReactions: [],
-      };
-      createNotification('new_comment', randomActor, mockAdminUserData.id, adminPostForNotifs, mockComment);
-      if (!adminPostForNotifs.comments) adminPostForNotifs.comments = [];
-      adminPostForNotifs.comments.push(mockComment);
-      adminPostForNotifs.repliesCount = (adminPostForNotifs.repliesCount || 0) + 1;
-    }
+    
+    createNotification('new_reaction_post', randomActor, mockAdminUserData.id, adminP);
+    
+    const mockComment: Comment = {
+      id: `mockcomment-adminpost-${i}-${Date.now()}`,
+      author: randomActor,
+      content: `This is comment #${i+1} on admin's post ("${adminP.content.substring(0,20)}...") by ${getActorDisplayName(randomActor)}.`,
+      createdAt: new Date(Date.now() - (i * 1000 * 60 * (10 + i))).toISOString(),
+      detailedReactions: [],
+    };
+    createNotification('new_comment', randomActor, mockAdminUserData.id, adminP, mockComment);
+    if (!adminP.comments) adminP.comments = [];
+    adminP.comments.push(mockComment);
+    adminP.repliesCount = (adminP.repliesCount || 0) + 1;
   }
 }
 
 // Generate notifications for anotherAdminPostForNotifs (authored by admin)
-if (anotherAdminPostForNotifs) {
-   for (let i = 0; i < 8; i++) {
+if (anotherAdminP) {
+   for (let i = 0; i < 6; i++) { // Reduced
     const randomActor = usersAndIdentities[i % usersAndIdentities.length];
-     createNotification('new_reaction_post', randomActor, mockAdminUserData.id, anotherAdminPostForNotifs);
+     createNotification('new_reaction_post', randomActor, mockAdminUserData.id, anotherAdminP);
    }
 }
 
-
 // Generate notifications related to admin's comment (adminCommentOnPost1 on post1)
-if (adminCommentOnPost1 && post1ForAdminComment) {
-  for (let i = 0; i < 12; i++) {
+if (adminCommentOnP1 && post1ForAdminC) {
+  for (let i = 0; i < 8; i++) { // Reduced
     const randomActor = usersAndIdentities[i % usersAndIdentities.length];
 
-    // Reaction to admin's comment
-    if (i % 2 === 0) {
-      createNotification('new_reaction_comment', randomActor, mockAdminUserData.id, post1ForAdminComment, adminCommentOnPost1);
-    }
-    // Reply to admin's comment
-    else {
-       const mockReply: Comment = {
-        id: `mockreply-admincomment-${i}-${Date.now()}`,
-        author: randomActor,
-        content: `This is reply #${i+1} to admin's comment, by ${getActorDisplayName(randomActor)}. Let's see how this looks.`,
-        createdAt: new Date(Date.now() - (i * 1000 * 60 * 7)).toISOString(), // Stagger time
-        parentId: adminCommentOnPost1.id,
-        detailedReactions: [],
-      };
-      createNotification('new_reply', randomActor, mockAdminUserData.id, post1ForAdminComment, mockReply, adminCommentOnPost1);
-      if (!post1ForAdminComment.comments) post1ForAdminComment.comments = [];
-      post1ForAdminComment.comments.push(mockReply);
-      post1ForAdminComment.repliesCount = (post1ForAdminComment.repliesCount || 0) + 1;
-    }
+    createNotification('new_reaction_comment', randomActor, mockAdminUserData.id, post1ForAdminC, adminCommentOnP1);
+    
+    const mockReply: Comment = {
+      id: `mockreply-admincomment-${i}-${Date.now()}`,
+      author: randomActor,
+      content: `This is reply #${i+1} to admin's comment ("${adminCommentOnP1.content.substring(0,20)}...") by ${getActorDisplayName(randomActor)}.`,
+      createdAt: new Date(Date.now() - (i * 1000 * 60 * (7 + i))).toISOString(),
+      parentId: adminCommentOnP1.id,
+      detailedReactions: [],
+    };
+    createNotification('new_reply', randomActor, mockAdminUserData.id, post1ForAdminC, mockReply, adminCommentOnP1);
+    if (!post1ForAdminC.comments) post1ForAdminC.comments = [];
+    post1ForAdminC.comments.push(mockReply);
+    post1ForAdminC.repliesCount = (post1ForAdminC.repliesCount || 0) + 1;
   }
 }
 
+// Add a few more very recent notifications
+if (adminP) {
+    createNotification('new_comment', mockUser1Data, mockAdminUserData.id, adminP, {id: `lastminutecomment-${Date.now()}`, author: mockUser1Data, content: "A very recent comment!", createdAt: new Date(Date.now() - 1000*10).toISOString(), detailedReactions:[]});
+}
+if (anotherAdminP) {
+    createNotification('new_reaction_post', mockUser2Data, mockAdminUserData.id, anotherAdminP);
+}
+
+
 mockNotifications.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-
+console.log(`[MockData] Initialized. Total mockNotifications: ${mockNotifications.length}. For admin (${mockAdminUserData.id}): ${mockNotifications.filter(n=>n.recipientUserId === mockAdminUserData.id).length}`);
 // --- End of initializing mock notifications ---
 
 
@@ -567,5 +574,3 @@ export const mockUser2 = mockUser2Data;
 export const mockAdminUser = mockAdminUserData;
 export const mockIdentityAnalystPro = mockIdentityAnalystProData;
 export const mockIdentityFanaticBrand = mockIdentityFanaticBrandData;
-
-    
