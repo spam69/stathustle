@@ -7,12 +7,25 @@ import { useAuth } from './auth-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
+const NOTIFICATIONS_PER_PAGE_CLIENT = 10;
+
+interface PaginatedNotificationsResponse {
+  items: Notification[];
+  hasMore: boolean;
+  currentPage: number;
+  totalItems: number;
+  totalPages: number;
+}
+
 interface NotificationContextType {
-  notifications: Notification[];
+  displayedNotifications: Notification[];
   unreadCount: number;
-  isLoading: boolean;
+  isLoadingInitial: boolean;
+  isFetchingMore: boolean;
+  hasMoreNotifications: boolean;
   error: Error | null;
-  fetchNotifications: () => void;
+  fetchInitialNotifications: () => void; // Renamed for clarity
+  loadMoreNotifications: () => void;
   markOneAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
@@ -23,8 +36,8 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const fetchNotificationsAPI = async (): Promise<Notification[]> => {
-  const response = await fetch('/api/notifications');
+const fetchNotificationsAPI = async (page: number = 1, limit: number = NOTIFICATIONS_PER_PAGE_CLIENT): Promise<PaginatedNotificationsResponse> => {
+  const response = await fetch(`/api/notifications?page=${page}&limit=${limit}`);
   if (!response.ok) {
     throw new Error('Failed to fetch notifications');
   }
@@ -72,21 +85,53 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: notifications = [], isLoading, error, refetch } = useQuery<Notification[], Error>({
-    queryKey: ['notifications', user?.id],
-    queryFn: fetchNotificationsAPI,
-    enabled: !!user, 
-    refetchInterval: 60000, 
+  const [displayedNotifications, setDisplayedNotifications] = useState<Notification[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [hasMoreNotifications, setHasMoreNotifications] = useState<boolean>(true);
+  
+  const queryKey = ['notifications', user?.id, 'initial'];
+
+  const { isLoading: isLoadingInitial, error, refetch: fetchInitialNotifications } = useQuery<PaginatedNotificationsResponse, Error>({
+    queryKey: queryKey,
+    queryFn: () => fetchNotificationsAPI(1, NOTIFICATIONS_PER_PAGE_CLIENT),
+    enabled: !!user,
+    refetchInterval: 60000, // Keep periodic refetch for the first page
     staleTime: 30000,
+    onSuccess: (data) => {
+      setDisplayedNotifications(data.items);
+      setCurrentPage(data.currentPage);
+      setHasMoreNotifications(data.hasMore);
+    },
   });
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = displayedNotifications.filter(n => !n.isRead).length;
+
+  const loadMoreMutation = useMutation<PaginatedNotificationsResponse, Error, void>({
+    mutationFn: () => fetchNotificationsAPI(currentPage + 1, NOTIFICATIONS_PER_PAGE_CLIENT),
+    onSuccess: (data) => {
+      setDisplayedNotifications(prev => [...prev, ...data.items]);
+      setCurrentPage(data.currentPage);
+      setHasMoreNotifications(data.hasMore);
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: `Could not load more notifications: ${error.message}`, variant: "destructive" });
+    }
+  });
 
   const markAsReadMutation = useMutation< { message: string }, Error, { notificationId?: string } >({
     mutationFn: ({ notificationId }) => markNotificationAsReadAPI(notificationId),
     onSuccess: (data, variables) => {
       toast({ title: "Notifications Updated", description: data.message });
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      // Optimistically update local state
+      setDisplayedNotifications(prev => 
+        prev.map(n => {
+          if (variables.notificationId && n.id === variables.notificationId) return { ...n, isRead: true };
+          if (!variables.notificationId) return { ...n, isRead: true }; // Mark all as read
+          return n;
+        })
+      );
+      // Invalidate initial query or refetch if needed for other counts, but local update is faster for UI
+      // queryClient.invalidateQueries({ queryKey: queryKey }); 
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -97,7 +142,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     mutationFn: ({ notificationId }) => deleteNotificationAPI(notificationId),
     onSuccess: (data, variables) => {
       toast({ title: "Notification Deleted", description: data.message });
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      setDisplayedNotifications(prev => prev.filter(n => n.id !== variables.notificationId));
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -108,7 +153,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     mutationFn: () => deleteReadNotificationsAPI(),
     onSuccess: (data) => {
       toast({ title: "Notifications Cleared", description: data.message });
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      setDisplayedNotifications(prev => prev.filter(n => !n.isRead));
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -117,62 +162,43 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
 
   const markOneAsRead = useCallback(async (notificationId: string) => {
-    queryClient.setQueryData<Notification[]>(['notifications', user?.id], (oldNotifications) =>
-      oldNotifications?.map(n => n.id === notificationId ? { ...n, isRead: true } : n) || []
-    );
     try {
       await markAsReadMutation.mutateAsync({ notificationId });
     } catch (e) {
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      // Error handled by mutation's onError
     }
-  }, [user?.id, queryClient, markAsReadMutation]);
+  }, [markAsReadMutation]);
 
   const markAllAsRead = useCallback(async () => {
-    queryClient.setQueryData<Notification[]>(['notifications', user?.id], (oldNotifications) =>
-      oldNotifications?.map(n => ({ ...n, isRead: true })) || []
-    );
     try {
       await markAsReadMutation.mutateAsync({});
     } catch (e) {
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+       // Error handled by mutation's onError
     }
-  }, [user?.id, queryClient, markAsReadMutation]);
+  }, [markAsReadMutation]);
   
-  const fetchNotifications = useCallback(() => {
-    if (user) {
-      refetch();
+  const loadMoreNotifications = useCallback(() => {
+    if (hasMoreNotifications && !loadMoreMutation.isPending) {
+      loadMoreMutation.mutate();
     }
-  }, [user, refetch]);
-
-  const deleteNotification = useCallback(async (notificationId: string) => {
-    try {
-      await deleteNotificationMutation.mutateAsync({ notificationId });
-    } catch (e) {
-      // Error is handled by mutation's onError
-    }
-  }, [deleteNotificationMutation]);
-
-  const deleteReadNotifications = useCallback(async () => {
-    try {
-      await deleteReadNotificationsMutation.mutateAsync();
-    } catch (e) {
-      // Error is handled by mutation's onError
-    }
-  }, [deleteReadNotificationsMutation]);
+  }, [hasMoreNotifications, loadMoreMutation]);
 
 
   return (
     <NotificationContext.Provider value={{
-      notifications,
+      displayedNotifications,
       unreadCount,
-      isLoading,
+      isLoadingInitial,
+      isFetchingMore: loadMoreMutation.isPending,
+      hasMoreNotifications,
       error,
-      fetchNotifications,
+      fetchInitialNotifications,
+      loadMoreNotifications,
       markOneAsRead,
       markAllAsRead,
-      deleteNotification,
+      deleteNotification: async (notificationId) => { await deleteNotificationMutation.mutateAsync({notificationId}); },
       isDeletingNotification: deleteNotificationMutation.isPending,
-      deleteReadNotifications,
+      deleteReadNotifications: async () => { await deleteReadNotificationsMutation.mutateAsync(); },
       isDeletingReadNotifications: deleteReadNotificationsMutation.isPending,
     }}>
       {children}

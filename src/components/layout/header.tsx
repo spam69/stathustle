@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon } from 'lucide-react';
+import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -80,7 +80,7 @@ const NotificationItem = ({
         disabled={isDeleting}
         aria-label="Delete notification"
       >
-        <CloseIcon className="h-3.5 w-3.5" />
+        {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloseIcon className="h-3.5 w-3.5" />}
       </Button>
     </DropdownMenuItem>
   );
@@ -95,23 +95,26 @@ export default function Header({ toggleChat }: HeaderProps) {
   const { toast } = useToast();
   const router = useRouter();
   const { 
-    notifications, 
+    displayedNotifications,
     unreadCount, 
     markOneAsRead, 
     markAllAsRead, 
-    fetchNotifications,
+    fetchInitialNotifications,
     deleteNotification,
     isDeletingNotification,
     deleteReadNotifications,
     isDeletingReadNotifications,
-    isLoading: isLoadingNotifications,
+    isLoadingInitial,
+    isFetchingMore,
+    hasMoreNotifications,
+    loadMoreNotifications,
   } = useNotifications();
 
   useEffect(() => {
     if (currentUser) {
-      fetchNotifications(); 
+      fetchInitialNotifications(); 
     }
-  }, [currentUser, fetchNotifications]);
+  }, [currentUser, fetchInitialNotifications]);
 
 
   const getInitials = (name: string = "") => {
@@ -141,14 +144,6 @@ export default function Header({ toggleChat }: HeaderProps) {
     
     const defaultLink = `/profile/${notification.actor.username}`;
     let targetLink = notification.link || defaultLink;
-
-    if (notification.postId) {
-        // This needs a robust way to get actual blog/post slug or path
-        // For now, simplifying to a generic path or profile fallback
-        const foundPost = notifications.find(n => n.id === notification.id)?.postId; // Placeholder
-        targetLink = `/blogs/placeholder-user/placeholder-slug`; // Example - needs real data
-        // targetLink = `/profile/${currentUser?.username || ''}/posts/${notification.postId}`; // More specific example
-    }
     
     if(notification.link && notification.link.startsWith('/')) {
         router.push(notification.link);
@@ -169,8 +164,8 @@ export default function Header({ toggleChat }: HeaderProps) {
   };
 
   const handleRefreshNotifications = () => {
-    if (isLoadingNotifications || isDeletingNotification || isDeletingReadNotifications) return;
-    fetchNotifications();
+    if (isLoadingInitial || isFetchingMore || isDeletingNotification || isDeletingReadNotifications) return;
+    fetchInitialNotifications();
     toast({ title: "Notifications", description: "Refreshing notifications list..."});
   };
   
@@ -218,7 +213,7 @@ export default function Header({ toggleChat }: HeaderProps) {
 
         <ThemeSwitcher />
         
-        <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingNotifications) fetchNotifications() }}>
+        <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingInitial && displayedNotifications.length === 0) fetchInitialNotifications() }}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
               <Bell className="h-5 w-5" />
@@ -237,26 +232,26 @@ export default function Header({ toggleChat }: HeaderProps) {
             <div className="flex items-center justify-between p-3 border-b">
               <DropdownMenuLabel className="p-0 font-headline text-base">Notifications</DropdownMenuLabel>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" onClick={handleRefreshNotifications} className="h-7 w-7" disabled={isLoadingNotifications || isDeletingNotification || isDeletingReadNotifications} title="Refresh notifications">
-                   <RefreshCw className={`h-4 w-4 ${isLoadingNotifications ? 'animate-spin' : ''}`} />
+                <Button variant="ghost" size="icon" onClick={handleRefreshNotifications} className="h-7 w-7" disabled={isLoadingInitial || isFetchingMore || isDeletingNotification || isDeletingReadNotifications} title="Refresh notifications">
+                   <RefreshCw className={`h-4 w-4 ${isLoadingInitial || isFetchingMore ? 'animate-spin' : ''}`} />
                 </Button>
-                {notifications.length > 0 && unreadCount > 0 && (
+                {displayedNotifications.length > 0 && unreadCount > 0 && (
                   <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="text-xs h-auto p-1" disabled={isDeletingNotification || isDeletingReadNotifications}>
                     <CheckCheck className="h-3.5 w-3.5 mr-1" /> Mark all read
                   </Button>
                 )}
               </div>
             </div>
-            <ScrollArea className="max-h-[calc(80vh_-_120px)]"> {/* Adjusted max height */}
-              {isLoadingNotifications && notifications.length === 0 ? (
+            <ScrollArea className="max-h-[calc(80vh_-_180px)]"> {/* Adjusted max height for Load More button */}
+              {isLoadingInitial && displayedNotifications.length === 0 ? (
                  <div className="p-4 text-center text-sm text-muted-foreground">Loading notifications...</div>
-              ) : notifications.length === 0 ? (
+              ) : displayedNotifications.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   <CircleSlash className="mx-auto h-8 w-8 mb-2 text-muted-foreground/50"/>
                   No notifications yet.
                 </div>
               ) : (
-                notifications.map(notif => (
+                displayedNotifications.map(notif => (
                   <NotificationItem 
                     key={notif.id} 
                     notification={notif} 
@@ -267,14 +262,25 @@ export default function Header({ toggleChat }: HeaderProps) {
                 ))
               )}
             </ScrollArea>
+            {hasMoreNotifications && !isLoadingInitial && (
+              <div className="p-2 text-center border-t">
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={loadMoreNotifications}
+                  disabled={isFetchingMore}
+                  className="w-full text-primary"
+                >
+                  {isFetchingMore ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Load More Notifications
+                </Button>
+              </div>
+            )}
             <DropdownMenuSeparator />
-            <div className="p-2 flex justify-between items-center">
-                <Button variant="outline" size="sm" onClick={handleDeleteRead} disabled={isDeletingReadNotifications || isDeletingNotification || notifications.filter(n => n.isRead).length === 0} className="text-xs">
+            <div className="p-2 flex justify-end items-center"> {/* Changed from justify-between */}
+                <Button variant="outline" size="sm" onClick={handleDeleteRead} disabled={isDeletingReadNotifications || isDeletingNotification || displayedNotifications.filter(n => n.isRead).length === 0} className="text-xs">
                     <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Read
                 </Button>
-                 <DropdownMenuItem className="justify-center text-sm text-primary hover:underline p-1" asChild>
-                    <Link href="/notifications">View all</Link>
-                </DropdownMenuItem>
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
