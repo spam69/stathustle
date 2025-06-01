@@ -412,27 +412,31 @@ export const createNotification = (
   let message = '';
   let link = `/profile/${recipientUserId}`; // Default link, should be overridden
 
-  const actorName = getActorDisplayName(actor);
+  const actorName = `<strong>${getActorDisplayName(actor)}</strong>`;
+  const postContentPreview = post?.content ? `"${post.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : 'your post';
+  const commentContentPreview = comment?.content ? `"${comment.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : 'your comment';
+  const originalCommentContentPreview = originalComment?.content ? `"${originalComment.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : 'your comment';
+
 
   switch (type) {
     case 'new_reaction_post':
-      message = `${actorName} reacted to your post.`;
-      if (post) link = `/posts/${post.author.username}/${post.id}`; // Assuming slug is post.id for now
+      message = `${actorName} reacted to ${postContentPreview}.`;
+      // For now, a simple link. This needs to be more robust.
+      if (post) link = `/profile/${post.author.username}`; // Simplistic link, needs to go to the post
       break;
     case 'new_comment':
-      message = `${actorName} commented on your post.`;
-      if (post) link = `/posts/${post.author.username}/${post.id}`;
+      message = `${actorName} commented on ${postContentPreview}: ${commentContentPreview}`;
+      if (post) link = `/profile/${post.author.username}`;
       break;
     case 'new_reply':
-      message = `${actorName} replied to your comment.`;
-      // Link to the post, the comment modal can be opened from there
-      if (post && originalComment) link = `/posts/${post.author.username}/${post.id}#comment-${originalComment.id}`;
-      else if (post) link = `/posts/${post.author.username}/${post.id}`;
+      message = `${actorName} replied to ${originalCommentContentPreview}: ${commentContentPreview}`;
+      if (post && originalComment) link = `/profile/${post.author.username}`;
+      else if (post) link = `/profile/${post.author.username}`;
       break;
     case 'new_reaction_comment':
-      message = `${actorName} reacted to your comment.`;
-      if (post && comment) link = `/posts/${post.author.username}/${post.id}#comment-${comment.id}`;
-      else if (post) link = `/posts/${post.author.username}/${post.id}`;
+      message = `${actorName} reacted to your comment: ${commentContentPreview}`;
+      if (post && comment) link = `/profile/${post.author.username}`;
+      else if (post) link = `/profile/${post.author.username}`;
       break;
   }
 
@@ -449,8 +453,49 @@ export const createNotification = (
     createdAt: new Date().toISOString(),
     isRead: false,
   };
-  mockNotifications.unshift(newNotification); // Add to beginning
+  const existingNotification = mockNotifications.find(n => 
+    n.type === type && 
+    n.actor.id === actor.id && 
+    n.recipientUserId === recipientUserId &&
+    n.postId === post?.id &&
+    n.commentId === comment?.id &&
+    n.originalCommentId === originalComment?.id
+  );
+
+  if (!existingNotification) {
+    mockNotifications.unshift(newNotification); // Add to beginning only if not a duplicate action
+  }
 };
+
+// --- Initialize some mock notifications ---
+const postForAdminReaction = adminPost1; // Admin's post
+const commentForAdminReply = mockComment2_post1; // Admin's comment on post1 (owned by user1)
+
+// Ensure related posts/comments exist before creating notifications
+if (postForAdminReaction) {
+    createNotification('new_reaction_post', mockUser1Data, mockAdminUserData.id, postForAdminReaction);
+    createNotification('new_comment', mockUser2Data, mockAdminUserData.id, postForAdminReaction, {
+        id: `mockcomment-${Date.now()}`,
+        author: mockUser2Data,
+        content: 'This is a great update for admin!',
+        createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+        detailedReactions: [],
+    });
+}
+
+if (commentForAdminReply && mockPosts.find(p => p.id === 'post1')) {
+    const parentPostForReply = mockPosts.find(p => p.id === 'post1')!;
+    createNotification('new_reply', mockIdentityAnalystProData, mockAdminUserData.id, parentPostForReply, {
+        id: `mockreply-${Date.now()}`,
+        author: mockIdentityAnalystProData,
+        content: 'Insightful point on Player X, admin.',
+        createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
+        detailedReactions: [],
+        parentId: commentForAdminReply.id,
+    }, commentForAdminReply);
+    createNotification('new_reaction_comment', mockUser1Data, mockAdminUserData.id, parentPostForReply, commentForAdminReply);
+}
+// --- End of initializing mock notifications ---
 
 
 export const mockUser1 = mockUser1Data;
