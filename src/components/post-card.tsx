@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Repeat, Upload, MoreHorizontal, Award, Link2 } from "lucide-react";
+import { MessageCircle, Repeat, Upload, MoreHorizontal, Award, Link2, Loader2 } from "lucide-react";
 import type { Post } from "@/types";
 import { formatDistanceToNow } from 'date-fns';
 import DOMPurify from 'dompurify';
@@ -31,6 +31,7 @@ const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
     if (typeof window !== 'undefined') {
       setSanitizedHtml(DOMPurify.sanitize(htmlContent, { USE_PROFILES: { html: true } }));
     } else {
+      // Basic stripping for server-side or non-DOM environments (less robust)
       setSanitizedHtml(htmlContent.replace(/<script.*?>.*?<\/script>/gi, ''));
     }
   }, [htmlContent]);
@@ -50,28 +51,20 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     reactToComment,
     isReactingToPost,
     isReactingToComment,
-    openCreatePostModal, // For initiating a share
-    fetchSinglePost, // For fetching original post data
-    posts: allFeedPosts, // To find original post in DOM
-    queryClient, // For potential optimistic updates or cache manipulation
+    openCreatePostModal,
+    fetchSinglePost,
+    isPreparingShare, // Get loading state for preparing share
   } = useFeed();
 
-  const [currentPost, setCurrentPost] = useState<Post>(initialPost); // Manage post state locally for updates like fetched shared post
-  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
+  const [currentPost, setCurrentPost] = useState<Post>(initialPost);
   const [isLoadingOriginalPost, setIsLoadingOriginalPost] = useState(false);
+  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
 
   useEffect(() => {
     setCurrentPost(initialPost);
-    // If this card is displaying a share, and the original post data isn't fully loaded,
-    // try to fetch it if not already doing so or if it's not present.
-    if (initialPost.sharedOriginalPostId && !initialPost.sharedOriginalPost && !isEmbedded) {
-        // This logic might be better if the parent (feed page) handles this,
-        // but for now, card can try to self-complete.
-        // console.log(`PostCard for ${initialPost.id} needs to fetch original ${initialPost.sharedOriginalPostId}`);
-    }
-  }, [initialPost, isEmbedded]);
+  }, [initialPost]);
 
 
   const { author, content, createdAt, mediaUrl, mediaType, shares, repliesCount, detailedReactions, comments } = currentPost;
@@ -102,12 +95,13 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     reactToPost({ postId: currentPost.id, reactionType });
   };
   
-  const handleInitiateShare = () => {
+  const handleInitiateShare = async () => {
     if (!currentUser) {
         toast({ title: "Login Required", description: "Please login to share posts.", variant: "destructive"});
         return;
     }
-    openCreatePostModal(currentPost); // Pass the current post to be shared
+    if (isPreparingShare) return; // Prevent multiple clicks while preparing
+    await openCreatePostModal(currentPost);
   };
 
   const handleSharedPostClick = async () => {
@@ -116,27 +110,25 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     const originalPostElement = document.getElementById(`post-card-${sharedOriginalPostId}`);
     if (originalPostElement) {
       originalPostElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else {
-      // Original post not in DOM, try to fetch and display it
-      if (!postToDisplayAsShared) { // Only fetch if not already fetched and embedded
-        setIsLoadingOriginalPost(true);
-        const fetchedOriginal = await fetchSinglePost(sharedOriginalPostId);
-        setIsLoadingOriginalPost(false);
-        if (fetchedOriginal) {
-          // Update the currentPost's sharedOriginalPost data to trigger re-render
-          setCurrentPost(prev => ({...prev, sharedOriginalPost: fetchedOriginal}));
-          // Try to scroll to the parent card that now contains the fetched embed
-          // Needs a slight delay for render
-          setTimeout(() => {
-            cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 100);
-        } else {
-          toast({ title: "Error", description: "Could not load the original post.", variant: "destructive"});
-        }
+      return; 
+    }
+    
+    if (!postToDisplayAsShared || postToDisplayAsShared.id !== sharedOriginalPostId) { 
+      setIsLoadingOriginalPost(true);
+      // fetchSinglePost in the context is now designed to return the ultimate original if it's a chain.
+      // However, for display purposes here, we are fetching the *direct* original of *this currentPost*.
+      // If currentPost is C (shares B), and B (shares A), this fetches B.
+      // The actual sharing action (handleInitiateShare -> openCreatePostModal) will resolve to A.
+      const fetchedDirectOriginal = await fetchSinglePost(sharedOriginalPostId); 
+      setIsLoadingOriginalPost(false);
+      if (fetchedDirectOriginal) {
+        setCurrentPost(prev => ({...prev, sharedOriginalPost: fetchedDirectOriginal}));
+        setTimeout(() => cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
       } else {
-         // If already fetched and displayed, clicking it could scroll to THIS card's location again (or do nothing further)
-         cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        toast({ title: "Error", description: "Could not load the original post.", variant: "destructive"});
       }
+    } else {
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -171,7 +163,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
             )}
             <p className="text-xs text-muted-foreground">{postTimeAgo}</p>
           </div>
-          {isMainPost && !isEmbedded && ( // Only show MoreOptions for the main, non-embedded post card
+          {isMainPost && !isEmbedded && (
             <Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
               <MoreHorizontal className="h-4 w-4" />
               <span className="sr-only">More options</span>
@@ -210,7 +202,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
       <Card ref={cardRef} id={`post-card-${currentPost.id}`} className={`mb-4 overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 ${isEmbedded ? 'shadow-md hover:shadow-lg ml-0' : ''}`}>
         {renderPostContent(currentPost, true)}
 
-        {sharedOriginalPostId && !isEmbedded && ( // Render the shared post area if this is a share post (and not itself an embed)
+        {sharedOriginalPostId && !isEmbedded && (
           <div 
             className="mt-0 mb-2 mx-3 p-0 border border-border/50 rounded-lg hover:border-primary/50 cursor-pointer transition-all"
             onClick={handleSharedPostClick}
@@ -234,7 +226,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
           </div>
         )}
 
-        {!isEmbedded && ( // Footer only for main, non-embedded post cards
+        {!isEmbedded && (
           <CardFooter className="flex flex-col items-start p-3 pt-1 border-t">
             <div className="flex justify-between items-center w-full">
               <div className="flex gap-0.5 sm:gap-1 items-center">
@@ -248,13 +240,27 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary" onClick={handleToggleCommentsModal}>
                   <MessageCircle className="h-4 w-4 mr-1.5" /> {repliesCount || 0}
                 </Button>
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-green-500" disabled={!currentUser} onClick={handleInitiateShare}>
-                  <Repeat className="h-4 w-4 mr-1.5" /> {shares} {/* This 'shares' is direct share count, not new post shares */}
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-muted-foreground hover:text-green-500" 
+                  disabled={!currentUser || isPreparingShare} 
+                  onClick={handleInitiateShare}
+                >
+                  {isPreparingShare ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Repeat className="h-4 w-4 mr-1.5" />}
+                  {shares}
                 </Button>
               </div>
               <div className="flex gap-1">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary" disabled={!currentUser} onClick={handleInitiateShare}>
-                  <Upload className="h-4 w-4 mr-1.5" /> Share
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-muted-foreground hover:text-primary" 
+                  disabled={!currentUser || isPreparingShare} 
+                  onClick={handleInitiateShare}
+                >
+                  {isPreparingShare ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />} 
+                  Share
                 </Button>
               </div>
             </div>
@@ -275,3 +281,5 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     </>
   );
 }
+
+    

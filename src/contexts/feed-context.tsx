@@ -3,7 +3,7 @@
 
 import type { Post, User, Comment as CommentType, Identity } from '@/types';
 import type { ReactionType } from '@/lib/reactions'; // Import ReactionType
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
 import { useAuth } from './auth-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -14,9 +14,10 @@ interface FeedContextType {
   postsError: Error | null;
   
   isCreatePostModalOpen: boolean;
-  openCreatePostModal: (postToShare?: Post) => void; // Can optionally take a post to share
+  openCreatePostModal: (postToShare?: Post) => Promise<void>; // Can optionally take a post to share, now async
   closeCreatePostModal: () => void;
   postToShare: Post | null; // State to hold the post being shared
+  isPreparingShare: boolean; // New state for loading indicator when preparing a share
 
   publishPost: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif'; sharedOriginalPostId?: string }) => void;
   addCommentToFeedPost: (data: { postId: string; content: string; parentId?: string }) => void;
@@ -43,6 +44,8 @@ const fetchPostsAPI = async (): Promise<Post[]> => {
     if (post.sharedOriginalPostId && !post.sharedOriginalPost) {
       const original = postsData.find(p => p.id === post.sharedOriginalPostId);
       if (original) {
+        // If the 'original' is also a share, its own sharedOriginalPost might not be populated here.
+        // This shallow population is generally okay for feed display; deeper population handled on demand.
         return { ...post, sharedOriginalPost: original };
       }
     }
@@ -124,7 +127,8 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
-  const [postToShare, setPostToShare] = useState<Post | null>(null); // For sharing flow
+  const [postToShare, setPostToShare] = useState<Post | null>(null);
+  const [isPreparingShare, setIsPreparingShare] = useState(false); // New state
 
   const { data: posts = [], isLoading: isPostsLoading, error: postsError } = useQuery<Post[], Error>({
     queryKey: ['posts'],
@@ -132,18 +136,80 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     staleTime: 1000 * 60 * 1, 
   });
 
-  const openCreatePostModal = useCallback((postForSharing?: Post) => {
-    if (postForSharing) {
-      setPostToShare(postForSharing);
+  const fetchSinglePost = useCallback(async (postId: string): Promise<Post | null> => {
+    try {
+      const cachedPosts = queryClient.getQueryData<Post[]>(['posts']);
+      const cachedPost = cachedPosts?.find(p => p.id === postId);
+      if (cachedPost) {
+        let fullyPopulatedCachedPost = { ...cachedPost };
+        // If it's a share and original data is missing from this cached version,
+        // try to find it within the same cache to populate one level deep.
+        if (fullyPopulatedCachedPost.sharedOriginalPostId && !fullyPopulatedCachedPost.sharedOriginalPost) {
+            const originalFromCache = cachedPosts?.find(p => p.id === fullyPopulatedCachedPost.sharedOriginalPostId);
+            if (originalFromCache) {
+              fullyPopulatedCachedPost.sharedOriginalPost = { ...originalFromCache }; // shallow copy original
+            }
+        }
+        return fullyPopulatedCachedPost;
+      }
+      
+      const post = await fetchSinglePostAPI(postId);
+      if (post) {
+        // If the fetched post is a share, try to populate its direct sharedOriginalPost
+        // This doesn't recursively populate the entire chain here,
+        // the calling function (openCreatePostModal) handles iteration.
+        if (post.sharedOriginalPostId && !post.sharedOriginalPost) {
+            const original = await fetchSinglePostAPI(post.sharedOriginalPostId);
+            if (original) {
+              post.sharedOriginalPost = original;
+            }
+        }
+      }
+      return post;
+    } catch (error) {
+      console.error("Error fetching single post:", error);
+      toast({ title: "Error", description: `Could not fetch post details for ${postId}.`, variant: "destructive"});
+      return null;
+    }
+  }, [queryClient, toast]);
+
+  const openCreatePostModal = useCallback(async (postForSharingInput?: Post) => {
+    if (isPreparingShare) return;
+
+    if (postForSharingInput) {
+      setIsPreparingShare(true);
+      let currentPostToEvaluate = postForSharingInput;
+      try {
+        // Traverse up the share chain to find the ultimate original post.
+        while (currentPostToEvaluate.sharedOriginalPostId) {
+          const originalPost = await fetchSinglePost(currentPostToEvaluate.sharedOriginalPostId);
+          if (originalPost) {
+            currentPostToEvaluate = originalPost; // Move to the fetched original
+          } else {
+            // Original post not found, stop traversing.
+            toast({ title: "Warning", description: "Could not find the ultimate original post. Sharing the most recent available version.", variant: "default" });
+            break;
+          }
+        }
+        setPostToShare(currentPostToEvaluate);
+      } catch (error: any) {
+        console.error("Error preparing share:", error);
+        toast({ title: "Error Preparing Share", description: error.message || "Could not prepare post for sharing.", variant: "destructive" });
+        setPostToShare(postForSharingInput); // Fallback to sharing the initially clicked post
+      } finally {
+        setIsPreparingShare(false);
+      }
     } else {
-      setPostToShare(null); // Explicitly set to null if no post is being shared
+      setPostToShare(null); // For creating a new post
     }
     setIsCreatePostModalOpen(true);
-  }, []);
+  }, [fetchSinglePost, toast, isPreparingShare]);
+
 
   const closeCreatePostModal = useCallback(() => {
     setIsCreatePostModalOpen(false);
-    setPostToShare(null); // Clear postToShare when modal closes
+    setPostToShare(null);
+    setIsPreparingShare(false); // Ensure this is reset
   }, []);
 
   const publishPostMutation = useMutation<Post, Error, { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string }>({
@@ -205,37 +271,6 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     }
   });
 
-  const fetchSinglePost = useCallback(async (postId: string): Promise<Post | null> => {
-    try {
-      // Check cache first
-      const cachedPosts = queryClient.getQueryData<Post[]>(['posts']);
-      const cachedPost = cachedPosts?.find(p => p.id === postId);
-      if (cachedPost) {
-        // If it's a share and original data is missing, try to find it in cache
-        if (cachedPost.sharedOriginalPostId && !cachedPost.sharedOriginalPost) {
-            const original = cachedPosts?.find(p => p.id === cachedPost.sharedOriginalPostId);
-            if (original) return {...cachedPost, sharedOriginalPost: original };
-        }
-        return cachedPost;
-      }
-      // Fetch from API if not in cache
-      const post = await fetchSinglePostAPI(postId);
-      if (post) {
-         // If the fetched post is a share, try to fetch its original post if not embedded
-        if (post.sharedOriginalPostId && !post.sharedOriginalPost) {
-            const original = await fetchSinglePostAPI(post.sharedOriginalPostId);
-            if (original) post.sharedOriginalPost = original;
-        }
-        // Optionally update cache here, though PostCard will manage its own state for display
-      }
-      return post;
-    } catch (error) {
-      console.error("Error fetching single post:", error);
-      toast({ title: "Error", description: `Could not fetch post details for ${postId}.`, variant: "destructive"});
-      return null;
-    }
-  }, [queryClient, toast]);
-
 
   return (
     <FeedContext.Provider value={{
@@ -245,7 +280,8 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       isCreatePostModalOpen,
       openCreatePostModal,
       closeCreatePostModal,
-      postToShare, // Provide postToShare to consumers
+      postToShare,
+      isPreparingShare, // Expose new state
       publishPost: publishPostMutation.mutate,
       addCommentToFeedPost: addCommentMutation.mutate,
       reactToPost: reactToPostMutation.mutate,
@@ -269,3 +305,4 @@ export const useFeed = () => {
   return context;
 };
 
+    
