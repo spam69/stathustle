@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
-import { mockPosts, mockUsers, mockIdentities } from '@/lib/mock-data';
-import type { Comment as CommentType, User, Identity } from '@/types';
+import { mockPosts, mockUsers, mockIdentities, createNotification } from '@/lib/mock-data';
+import type { Comment as CommentType, User, Identity, Post } from '@/types';
 
 export async function POST(
   request: Request,
@@ -33,7 +33,7 @@ export async function POST(
       author,
       content,
       createdAt: new Date().toISOString(),
-      likes: 0,
+      // likes: 0, // Deprecated
       ...(parentId && { parentId }),
     };
 
@@ -43,11 +43,23 @@ export async function POST(
     post.comments.push(newComment);
     post.repliesCount = (post.repliesCount || 0) + 1;
 
+    // Notification for new comment on post
+    if (post.author.id !== author.id) {
+        createNotification('new_comment', author, post.author.id, post, newComment);
+    }
+
+    // Notification for new reply to a comment
+    if (parentId) {
+        const originalComment = post.comments.find(c => c.id === parentId);
+        if (originalComment && originalComment.author.id !== author.id) {
+            createNotification('new_reply', author, originalComment.author.id, post, newComment, originalComment);
+        }
+    }
+
+
     return NextResponse.json(newComment, { status: 201 });
   } catch (error) {
     console.error(`Comment API error for post ${params.postId}:`, error);
     return NextResponse.json({ message: 'An unexpected error occurred' }, { status: 500 });
   }
 }
-
-    

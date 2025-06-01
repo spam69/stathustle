@@ -1,5 +1,5 @@
 
-import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment, Identity, ReactionEntry } from '@/types';
+import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment, Identity, ReactionEntry, Notification, NotificationType } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
 
 // Make mock data mutable for API route simulation
@@ -112,7 +112,7 @@ const mockReply1_to_comment1_post1: Comment = {
 
 const mockReply2_to_comment1_post1: Comment = {
   id: 'reply2-to-comment1-post1',
-  author: mockUser2Data,
+  author: mockUser2Data, // Changed to User2Data to test reply notifications
   content: 'Definitely! Watched some film on him, looks promising.',
   createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
   parentId: 'comment1-post1',
@@ -121,7 +121,7 @@ const mockReply2_to_comment1_post1: Comment = {
 
 const mockComment2_post1: Comment = {
   id: 'comment2-post1',
-  author: mockUser1Data,
+  author: mockAdminUserData, // Admin comments on User1's post
   content: 'Any thoughts on Player X? Seems a bit overrated to me this year.',
   createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
   detailedReactions: [
@@ -142,9 +142,9 @@ const mockComment1_post3: Comment = {
 
 const originalPostForSharing1: Post = {
   id: 'original-post-1',
-  author: mockUser1Data,
+  author: mockUser1Data, // User 1
   content: 'This is an original post by FantasyFanatic about the importance of weekly waiver wire pickups. Never underestimate them! #FantasyStrategy',
-  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 100).toISOString(), // Older post
+  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 100).toISOString(), 
   detailedReactions: [{ userId: mockUser2Data.id, reactionType: 'like', createdAt: new Date().toISOString() }],
   shares: 5,
   repliesCount: 1,
@@ -160,7 +160,7 @@ const originalPostForSharing1: Post = {
 
 const originalPostForSharing2: Post = {
   id: 'original-post-2',
-  author: mockIdentityAnalystProData,
+  author: mockIdentityAnalystProData, // Identity 1 (owned by User 2)
   content: 'Just published a new blog on breakout candidates for the second half of the MLB season. Check it out on my profile! ⚾️ #MLB #FantasyBaseball @AnalystPro',
   createdAt: new Date(Date.now() - 1000 * 60 * 60 * 70).toISOString(),
   detailedReactions: [
@@ -175,12 +175,28 @@ const originalPostForSharing2: Post = {
   tags: ['#MLBAnalysis']
 };
 
+const adminPost1: Post = {
+  id: 'admin-post-1',
+  author: mockAdminUserData, // Admin User
+  content: 'Exciting new features coming soon to StatHustle! Stay tuned for updates. #PlatformNews',
+  createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+  detailedReactions: [
+      { userId: mockUser1Data.id, reactionType: 'like', createdAt: new Date().toISOString() },
+      { userId: mockUser2Data.id, reactionType: 'wow', createdAt: new Date().toISOString() }
+  ],
+  shares: 2,
+  repliesCount: 0,
+  comments: [],
+};
+
+
 export let mockPosts: Post[] = [
-  originalPostForSharing1, // Add original posts first so they exist for sharing
+  originalPostForSharing1,
   originalPostForSharing2,
+  adminPost1, // Add admin's post
   {
     id: 'post1',
-    author: mockUser1Data,
+    author: mockUser1Data, // User 1
     content: 'Just drafted my fantasy basketball team! Feeling good about this season. 🏀 Who do you think is a sleeper pick this year? #FantasyBasketball #NBA',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
     detailedReactions: [
@@ -196,7 +212,7 @@ export let mockPosts: Post[] = [
   },
   {
     id: 'post2',
-    author: mockIdentityAnalystProData,
+    author: mockIdentityAnalystProData, // Identity 1 (owned by User 2)
     content: "<b>Deep Dive Analysis (posted as @AnalystPro)</b>: Top 5 NFL quarterbacks to watch for MVP contention. My projections are looking interesting! 🏈 <i>Full blog post coming soon!</i>",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
     detailedReactions: [],
@@ -208,7 +224,7 @@ export let mockPosts: Post[] = [
   },
   {
     id: 'post3',
-    author: mockUser1Data,
+    author: mockUser1Data, // User 1
     content: "Anyone else catch that amazing hockey game last night? The overtime goal was insane! 🏒🥅 #NHL #HockeyHighlights",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     detailedReactions: [
@@ -221,34 +237,32 @@ export let mockPosts: Post[] = [
     mediaType: 'gif',
     tags: ['#Hockey']
   },
-  // --- SHARED POSTS ---
   {
     id: 'share-post-1',
-    author: mockUser2Data, // User2 is sharing originalPostForSharing1
+    author: mockUser2Data, // User2 is sharing originalPostForSharing1 (by User1)
     content: 'Absolutely crucial advice from @FantasyFanatic! Everyone should read this.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(), // Recent share
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(), 
     detailedReactions: [{ userId: mockAdminUserData.id, reactionType: 'like', createdAt: new Date().toISOString() }],
-    shares: 0, // This is a share, its own share count is 0 initially
+    shares: 0,
     repliesCount: 0,
     comments: [],
     sharedOriginalPostId: originalPostForSharing1.id,
-    // sharedOriginalPost: originalPostForSharing1, // Simulate pre-loaded shared post
   },
   {
     id: 'share-post-2',
-    author: mockAdminUserData, // Admin is sharing originalPostForSharing2
+    author: mockAdminUserData, // Admin is sharing originalPostForSharing2 (by Identity1/User2)
     content: 'Top-notch MLB insights from @AnalystPro as always. Highly recommend their work!',
-    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // More recent share
+    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
     detailedReactions: [{ userId: mockUser1Data.id, reactionType: 'love', createdAt: new Date().toISOString() }],
     shares: 0,
     repliesCount: 0,
     comments: [],
     sharedOriginalPostId: originalPostForSharing2.id,
-    sharedOriginalPost: originalPostForSharing2, // Simulate pre-loaded shared post data for this one
+    sharedOriginalPost: originalPostForSharing2, 
   },
   {
     id: 'share-post-3-no-preload',
-    author: mockUser1Data, // User1 sharing originalPostForSharing2 (again, but without preload to test fetching)
+    author: mockUser1Data, // User1 sharing originalPostForSharing2 (by Identity1/User2)
     content: 'Checking out this great MLB analysis by @AnalystPro!',
     createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
     detailedReactions: [],
@@ -256,9 +270,7 @@ export let mockPosts: Post[] = [
     repliesCount: 0,
     comments: [],
     sharedOriginalPostId: originalPostForSharing2.id,
-    // sharedOriginalPost is deliberately undefined here to test fetching
   },
-  // Add more posts to make the feed longer
   {
     id: 'post-extra-1',
     author: mockUser1Data,
@@ -289,7 +301,6 @@ export let mockPosts: Post[] = [
   },
 ];
 
-// Ensure mockPosts are sorted by date for initial feed display (most recent first)
 mockPosts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
 
@@ -380,7 +391,68 @@ export let mockPlayerChatMessages: PlayerChatMessage[] = [
 export const availableSports: string[] = ['Basketball', 'Football', 'Baseball', 'Hockey', 'Soccer', 'Tennis', 'Golf'];
 export const sportInterestLevels: SportInterestLevel[] = ['very interested', 'somewhat interested', 'no interest'];
 
-// Expose the original mockUser1 and mockUser2 for AuthContext default or other direct uses if needed.
+export let mockNotifications: Notification[] = [];
+
+// Helper to generate actor display name
+const getActorDisplayName = (actor: User | Identity) => {
+  return actor.isIdentity ? (actor as Identity).displayName || actor.username : actor.username;
+};
+
+// Helper function to create and add notifications
+export const createNotification = (
+  type: NotificationType,
+  actor: User | Identity,
+  recipientUserId: string,
+  post?: Post,
+  comment?: Comment,
+  originalComment?: Comment 
+): void => {
+  if (actor.id === recipientUserId) return; // Don't notify user for their own actions
+
+  let message = '';
+  let link = `/profile/${recipientUserId}`; // Default link, should be overridden
+
+  const actorName = getActorDisplayName(actor);
+
+  switch (type) {
+    case 'new_reaction_post':
+      message = `${actorName} reacted to your post.`;
+      if (post) link = `/posts/${post.author.username}/${post.id}`; // Assuming slug is post.id for now
+      break;
+    case 'new_comment':
+      message = `${actorName} commented on your post.`;
+      if (post) link = `/posts/${post.author.username}/${post.id}`;
+      break;
+    case 'new_reply':
+      message = `${actorName} replied to your comment.`;
+      // Link to the post, the comment modal can be opened from there
+      if (post && originalComment) link = `/posts/${post.author.username}/${post.id}#comment-${originalComment.id}`;
+      else if (post) link = `/posts/${post.author.username}/${post.id}`;
+      break;
+    case 'new_reaction_comment':
+      message = `${actorName} reacted to your comment.`;
+      if (post && comment) link = `/posts/${post.author.username}/${post.id}#comment-${comment.id}`;
+      else if (post) link = `/posts/${post.author.username}/${post.id}`;
+      break;
+  }
+
+  const newNotification: Notification = {
+    id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    type,
+    actor,
+    recipientUserId,
+    postId: post?.id,
+    commentId: comment?.id,
+    originalCommentId: originalComment?.id,
+    message,
+    link,
+    createdAt: new Date().toISOString(),
+    isRead: false,
+  };
+  mockNotifications.unshift(newNotification); // Add to beginning
+};
+
+
 export const mockUser1 = mockUser1Data;
 export const mockUser2 = mockUser2Data;
 export const mockAdminUser = mockAdminUserData;

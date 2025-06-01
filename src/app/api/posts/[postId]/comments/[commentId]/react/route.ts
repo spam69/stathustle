@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
-import { mockPosts, mockAdminUser } from '@/lib/mock-data';
-import type { ReactionEntry } from '@/types';
+import { mockPosts, mockAdminUser, mockUsers, mockIdentities, createNotification } from '@/lib/mock-data';
+import type { ReactionEntry, User, Identity } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
 
 export async function POST(
@@ -12,12 +12,15 @@ export async function POST(
     const { postId, commentId } = params;
     const { reactionType } = (await request.json()) as { reactionType: ReactionType | null };
     
-    // In a real app, get userId from session. For dev, using mockAdminUser.id
     const reactingUserId = mockAdminUser.id;
+    const reactingUser = mockUsers.find(u => u.id === reactingUserId) || mockIdentities.find(i => i.id === reactingUserId);
 
     const post = mockPosts.find(p => p.id === postId);
     if (!post || !post.comments) {
       return NextResponse.json({ message: 'Post or comments not found' }, { status: 404 });
+    }
+    if (!reactingUser) {
+        return NextResponse.json({ message: 'Reacting user not found' }, { status: 404 });
     }
 
     const comment = post.comments.find(c => c.id === commentId);
@@ -32,6 +35,12 @@ export async function POST(
     const existingReactionIndex = comment.detailedReactions.findIndex(
       r => r.userId === reactingUserId
     );
+    
+    let previousReactionType: ReactionType | null = null;
+    if(existingReactionIndex !== -1) {
+      previousReactionType = comment.detailedReactions[existingReactionIndex].reactionType;
+    }
+
 
     if (reactionType === null) { // Request to unreact
       if (existingReactionIndex !== -1) {
@@ -54,9 +63,12 @@ export async function POST(
         comment.detailedReactions.push(newReaction);
       }
     }
-    // The comment object within mockPosts is directly mutated.
-    // We need to return the specific comment that was reacted to, or the whole post for client update.
-    // For simplicity, returning the whole post.
+
+    // Generate notification if it's a new reaction and reactor is not comment author
+    if (reactionType && reactionType !== previousReactionType && comment.author.id !== reactingUserId) {
+        createNotification('new_reaction_comment', reactingUser, comment.author.id, post, comment);
+    }
+
     return NextResponse.json(post); 
   } catch (error) {
     console.error(`React to Comment API error for post ${params.postId}, comment ${params.commentId}:`, error);

@@ -67,11 +67,11 @@ export interface Post {
   tags?: string[];
   createdAt: string;
   detailedReactions?: ReactionEntry[];
-  shares: number; // Kept for direct share count, distinct from creating a new "share post"
+  shares: number;
   repliesCount: number;
   comments?: Comment[];
-  sharedOriginalPostId?: string; // ID of the post being shared
-  sharedOriginalPost?: Post; // Full data of the shared post, if available/fetched
+  sharedOriginalPostId?: string;
+  sharedOriginalPost?: Post;
 }
 
 export interface Blog {
@@ -100,4 +100,24 @@ export interface PlayerChatMessage {
   author: User | Identity;
   message: string;
   createdAt: string;
+}
+
+export type NotificationType = 
+  | 'new_reaction_post' 
+  | 'new_comment' 
+  | 'new_reply' 
+  | 'new_reaction_comment';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  actor: User | Identity; // The user who performed the action
+  recipientUserId: string; // The ID of the user who should receive the notification
+  postId?: string; // ID of the post related to the notification
+  commentId?: string; // ID of the comment related to the notification (if it's a reply or comment reaction)
+  originalCommentId?: string; // If type is 'new_reply', this is the ID of the comment being replied to
+  message: string; // Generated message for the notification
+  link: string; // URL to navigate to when the notification is clicked
+  createdAt: string;
+  isRead: boolean;
 }

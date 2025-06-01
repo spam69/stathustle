@@ -2,8 +2,8 @@
 "use client";
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, MessageSquare, PlusSquare, CheckCheck, CircleSlash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,32 +14,68 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useFeed } from '@/contexts/feed-context';
-// import { signOut } from 'next-auth/react'; // Not used in dev mode
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation'; // For simulated logout
+import { useRouter } from 'next/navigation'; 
+import { useNotifications } from '@/contexts/notification-context';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { formatDistanceToNow } from 'date-fns';
+import type { Notification } from '@/types';
 
 interface HeaderProps {
   toggleChat: () => void;
 }
 
+const NotificationItem = ({ notification, onNotificationClick }: { notification: Notification, onNotificationClick: (notification: Notification) => void }) => {
+  const actorDisplayName = notification.actor.isIdentity ? (notification.actor as any).displayName || notification.actor.username : notification.actor.username;
+  const timeAgo = formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true });
+
+  return (
+    <DropdownMenuItem
+      className={`flex items-start gap-3 p-3 hover:bg-accent/50 cursor-pointer ${!notification.isRead ? 'bg-accent/20' : ''}`}
+      onClick={() => onNotificationClick(notification)}
+      style={{whiteSpace: 'normal', height: 'auto', lineHeight: 'normal'}}
+    >
+      <Avatar className="h-8 w-8 mt-1">
+        <AvatarImage src={notification.actor.profilePictureUrl} alt={actorDisplayName} data-ai-hint="person avatar"/>
+        <AvatarFallback>
+          {actorDisplayName?.substring(0, 1).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1">
+        <p className="text-sm leading-snug" dangerouslySetInnerHTML={{ __html: notification.message }} />
+        <p className={`text-xs mt-1 ${!notification.isRead ? 'text-primary font-medium' : 'text-muted-foreground'}`}>{timeAgo}</p>
+      </div>
+      {!notification.isRead && (
+        <div className="h-2 w-2 rounded-full bg-primary self-center ml-2 shrink-0" title="Unread"></div>
+      )}
+    </DropdownMenuItem>
+  );
+};
+
+
 export default function Header({ toggleChat }: HeaderProps) {
-  const { user, loading: authContextLoading } = useAuth();
+  const { user: currentUser, loading: authContextLoading } = useAuth();
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const router = useRouter();
+  const { notifications, unreadCount, markOneAsRead, markAllAsRead, fetchNotifications } = useNotifications();
 
+  useEffect(() => {
+    if (currentUser) {
+      fetchNotifications(); // Fetch initially when header mounts and user is available
+    }
+  }, [currentUser, fetchNotifications]);
 
-  const currentUser = user;
 
   const getInitials = (name: string = "") => {
     return name
@@ -50,12 +86,7 @@ export default function Header({ toggleChat }: HeaderProps) {
   };
 
   const handleLogout = async () => {
-    // In dev mode with always-logged-in admin, "logout" can be a no-op or simulate by redirecting
     toast({ title: "Logout (Dev Mode)", description: "Admin user is always logged in. Refresh to simulate session clear."});
-    // Optionally, redirect to a non-auth page or refresh to clear some client state if needed
-    // For now, just a toast. If you want to go to login, we can add:
-    // router.push('/login'); // but login page itself is bypassed
-    // queryClient.clear(); // Could be disruptive if not truly logging out
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -63,6 +94,37 @@ export default function Header({ toggleChat }: HeaderProps) {
     const searchInput = event.currentTarget.elements.namedItem('searchQuery') as HTMLInputElement;
     console.log("Search submitted from modal with value:", searchInput?.value);
     setIsSearchModalOpen(false);
+  };
+  
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.isRead) {
+      await markOneAsRead(notification.id);
+    }
+    // For now, all notification links go to the post page if postId exists.
+    // Or to the actor's profile if no specific content link.
+    const defaultLink = `/profile/${notification.actor.username}`;
+    let targetLink = notification.link || defaultLink;
+
+    if (notification.postId) {
+        const postAuthorUsername = notifications.find(n => n.id === notification.id)?.actor.username || 'unknown'; // simplified
+        targetLink = `/blogs/${postAuthorUsername}/${notification.postId}`; // Assuming slug is postId. This needs a robust way to get actual blog slug
+        // For actual posts, it would be /profile/username/posts/postId or similar
+        // The current link structure in mock-data is simplified.
+    }
+    
+    // A more robust linking strategy is needed here, for now, basic navigation:
+    if(notification.link && notification.link.startsWith('/')) {
+        router.push(notification.link);
+    } else {
+        console.warn("Notification link is not a relative path or is missing:", notification.link);
+        // Fallback, perhaps to user profile or feed
+        router.push(`/profile/${currentUser?.username || ''}`);
+    }
+
+  };
+
+  const handleMarkAllRead = async () => {
+    await markAllAsRead();
   };
 
   return (
@@ -104,20 +166,56 @@ export default function Header({ toggleChat }: HeaderProps) {
         )}
 
         <ThemeSwitcher />
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -top-1 -right-1 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-accent"></span>
-          </span>
-          <span className="sr-only">Notifications</span>
-        </Button>
+        
+        <DropdownMenu onOpenChange={(isOpen) => isOpen && fetchNotifications()}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="absolute -top-1 -right-1 h-4 w-4 min-w-[1rem] p-0.5 text-xs flex items-center justify-center rounded-full"
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Badge>
+              )}
+              <span className="sr-only">Notifications</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-80 sm:w-96 p-0" align="end">
+            <div className="flex items-center justify-between p-3 border-b">
+              <DropdownMenuLabel className="p-0 font-headline text-base">Notifications</DropdownMenuLabel>
+              {notifications.length > 0 && unreadCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="text-xs h-auto p-1">
+                  <CheckCheck className="h-3.5 w-3.5 mr-1" /> Mark all read
+                </Button>
+              )}
+            </div>
+            <ScrollArea className="max-h-[60vh]">
+              {notifications.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  <CircleSlash className="mx-auto h-8 w-8 mb-2 text-muted-foreground/50"/>
+                  No notifications yet.
+                </div>
+              ) : (
+                notifications.map(notif => (
+                  <NotificationItem key={notif.id} notification={notif} onNotificationClick={handleNotificationClick} />
+                ))
+              )}
+            </ScrollArea>
+             {notifications.length > 0 && (
+                <DropdownMenuItem className="justify-center text-sm text-primary hover:underline p-2 border-t" asChild>
+                    <Link href="/notifications">View all notifications</Link>
+                </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button variant="ghost" size="icon" onClick={toggleChat} aria-label="Open Live Support Chat">
           <MessageSquare className="h-5 w-5" />
           <span className="sr-only">Live Support</span>
         </Button>
 
-        {/* In dev mode with always-logged-in admin, currentUser will always be true if AuthContext is set up */}
         {authContextLoading ? (
           <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
         ) : currentUser ? (
