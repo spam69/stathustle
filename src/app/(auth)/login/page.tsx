@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { signIn } from 'next-auth/react';
+import { useAuth } from '@/contexts/auth-context'; // Import useAuth from your context
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -24,6 +24,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth(); // Get login function from context
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
@@ -38,31 +39,23 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
-    console.log("LoginPage: Attempting sign-in with email/username:", data.emailOrUsername);
     try {
-      const result = await signIn('credentials', {
-        redirect: false,
-        emailOrUsername: data.emailOrUsername,
-        password: data.password,
+      const loggedInUser = await login({ 
+        emailOrUsername: data.emailOrUsername, 
+        password: data.password 
       });
 
-      console.log("LoginPage: signIn result object:", result);
-
-      if (result?.error) {
-        console.error("LoginPage: signIn returned an error:", result.error);
-        toast({ title: "Login Failed", description: result.error === "CredentialsSignin" ? "Invalid credentials." : result.error, variant: "destructive" });
-      } else if (result?.ok) {
-        toast({ title: "Login Successful", description: `Welcome back!`});
-        await queryClient.invalidateQueries({ queryKey: ['session'] });
-        await queryClient.invalidateQueries({ queryKey: ['posts'] });
+      if (loggedInUser) {
+        toast({ title: "Login Successful", description: `Welcome back, ${loggedInUser.username}!`});
+        await queryClient.invalidateQueries({ queryKey: ['posts'] }); // Invalidate posts to refetch potentially user-specific data
+        // No need to invalidate session query as we are not using NextAuth sessions
         router.push('/');
         router.refresh(); 
       } else {
-        console.warn("LoginPage: signIn result was not 'ok' and not an 'error'. Result:", result);
-        toast({ title: "Login Attempt Failed", description: "An unexpected error occurred during login. Please try again.", variant: "destructive" });
+        toast({ title: "Login Failed", description: "Invalid email/username or password.", variant: "destructive" });
       }
     } catch (error: any) {
-      console.error("LoginPage: Error caught during signIn call:", error);
+      console.error("LoginPage: Error during login:", error);
       toast({ title: "Login Error", description: error.message || "An unexpected error occurred.", variant: "destructive" });
     } finally {
       setIsLoading(false);

@@ -22,7 +22,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useFeed } from '@/contexts/feed-context';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation'; 
+import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/contexts/notification-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -33,13 +33,13 @@ interface HeaderProps {
   toggleChat: () => void;
 }
 
-const NotificationItem = ({ 
-  notification, 
+const NotificationItem = ({
+  notification,
   onNotificationClick,
   onDeleteNotification,
   isDeleting,
-}: { 
-  notification: Notification, 
+}: {
+  notification: Notification,
   onNotificationClick: (notification: Notification) => void,
   onDeleteNotification: (notificationId: string) => void,
   isDeleting: boolean,
@@ -48,7 +48,7 @@ const NotificationItem = ({
   const timeAgo = formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true });
 
   const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     onDeleteNotification(notification.id);
   };
 
@@ -88,17 +88,17 @@ const NotificationItem = ({
 
 
 export default function Header({ toggleChat }: HeaderProps) {
-  const { user: currentUser, loading: authContextLoading } = useAuth();
+  const { user: currentUser, logout, loading: authContextLoading } = useAuth(); // Use logout from useAuth
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const { toast } = useToast();
-  const router = useRouter(); // Still needed if modal links out
-  const { 
+  const router = useRouter();
+  const {
     displayedNotifications,
-    unreadCount, 
-    markOneAsRead, 
-    markAllAsRead, 
+    unreadCount,
+    markOneAsRead,
+    markAllAsRead,
     fetchInitialNotifications,
     deleteNotification,
     isDeletingNotification,
@@ -109,12 +109,12 @@ export default function Header({ toggleChat }: HeaderProps) {
     hasMoreNotifications,
     loadMoreNotifications,
     totalServerNotificationsCount,
-    openNotificationInModal, // Use this from context
+    openNotificationInModal,
   } = useNotifications();
 
   useEffect(() => {
-    if (currentUser && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) { 
-      fetchInitialNotifications(); 
+    if (currentUser && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) {
+      fetchInitialNotifications();
     }
   }, [currentUser, fetchInitialNotifications, isLoadingInitial, displayedNotifications.length, totalServerNotificationsCount]);
 
@@ -127,8 +127,9 @@ export default function Header({ toggleChat }: HeaderProps) {
       .toUpperCase() || (name ? name[0]?.toUpperCase() : 'U');
   };
 
-  const handleLogout = async () => {
-    toast({ title: "Logout (Dev Mode)", description: "Admin user is always logged in. Refresh to simulate session clear."});
+  const handleLogout = () => {
+    logout(); // Call logout from AuthContext
+    toast({ title: "Logged Out", description: "You have been successfully logged out."});
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -137,10 +138,9 @@ export default function Header({ toggleChat }: HeaderProps) {
     console.log("Search submitted from modal with value:", searchInput?.value);
     setIsSearchModalOpen(false);
   };
-  
+
   const handleNotificationClick = async (notification: Notification) => {
-    if (isDeletingNotification) return; 
-    // Mark as read is now handled by openNotificationInModal if needed
+    if (isDeletingNotification) return;
     openNotificationInModal(notification);
   };
 
@@ -159,7 +159,7 @@ export default function Header({ toggleChat }: HeaderProps) {
     fetchInitialNotifications();
     toast({ title: "Notifications", description: "Refreshing notifications list..."});
   };
-  
+
   const handleDeleteNotification = async (notificationId: string) => {
      await deleteNotification(notificationId);
   };
@@ -203,78 +203,80 @@ export default function Header({ toggleChat }: HeaderProps) {
         )}
 
         <ThemeSwitcher />
-        
-        <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) fetchInitialNotifications() }}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
-                <Badge 
-                  variant="destructive" 
-                  className="absolute -top-1 -right-1 h-4 w-4 min-w-[1rem] p-0.5 text-xs flex items-center justify-center rounded-full"
-                >
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Badge>
-              )}
-              <span className="sr-only">Notifications</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-80 sm:w-96 p-0" align="end">
-            <div className="flex items-center justify-between p-3 border-b">
-              <DropdownMenuLabel className="p-0 font-headline text-base">Notifications</DropdownMenuLabel>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" onClick={handleRefreshNotifications} className="h-7 w-7" disabled={isLoadingInitial || isFetchingMore || isDeletingNotification || isDeletingReadNotifications} title="Refresh notifications">
-                   <RefreshCw className={`h-4 w-4 ${isLoadingInitial || isFetchingMore ? 'animate-spin' : ''}`} />
-                </Button>
-                {displayedNotifications.length > 0 && unreadCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="text-xs h-auto p-1" disabled={isDeletingNotification || isDeletingReadNotifications}>
-                    <CheckCheck className="h-3.5 w-3.5 mr-1" /> Mark all read
-                  </Button>
+
+        {currentUser && ( // Only show notifications if user is logged in
+          <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0 && currentUser) fetchInitialNotifications() }}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-4 w-4 min-w-[1rem] p-0.5 text-xs flex items-center justify-center rounded-full"
+                  >
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Badge>
                 )}
-              </div>
-            </div>
-            <ScrollArea className="max-h-[calc(80vh_-_180px)]"> 
-              {isLoadingInitial && displayedNotifications.length === 0 ? (
-                 <div className="p-4 text-center text-sm text-muted-foreground">Loading notifications...</div>
-              ) : !isLoadingInitial && displayedNotifications.length === 0 ? (
-                <div className="p-4 text-center text-sm text-muted-foreground">
-                  <CircleSlash className="mx-auto h-8 w-8 mb-2 text-muted-foreground/50"/>
-                  No notifications yet.
+                <span className="sr-only">Notifications</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-80 sm:w-96 p-0" align="end">
+              <div className="flex items-center justify-between p-3 border-b">
+                <DropdownMenuLabel className="p-0 font-headline text-base">Notifications</DropdownMenuLabel>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={handleRefreshNotifications} className="h-7 w-7" disabled={isLoadingInitial || isFetchingMore || isDeletingNotification || isDeletingReadNotifications} title="Refresh notifications">
+                     <RefreshCw className={`h-4 w-4 ${isLoadingInitial || isFetchingMore ? 'animate-spin' : ''}`} />
+                  </Button>
+                  {displayedNotifications.length > 0 && unreadCount > 0 && (
+                    <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="text-xs h-auto p-1" disabled={isDeletingNotification || isDeletingReadNotifications}>
+                      <CheckCheck className="h-3.5 w-3.5 mr-1" /> Mark all read
+                    </Button>
+                  )}
                 </div>
-              ) : (
-                displayedNotifications.map(notif => (
-                  <NotificationItem 
-                    key={notif.id} 
-                    notification={notif} 
-                    onNotificationClick={handleNotificationClick}
-                    onDeleteNotification={handleDeleteNotification}
-                    isDeleting={isDeletingNotification}
-                  />
-                ))
-              )}
-            </ScrollArea>
-            {hasMoreNotifications && !isLoadingInitial && displayedNotifications.length > 0 && (
-              <div className="p-2 text-center border-t">
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={loadMoreNotifications}
-                  disabled={isFetchingMore}
-                  className="w-full text-primary"
-                >
-                  {isFetchingMore ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Load More Notifications
-                </Button>
               </div>
-            )}
-            <DropdownMenuSeparator />
-            <div className="p-2 flex justify-end items-center"> 
-                <Button variant="outline" size="sm" onClick={handleDeleteRead} disabled={isDeletingReadNotifications || isDeletingNotification || displayedNotifications.filter(n => n.isRead).length === 0} className="text-xs">
-                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Read
-                </Button>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <ScrollArea className="max-h-[calc(80vh_-_180px)]">
+                {isLoadingInitial && displayedNotifications.length === 0 ? (
+                   <div className="p-4 text-center text-sm text-muted-foreground">Loading notifications...</div>
+                ) : !isLoadingInitial && displayedNotifications.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    <CircleSlash className="mx-auto h-8 w-8 mb-2 text-muted-foreground/50"/>
+                    No notifications yet.
+                  </div>
+                ) : (
+                  displayedNotifications.map(notif => (
+                    <NotificationItem
+                      key={notif.id}
+                      notification={notif}
+                      onNotificationClick={handleNotificationClick}
+                      onDeleteNotification={handleDeleteNotification}
+                      isDeleting={isDeletingNotification}
+                    />
+                  ))
+                )}
+              </ScrollArea>
+              {hasMoreNotifications && !isLoadingInitial && displayedNotifications.length > 0 && (
+                <div className="p-2 text-center border-t">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={loadMoreNotifications}
+                    disabled={isFetchingMore}
+                    className="w-full text-primary"
+                  >
+                    {isFetchingMore ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Load More Notifications
+                  </Button>
+                </div>
+              )}
+              <DropdownMenuSeparator />
+              <div className="p-2 flex justify-end items-center">
+                  <Button variant="outline" size="sm" onClick={handleDeleteRead} disabled={isDeletingReadNotifications || isDeletingNotification || displayedNotifications.filter(n => n.isRead).length === 0} className="text-xs">
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete Read
+                  </Button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         <Button variant="ghost" size="icon" onClick={toggleChat} aria-label="Open Live Support Chat">
           <MessageSquare className="h-5 w-5" />
@@ -326,7 +328,7 @@ export default function Header({ toggleChat }: HeaderProps) {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Log out (Dev Mode)
+                Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -371,4 +373,3 @@ export default function Header({ toggleChat }: HeaderProps) {
     </header>
   );
 }
-    
