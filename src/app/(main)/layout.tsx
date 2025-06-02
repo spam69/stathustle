@@ -8,13 +8,13 @@ import RightSidebar from '@/components/layout/right-sidebar';
 import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { LifeBuoy, Loader2 } from 'lucide-react';
-// LiveSupportChat import removed
 import { FeedProvider } from '@/contexts/feed-context';
 import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/auth-context';
 import { useFeed } from '@/contexts/feed-context';
 import NotificationDisplayModal from '@/components/notification-display-modal';
+import CommentRepliesModal from '@/components/comment-replies-modal';
 
 
 function CreatePostModal() {
@@ -64,38 +64,36 @@ export default function MainLayout({
 }: {
   children: ReactNode;
 }) {
-  // isChatOpen and toggleChat state and function removed
 
   return (
     <FeedProvider>
       <SidebarProvider>
         <div className="flex min-h-screen flex-col bg-background">
-          <Header /> {/* toggleChat prop removed */}
-          <div className="flex flex-1 pt-16"> {/* pt-16 to offset fixed header */}
-            <Sidebar collapsible="icon"> {/* Left Sidebar */}
+          <Header /> 
+          <div className="flex flex-1 pt-16"> 
+            <Sidebar collapsible="icon"> 
               <SidebarContent>
                 <SidebarNav />
               </SidebarContent>
             </Sidebar>
             
-            <SidebarInset> {/* Main Content Area */}
-              <main className="flex-1 p-0 md:p-0 lg:p-0 overflow-y-auto h-[calc(100vh_-_4rem)]"> {/* Removed padding, handled by child or page */}
+            <SidebarInset> 
+              <main className="flex-1 p-0 md:p-0 lg:p-0 overflow-y-auto h-[calc(100vh_-_4rem)]"> 
                 {children}
               </main>
             </SidebarInset>
 
-            {/* Right Sidebar - shown on larger screens */}
             <div className="hidden lg:block h-[calc(100vh_-_4rem)] sticky top-16">
               <RightSidebar />
             </div>
           </div>
-
-          {/* Live Support Chat Toggle Button removed */}
-          {/* LiveSupportChat component rendering removed */}
           <CreatePostModal />
           <NotificationDisplayModal />
+          <CommentRepliesModal /> {/* Add the new modal here */}
         </div>
       </SidebarProvider>
     </FeedProvider>
   );
 }
+
+    

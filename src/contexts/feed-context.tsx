@@ -8,23 +8,33 @@ import { useAuth } from './auth-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
+interface ActiveCommentForReplies {
+  post: Post;
+  topLevelComment: CommentType;
+}
+
 interface FeedContextType {
   posts: Post[];
   isPostsLoading: boolean;
   postsError: Error | null;
   
   isCreatePostModalOpen: boolean;
-  openCreatePostModal: (postToShare?: Post) => Promise<void>; // Can optionally take a post to share, now async
+  openCreatePostModal: (postToShare?: Post) => Promise<void>; 
   closeCreatePostModal: () => void;
-  postToShare: Post | null; // State to hold the post being shared
-  isPreparingShare: boolean; // New state for loading indicator when preparing a share
+  postToShare: Post | null; 
+  isPreparingShare: boolean; 
+
+  isCommentRepliesModalOpen: boolean;
+  activeCommentForReplies: ActiveCommentForReplies | null;
+  openCommentRepliesModal: (post: Post, comment: CommentType) => void;
+  closeCommentRepliesModal: () => void;
 
   publishPost: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif'; sharedOriginalPostId?: string }) => void;
   addCommentToFeedPost: (data: { postId: string; content: string; parentId?: string }) => void;
   reactToPost: (data: { postId: string; reactionType: ReactionType | null }) => void;
   reactToComment: (data: { postId: string; commentId: string; reactionType: ReactionType | null }) => void;
   
-  fetchSinglePost: (postId: string) => Promise<Post | null>; // For fetching original shared post
+  fetchSinglePost: (postId: string) => Promise<Post | null>; 
 
   isPublishingPost: boolean;
   isCommenting: boolean;
@@ -44,8 +54,6 @@ const fetchPostsAPI = async (): Promise<Post[]> => {
     if (post.sharedOriginalPostId && !post.sharedOriginalPost) {
       const original = postsData.find(p => p.id === post.sharedOriginalPostId);
       if (original) {
-        // If the 'original' is also a share, its own sharedOriginalPost might not be populated here.
-        // This shallow population is generally okay for feed display; deeper population handled on demand.
         return { ...post, sharedOriginalPost: original };
       }
     }
@@ -128,7 +136,11 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
   const { toast } = useToast();
   const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
   const [postToShare, setPostToShare] = useState<Post | null>(null);
-  const [isPreparingShare, setIsPreparingShare] = useState(false); // New state
+  const [isPreparingShare, setIsPreparingShare] = useState(false); 
+
+  const [isCommentRepliesModalOpen, setIsCommentRepliesModalOpen] = useState(false);
+  const [activeCommentForReplies, setActiveCommentForReplies] = useState<ActiveCommentForReplies | null>(null);
+
 
   const { data: posts = [], isLoading: isPostsLoading, error: postsError } = useQuery<Post[], Error>({
     queryKey: ['posts'],
@@ -142,12 +154,10 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       const cachedPost = cachedPosts?.find(p => p.id === postId);
       if (cachedPost) {
         let fullyPopulatedCachedPost = { ...cachedPost };
-        // If it's a share and original data is missing from this cached version,
-        // try to find it within the same cache to populate one level deep.
         if (fullyPopulatedCachedPost.sharedOriginalPostId && !fullyPopulatedCachedPost.sharedOriginalPost) {
             const originalFromCache = cachedPosts?.find(p => p.id === fullyPopulatedCachedPost.sharedOriginalPostId);
             if (originalFromCache) {
-              fullyPopulatedCachedPost.sharedOriginalPost = { ...originalFromCache }; // shallow copy original
+              fullyPopulatedCachedPost.sharedOriginalPost = { ...originalFromCache }; 
             }
         }
         return fullyPopulatedCachedPost;
@@ -155,9 +165,6 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       
       const post = await fetchSinglePostAPI(postId);
       if (post) {
-        // If the fetched post is a share, try to populate its direct sharedOriginalPost
-        // This doesn't recursively populate the entire chain here,
-        // the calling function (openCreatePostModal) handles iteration.
         if (post.sharedOriginalPostId && !post.sharedOriginalPost) {
             const original = await fetchSinglePostAPI(post.sharedOriginalPostId);
             if (original) {
@@ -180,13 +187,11 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       setIsPreparingShare(true);
       let currentPostToEvaluate = postForSharingInput;
       try {
-        // Traverse up the share chain to find the ultimate original post.
         while (currentPostToEvaluate.sharedOriginalPostId) {
           const originalPost = await fetchSinglePost(currentPostToEvaluate.sharedOriginalPostId);
           if (originalPost) {
-            currentPostToEvaluate = originalPost; // Move to the fetched original
+            currentPostToEvaluate = originalPost; 
           } else {
-            // Original post not found, stop traversing.
             toast({ title: "Warning", description: "Could not find the ultimate original post. Sharing the most recent available version.", variant: "default" });
             break;
           }
@@ -195,12 +200,12 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       } catch (error: any) {
         console.error("Error preparing share:", error);
         toast({ title: "Error Preparing Share", description: error.message || "Could not prepare post for sharing.", variant: "destructive" });
-        setPostToShare(postForSharingInput); // Fallback to sharing the initially clicked post
+        setPostToShare(postForSharingInput); 
       } finally {
         setIsPreparingShare(false);
       }
     } else {
-      setPostToShare(null); // For creating a new post
+      setPostToShare(null); 
     }
     setIsCreatePostModalOpen(true);
   }, [fetchSinglePost, toast, isPreparingShare]);
@@ -209,8 +214,19 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
   const closeCreatePostModal = useCallback(() => {
     setIsCreatePostModalOpen(false);
     setPostToShare(null);
-    setIsPreparingShare(false); // Ensure this is reset
+    setIsPreparingShare(false); 
   }, []);
+
+  const openCommentRepliesModal = useCallback((post: Post, comment: CommentType) => {
+    setActiveCommentForReplies({ post, topLevelComment: comment });
+    setIsCommentRepliesModalOpen(true);
+  }, []);
+
+  const closeCommentRepliesModal = useCallback(() => {
+    setIsCommentRepliesModalOpen(false);
+    setActiveCommentForReplies(null);
+  }, []);
+
 
   const publishPostMutation = useMutation<Post, Error, { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string }>({
     mutationFn: (postData) => {
@@ -232,9 +248,27 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       if (!user) throw new Error("User not logged in");
       return addCommentAPI({ ...commentData, authorId: user.id });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-      toast({ title: "Success", description: "Comment posted!"});
+    onSuccess: (newComment, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] }); // Invalidate all posts to refetch
+
+      // Optimistically update activeCommentForReplies if the new comment is a reply to it
+      if (variables.parentId && activeCommentForReplies && variables.parentId === activeCommentForReplies.topLevelComment.id) {
+        setActiveCommentForReplies(prev => {
+          if (!prev) return null;
+          const updatedTopLevelComment = {
+            ...prev.topLevelComment,
+            // repliesCount can be updated here if we track it directly on comments, or rely on post refetch
+          };
+          const updatedPost = {
+            ...prev.post,
+            comments: [...(prev.post.comments || []), newComment],
+            repliesCount: (prev.post.repliesCount || 0) + 1, // Update post's total replies if applicable
+          };
+          return { post: updatedPost, topLevelComment: updatedTopLevelComment };
+        });
+      }
+
+      toast({ title: "Success", description: variables.parentId ? "Reply posted!" : "Comment posted!"});
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message || "Failed to post comment.", variant: "destructive" });
@@ -265,6 +299,25 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
         return oldData?.map(post => post.id === updatedPostContainingComment.id ? updatedPostContainingComment : post) || [];
       });
+      // Optimistically update activeCommentForReplies if a reaction was made within that modal
+      if(activeCommentForReplies && activeCommentForReplies.post.id === updatedPostContainingComment.id) {
+        setActiveCommentForReplies(prev => {
+          if(!prev) return null;
+          // Find the reacted comment within the active top-level comment's structure or the post itself
+          const reactedCommentId = updatedPostContainingComment.comments?.find(c => 
+            c.detailedReactions?.some(r => r.userId === user?.id) && // crude way to find which comment was reacted to
+            (c.id === activeCommentForReplies.topLevelComment.id || c.parentId === activeCommentForReplies.topLevelComment.id)
+          )?.id;
+
+          if (reactedCommentId === prev.topLevelComment.id) {
+            const updatedTopLevel = updatedPostContainingComment.comments?.find(c => c.id === reactedCommentId);
+            return updatedTopLevel ? { ...prev, topLevelComment: updatedTopLevel } : prev;
+          } else {
+            // If it's a reply, update the post's comment list
+             return { ...prev, post: updatedPostContainingComment };
+          }
+        });
+      }
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message || "Failed to react to comment.", variant: "destructive" });
@@ -281,7 +334,13 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       openCreatePostModal,
       closeCreatePostModal,
       postToShare,
-      isPreparingShare, // Expose new state
+      isPreparingShare, 
+      
+      isCommentRepliesModalOpen,
+      activeCommentForReplies,
+      openCommentRepliesModal,
+      closeCommentRepliesModal,
+
       publishPost: publishPostMutation.mutate,
       addCommentToFeedPost: addCommentMutation.mutate,
       reactToPost: reactToPostMutation.mutate,
