@@ -8,10 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Grid } from '@giphy/react-components';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import type { IGif } from '@giphy/js-types';
-import { useDebounce } from '@/hooks/use-debounce'; // Assuming you have or will create this hook
-import { Loader2 } from 'lucide-react';
+import { useDebounce } from '@/hooks/use-debounce';
+import { Loader2, AlertTriangle } from 'lucide-react';
 
-const gf = new GiphyFetch(process.env.NEXT_PUBLIC_GIPHY_API_KEY || '');
+const GIPHY_API_KEY = process.env.NEXT_PUBLIC_GIPHY_API_KEY;
+let gf: GiphyFetch | null = null;
+
+if (GIPHY_API_KEY) {
+  gf = new GiphyFetch(GIPHY_API_KEY);
+} else {
+  console.warn("Giphy API Key (NEXT_PUBLIC_GIPHY_API_KEY) is not configured. Giphy Picker will be disabled.");
+}
 
 interface GiphyPickerModalProps {
   isOpen: boolean;
@@ -19,29 +26,15 @@ interface GiphyPickerModalProps {
   onGifSelect: (gif: IGif) => void;
 }
 
-// Simple debounce hook (create if not exists)
-// hooks/use-debounce.ts
-// import { useState, useEffect } from 'react';
-// export function useDebounce<T>(value: T, delay: number): T {
-//   const [debouncedValue, setDebouncedValue] = useState<T>(value);
-//   useEffect(() => {
-//     const handler = setTimeout(() => {
-//       setDebouncedValue(value);
-//     }, delay);
-//     return () => {
-//       clearTimeout(handler);
-//     };
-//   }, [value, delay]);
-//   return debouncedValue;
-// }
-
-
 export default function GiphyPickerModal({ isOpen, onClose, onGifSelect }: GiphyPickerModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const [isFetching, setIsFetching] = useState(false);
 
   const fetchGifs = useCallback(async (offset: number) => {
+    if (!gf) {
+      return { data: [], pagination: { total_count: 0, count: 0, offset: 0 } };
+    }
     setIsFetching(true);
     try {
       if (debouncedSearchTerm) {
@@ -68,34 +61,48 @@ export default function GiphyPickerModal({ isOpen, onClose, onGifSelect }: Giphy
         <DialogHeader>
           <DialogTitle className="font-headline">Select a GIF</DialogTitle>
           <DialogDescription>
-            Search for GIFs from GIPHY.
+            {gf ? "Search for GIFs from GIPHY." : "Giphy integration is not configured."}
           </DialogDescription>
         </DialogHeader>
-        <div className="p-1 relative">
-          <Input
-            type="text"
-            placeholder="Search GIPHY..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="mb-3"
-          />
-           {isFetching && <Loader2 className="absolute top-2 right-2 h-5 w-5 animate-spin text-muted-foreground" />}
-        </div>
-        <div className="flex-grow overflow-y-auto pr-1">
-          <Grid
-            key={debouncedSearchTerm} // Important to re-fetch when search term changes
-            fetchGifs={fetchGifs}
-            width={550} // Adjust width as needed based on modal size
-            columns={3}
-            gutter={6}
-            onGifClick={handleGifClick}
-            hideAttribution // We'll add custom attribution
-            noLink
-            className="[&>div]:overflow-visible" // Fix potential Giphy Grid overflow issues
-          />
-        </div>
+        
+        {!gf ? (
+          <div className="flex flex-col items-center justify-center p-6 text-center">
+            <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+            <p className="text-lg font-semibold">Giphy Not Available</p>
+            <p className="text-muted-foreground text-sm">
+              Please ensure <code>NEXT_PUBLIC_GIPHY_API_KEY</code> is set in your environment variables.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="p-1 relative">
+              <Input
+                type="text"
+                placeholder="Search GIPHY..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="mb-3"
+              />
+              {isFetching && <Loader2 className="absolute top-2 right-2 h-5 w-5 animate-spin text-muted-foreground" />}
+            </div>
+            <div className="flex-grow overflow-y-auto pr-1">
+              <Grid
+                key={debouncedSearchTerm} // Important to re-fetch when search term changes
+                fetchGifs={fetchGifs}
+                width={550} // Adjust width as needed based on modal size
+                columns={3}
+                gutter={6}
+                onGifClick={handleGifClick}
+                hideAttribution 
+                noLink
+                className="[&>div]:overflow-visible" 
+              />
+            </div>
+          </>
+        )}
+        
         <DialogFooter className="pt-4 border-t items-center">
-            <span className="text-xs text-muted-foreground">Powered by GIPHY</span>
+            {gf && <span className="text-xs text-muted-foreground mr-auto">Powered by GIPHY</span>}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </DialogFooter>
       </DialogContent>
