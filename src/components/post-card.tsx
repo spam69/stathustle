@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Repeat, Upload, MoreHorizontal, Award, Link2, Loader2, Heart } from "lucide-react";
+import { MessageCircle, Repeat, Upload, MoreHorizontal, Award, Link2, Loader2, Heart, Newspaper, ArrowRight } from "lucide-react";
 import type { Post } from "@/types";
 import { formatDistanceToNow } from 'date-fns';
 import DOMPurify from 'dompurify';
@@ -15,7 +15,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import CommentsModal from './comments-modal';
 import { Badge } from './ui/badge';
-import ReactionButton from './reaction-button'; // Using ReactionButton for "like"
+import ReactionButton from './reaction-button';
 import { useFeed } from '@/contexts/feed-context';
 import { Skeleton } from './ui/skeleton'; 
 
@@ -44,9 +44,9 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const { toast } = useToast();
   const {
     addCommentToFeedPost,
-    reactToPost, // This is for general reactions via ReactionButton
+    reactToPost, 
     reactToComment,
-    isReactingToPost, // Loading state for ReactionButton
+    isReactingToPost, 
     openCreatePostModal,
     fetchSinglePost,
     isPreparingShare,
@@ -61,7 +61,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     setCurrentPost(initialPost);
   }, [initialPost]);
 
-  const { author, content, createdAt, mediaUrl, mediaType, shares, repliesCount, detailedReactions, comments, sharedOriginalPostId } = currentPost;
+  const { author, content, createdAt, mediaUrl, mediaType, shares, repliesCount, detailedReactions, comments, sharedOriginalPostId, blogShareDetails } = currentPost;
   const postToDisplayAsShared = currentPost.sharedOriginalPost;
 
   const authorUsername = author.username;
@@ -94,7 +94,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
         return;
     }
     if (isPreparingShare) return; 
-    await openCreatePostModal(currentPost);
+    await openCreatePostModal({ postToShare: currentPost });
   };
 
   const handleSharedPostClick = async () => {
@@ -184,7 +184,45 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
       <Card ref={cardRef} id={`post-card-${currentPost.id}`} className={`mb-0.5 overflow-hidden shadow-none border-b border-border rounded-none bg-transparent hover:bg-card/30 transition-colors duration-200 ${isEmbedded ? 'shadow-none ml-0 border-none' : ''}`}>
         {renderPostContent(currentPost, true)}
 
-        {sharedOriginalPostId && !isEmbedded && (
+        {blogShareDetails && !isEmbedded && (
+            <Card className="mt-0 mb-3 mx-4 p-0 border border-primary/30 bg-primary/5 rounded-xl overflow-hidden">
+                <CardHeader className="flex flex-row items-start gap-3 p-3">
+                    {blogShareDetails.coverImageUrl ? (
+                        <div className="w-20 h-auto aspect-[16/9] relative rounded-md overflow-hidden shrink-0">
+                            <Image src={blogShareDetails.coverImageUrl} alt={blogShareDetails.title} layout="fill" objectFit="cover" data-ai-hint="blog cover preview"/>
+                        </div>
+                    ) : (
+                        <Newspaper className="h-10 w-10 text-primary mt-1 shrink-0" />
+                    )}
+                    <div className="grid gap-0.5 flex-1">
+                        <p className="text-xs text-primary font-semibold uppercase tracking-wider">Blog Post</p>
+                        <CardTitle className="text-base font-semibold hover:underline font-headline text-foreground">
+                            <Link href={blogShareDetails.url} target="_blank" rel="noopener noreferrer">
+                                {blogShareDetails.title}
+                            </Link>
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                            By <Link href={`/profile/${blogShareDetails.authorUsername}`} className="hover:underline">{blogShareDetails.authorDisplayName}</Link>
+                        </p>
+                    </div>
+                </CardHeader>
+                {blogShareDetails.excerpt && (
+                    <CardContent className="p-3 pt-0">
+                        <p className="text-sm leading-relaxed line-clamp-3 text-foreground/80">{blogShareDetails.excerpt}</p>
+                    </CardContent>
+                )}
+                <CardFooter className="p-3 bg-primary/10">
+                    <Button asChild variant="default" size="sm" className="w-full font-headline bg-primary hover:bg-primary/90">
+                        <Link href={blogShareDetails.url} target="_blank" rel="noopener noreferrer">
+                            Read Blog <ArrowRight className="ml-2 h-4 w-4" />
+                        </Link>
+                    </Button>
+                </CardFooter>
+            </Card>
+        )}
+
+
+        {sharedOriginalPostId && !blogShareDetails && !isEmbedded && ( // Ensure this doesn't render if it's a blog share
           <div 
             className="mt-0 mb-3 mx-4 p-0 border border-border/80 rounded-xl hover:border-primary/50 cursor-pointer transition-all overflow-hidden"
             onClick={handleSharedPostClick}
@@ -217,13 +255,12 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
               variant="ghost" 
               size="sm" 
               className="text-muted-foreground hover:text-green-500 flex-1 justify-center" 
-              disabled={!currentUser || isPreparingShare} 
+              disabled={!currentUser || isPreparingShare || !!blogShareDetails} // Disable if it's a blog share post
               onClick={handleInitiateShare}
             >
-              {isPreparingShare ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
+              {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
               <span className="text-xs">{shares || 0}</span>
             </Button>
-            {/* ReactionButton for "Like" and other reactions */}
             <div className="flex-1 justify-center flex">
                 <ReactionButton
                     reactions={detailedReactions}
@@ -238,8 +275,8 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
               variant="ghost" 
               size="sm" 
               className="text-muted-foreground hover:text-blue-500 flex-1 justify-center" 
-              disabled={!currentUser || isPreparingShare} 
-              onClick={handleInitiateShare} // Also triggers share functionality for simplicity
+              disabled={!currentUser || isPreparingShare || !!blogShareDetails}  // Disable if it's a blog share post
+              onClick={handleInitiateShare} 
             >
               {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Upload className="h-5 w-5" />}
             </Button>
@@ -252,8 +289,6 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
           post={currentPost}
           isOpen={isCommentsModalOpen}
           onClose={handleToggleCommentsModal}
-          onCommentSubmit={(postId, text, parentId) => addCommentToFeedPost({ postId, content: text, parentId })}
-          onReactToComment={(postId, commentId, reactionType) => reactToComment({ postId, commentId, reactionType })}
           currentUser={currentUser}
         />
       )}

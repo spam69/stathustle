@@ -9,20 +9,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Image as ImageIcon, Film, Users, Paperclip, Smile, X, BarChart3, CalendarClock, Loader2 } from "lucide-react";
+import { Image as ImageIcon, Film, Users, Paperclip, Smile, X, BarChart3, CalendarClock, Loader2, Newspaper } from "lucide-react";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import type { Post } from '@/types';
+import type { Post, BlogShareDetails } from '@/types';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
 import GiphyPickerModal from './giphy-picker-modal';
 import type { IGif } from '@giphy/js-types';
+import { useFeed } from '@/contexts/feed-context';
 
 const postSchema = z.object({
   content: z.string().max(1000, "Post too long.").optional(),
   sharedOriginalPostId: z.string().optional(),
-}).refine(data => data.content || data.sharedOriginalPostId, {
+  blogShareUrl: z.string().url().optional(), // For internal use, not directly submitted if blogShareDetails is present
+}).refine(data => data.content || data.sharedOriginalPostId || data.blogShareUrl, { // Loosen validation slightly if blogShareUrl might imply content
   message: "Post cannot be empty unless you are sharing something.",
   path: ["content"],
 });
@@ -30,11 +32,10 @@ const postSchema = z.object({
 type PostFormValues = z.infer<typeof postSchema>;
 
 interface CreatePostFormProps {
-  onPostCreated: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string }) => void;
+  onPostCreated: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string, blogShareDetails?: BlogShareDetails }) => void;
   isSubmitting: boolean; 
   isModal?: boolean;
-  postToShare?: Post | null;
-  onCancelShare?: () => void;
+  // postToShare and onCancelShare are now handled by FeedContext
 }
 
 const SharedPostPreviewCard = ({ post }: { post: Post }) => {
@@ -47,7 +48,6 @@ const SharedPostPreviewCard = ({ post }: { post: Post }) => {
       </Card>
     );
   }
-
   const authorDisplayName = 'isIdentity' in post.author && post.author.displayName ? post.author.displayName : post.author.username;
   const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase() || 'S';
 
@@ -79,9 +79,39 @@ const SharedPostPreviewCard = ({ post }: { post: Post }) => {
   );
 };
 
-export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = false, postToShare, onCancelShare }: CreatePostFormProps) {
+const BlogSharePreviewCard = ({ blogDetails }: { blogDetails: BlogShareDetails }) => {
+    return (
+        <Card className="mt-3 mb-2 border border-primary/30 shadow-sm bg-primary/5 rounded-xl">
+            <CardHeader className="flex flex-row items-start gap-3 p-3">
+                {blogDetails.coverImageUrl ? (
+                     <Image src={blogDetails.coverImageUrl} alt={blogDetails.title} width={60} height={34} className="rounded object-cover aspect-video" data-ai-hint="blog cover small"/>
+                ) : (
+                    <Newspaper className="h-8 w-8 text-primary mt-1 shrink-0" />
+                )}
+                <div className="grid gap-0.5 flex-1">
+                     <p className="text-[10px] uppercase font-semibold text-primary tracking-wider">Sharing Blog</p>
+                    <CardTitle className="text-sm font-semibold font-headline text-foreground">
+                        {blogDetails.title}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                        By <Link href={`/profile/${blogDetails.authorUsername}`} className="hover:underline">{blogDetails.authorDisplayName}</Link>
+                    </p>
+                </div>
+            </CardHeader>
+            {blogDetails.excerpt && (
+                <CardContent className="p-3 pt-0">
+                    <p className="text-xs leading-relaxed line-clamp-2 text-foreground/90">{blogDetails.excerpt}</p>
+                </CardContent>
+            )}
+        </Card>
+    );
+};
+
+
+export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = false }: CreatePostFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { postToShare, pendingBlogShare, closeCreatePostModal } = useFeed();
   
   const [imageToUpload, setImageToUpload] = useState<{ file: File, localPreviewUrl: string } | null>(null);
   const [gifUrl, setGifUrl] = useState<string | undefined>(undefined);
@@ -95,6 +125,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     defaultValues: {
       content: "",
       sharedOriginalPostId: undefined,
+      blogShareUrl: undefined,
     },
   });
   
@@ -102,16 +133,23 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     if (postToShare && postToShare.id) {
       form.setValue('sharedOriginalPostId', postToShare.id);
       form.setValue('content', ""); 
+      form.setValue('blogShareUrl', undefined);
+      setImageToUpload(null);
+      setGifUrl(undefined);
+    } else if (pendingBlogShare) {
+      form.setValue('sharedOriginalPostId', undefined);
+      form.setValue('content', ""); // User adds their own comment
+      form.setValue('blogShareUrl', pendingBlogShare.url); // Store for validation, not submitted directly
       setImageToUpload(null);
       setGifUrl(undefined);
     } else {
-      form.reset({ content: "", sharedOriginalPostId: undefined });
-      if (postToShare === null) { 
+      form.reset({ content: "", sharedOriginalPostId: undefined, blogShareUrl: undefined });
+      if (postToShare === null && pendingBlogShare === null) { 
         setImageToUpload(null);
         setGifUrl(undefined);
       }
     }
-  }, [postToShare, form]);
+  }, [postToShare, pendingBlogShare, form]);
 
   const uploadImageToR2Internal = async (file: File): Promise<string | null> => {
     return new Promise((resolve, reject) => {
@@ -132,7 +170,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
           if (!response.ok || !result.success) {
             throw new Error(result.message || 'Upload to R2 failed');
           }
-          console.log("R2 Upload Successful. Public URL:", result.url); // Log the public URL
+          console.log("R2 Upload Successful. Public URL:", result.url);
           resolve(result.url);
         } catch (error) {
           console.error("R2 Upload error:", error);
@@ -152,7 +190,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
       toast({ title: "Error", description: "You must be logged in to post.", variant: "destructive" });
       return;
     }
-    if (!data.content && !imageToUpload && !gifUrl && !data.sharedOriginalPostId) {
+    if (!data.content && !imageToUpload && !gifUrl && !data.sharedOriginalPostId && !pendingBlogShare) {
       toast({ title: "Error", description: "Post cannot be empty.", variant: "destructive" });
       return;
     }
@@ -185,12 +223,14 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
       mediaUrl: finalMediaUrl,
       mediaType: finalMediaType,
       sharedOriginalPostId: postToShare && postToShare.id ? postToShare.id : undefined,
+      blogShareDetails: pendingBlogShare ? pendingBlogShare : undefined,
     };
 
     onPostCreated(postData); 
     
-    if (!isModal) {
-        form.reset({ content: "", sharedOriginalPostId: undefined });
+    // Modal closing is handled by FeedContext after publishPost mutation
+    if (!isModal) { // Reset form only if it's the inline form
+        form.reset({ content: "", sharedOriginalPostId: undefined, blogShareUrl: undefined });
         setImageToUpload(null);
         setGifUrl(undefined);
     }
@@ -250,7 +290,8 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
   
   if (!user && isModal) return null;
 
-  const isSharingMode = !!(postToShare && postToShare.id);
+  const isRegularSharingMode = !!(postToShare && postToShare.id);
+  const isBlogSharingMode = !!pendingBlogShare;
   const hasMediaSelected = !!(imageToUpload || gifUrl);
   const overallSubmitting = isUploadingToR2 || isSubmitting;
 
@@ -266,7 +307,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
               </Avatar>
               <Textarea
                 {...form.register("content")}
-                placeholder={isSharingMode ? "Add your thoughts..." : `What's happening, ${user?.username}?`}
+                placeholder={isRegularSharingMode ? "Add your thoughts to the shared post..." : isBlogSharingMode ? "Add your thoughts about the blog..." : `What's happening, ${user?.username}?`}
                 className="min-h-[70px] flex-1 resize-none shadow-none focus-visible:ring-0 border-0 bg-transparent p-1 text-base"
                 maxLength={1000}
                 disabled={overallSubmitting}
@@ -276,47 +317,45 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
               <p className="text-xs text-destructive mt-1 ml-14">{form.formState.errors.content.message}</p>
             )}
 
-            {isSharingMode && postToShare && (
+            {isRegularSharingMode && postToShare && (
               <div className="ml-14 mt-2 relative">
                   <SharedPostPreviewCard post={postToShare} />
-                  {isModal && onCancelShare && (
+                  {isModal && (
                       <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon" 
+                          type="button" variant="ghost" size="icon" 
                           className="absolute top-1 right-1 h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={onCancelShare}
-                          title="Cancel share"
-                          disabled={overallSubmitting}
-                      >
-                          <X className="h-4 w-4" />
-                      </Button>
+                          onClick={closeCreatePostModal} title="Cancel share" disabled={overallSubmitting}
+                      > <X className="h-4 w-4" /> </Button>
                   )}
               </div>
             )}
+            
+            {isBlogSharingMode && pendingBlogShare && (
+                 <div className="ml-14 mt-2 relative">
+                    <BlogSharePreviewCard blogDetails={pendingBlogShare} />
+                    {isModal && (
+                         <Button 
+                            type="button" variant="ghost" size="icon" 
+                            className="absolute top-1 right-1 h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={closeCreatePostModal} title="Cancel share" disabled={overallSubmitting}
+                         > <X className="h-4 w-4" /> </Button>
+                    )}
+                </div>
+            )}
 
-            {!isSharingMode && (imageToUpload?.localPreviewUrl || gifUrl) && (
+
+            {!isRegularSharingMode && !isBlogSharingMode && (imageToUpload?.localPreviewUrl || gifUrl) && (
               <div className="ml-14 mt-2 border border-border rounded-md p-2 max-w-xs bg-card/50 relative">
                 <p className="text-xs text-muted-foreground mb-1">Attached {imageToUpload ? 'image' : 'GIF'}:</p>
                 <Image 
                     src={imageToUpload ? imageToUpload.localPreviewUrl : gifUrl!} 
-                    alt="Selected media" 
-                    width={200} 
-                    height={gifUrl ? 120 : 150}
+                    alt="Selected media" width={200} height={gifUrl ? 120 : 150}
                     objectFit={gifUrl ? 'contain' : 'cover'}
-                    className="rounded max-h-40 w-auto" 
-                    data-ai-hint="uploaded media" 
-                    unoptimized={!!imageToUpload}
+                    className="rounded max-h-40 w-auto" data-ai-hint="uploaded media" unoptimized={!!imageToUpload}
                 />
                 {gifUrl && <p className="text-[10px] text-muted-foreground mt-0.5">via GIPHY</p>}
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="absolute top-1 right-1 h-6 w-6 text-destructive/70 hover:text-destructive" 
-                  onClick={removeMedia} 
-                  title="Remove media"
-                  disabled={overallSubmitting}
-                >
+                <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6 text-destructive/70 hover:text-destructive" 
+                  onClick={removeMedia} title="Remove media" disabled={overallSubmitting}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -324,7 +363,8 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
           </CardContent>
           <CardFooter className={`flex justify-between items-center p-4 ${isModal ? 'pt-2' : 'pt-2 border-t border-border'}`}>
             <div className="flex gap-0">
-              {!isSharingMode && (
+              {/* Disable media buttons if sharing a blog post or regular post */}
+              {!isRegularSharingMode && !isBlogSharingMode && (
                 <>
                   <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add Image" onClick={handleImageUploadClick} disabled={hasMediaSelected || overallSubmitting}>
                     <ImageIcon className="h-5 w-5" />
@@ -347,11 +387,11 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
             </div>
             <Button 
               type="submit" 
-              disabled={overallSubmitting || (!form.getValues("content") && !imageToUpload && !gifUrl && !isSharingMode) || (!form.formState.isValid && form.formState.isSubmitted)}
+              disabled={overallSubmitting || (!form.getValues("content") && !imageToUpload && !gifUrl && !isRegularSharingMode && !isBlogSharingMode) || (!form.formState.isValid && form.formState.isSubmitted)}
               className="font-headline rounded-full px-6"
             >
               {overallSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {isUploadingToR2 ? "Uploading..." : (isSubmitting ? (isSharingMode ? "Sharing..." : "Posting...") : (isSharingMode ? "Share" : "Post"))}
+              {isUploadingToR2 ? "Uploading..." : (isSubmitting ? (isRegularSharingMode ? "Sharing Post..." : (isBlogSharingMode ? "Sharing Blog..." : "Posting...")) : (isRegularSharingMode ? "Share Post" : (isBlogSharingMode ? "Share Blog" : "Post")))}
             </Button>
           </CardFooter>
         </form>

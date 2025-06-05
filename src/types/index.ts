@@ -57,6 +57,15 @@ export interface Comment {
   detailedReactions?: ReactionEntry[];
 }
 
+export interface BlogShareDetails {
+  title: string;
+  url: string; 
+  authorDisplayName: string;
+  authorUsername: string;
+  excerpt?: string;
+  coverImageUrl?: string;
+}
+
 export interface Post {
   id: string;
   author: User | Identity;
@@ -72,6 +81,7 @@ export interface Post {
   comments?: Comment[];
   sharedOriginalPostId?: string;
   sharedOriginalPost?: Post;
+  blogShareDetails?: BlogShareDetails; // Added for sharing blogs
 }
 
 export interface Blog {
@@ -107,19 +117,18 @@ export type NotificationType =
   | 'new_comment' 
   | 'new_reply' 
   | 'new_reaction_comment'
-  | 'new_follower'; // Added new_follower
+  | 'new_follower';
 
 export interface Notification {
   id: string;
   type: NotificationType;
-  actor: User | Identity; // The user who performed the action
-  recipientUserId: string; // The ID of the user who should receive the notification
-  postId?: string; // ID of the post related to the notification
-  commentId?: string; // ID of the comment related to the notification (if it's a reply or comment reaction)
-  originalCommentId?: string; // If type is 'new_reply', this is the ID of the comment being replied to
-  message: string; // Generated message for the notification
-  link: string; // URL to navigate to when the notification is clicked
+  actor: User | Identity;
+  recipientUserId: string;
+  postId?: string;
+  commentId?: string;
+  originalCommentId?: string;
+  message: string;
+  link: string;
   createdAt: string;
   isRead: boolean;
 }
-
