@@ -9,7 +9,6 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { MessageCircle, Repeat, Upload, MoreHorizontal, Award, Link2, Loader2, Heart, Newspaper, ArrowRight } from "lucide-react";
 import type { Post } from "@/types";
 import { formatDistanceToNow } from 'date-fns';
-import DOMPurify from 'dompurify';
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -18,25 +17,14 @@ import { Badge } from './ui/badge';
 import ReactionButton from './reaction-button';
 import { useFeed } from '@/contexts/feed-context';
 import { Skeleton } from './ui/skeleton'; 
+import ClientSanitizedHtml from './client-sanitized-html'; // Import the shared component
 
 interface PostCardProps {
   post: Post;
   isEmbedded?: boolean; 
 }
 
-const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
-  const [sanitizedHtml, setSanitizedHtml] = useState('');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setSanitizedHtml(DOMPurify.sanitize(htmlContent, { USE_PROFILES: { html: true } }));
-    } else {
-      setSanitizedHtml(htmlContent.replace(/<script.*?>.*?<\/script>/gi, ''));
-    }
-  }, [htmlContent]);
-
-  return <div className="text-foreground/90" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
-};
+// Local ClientSanitizedHtml definition removed, will use shared component
 
 
 export default function PostCard({ post: initialPost, isEmbedded = false }: PostCardProps) {
@@ -159,7 +147,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
         <CardContent className={`px-4 pb-3 pt-0 ${isEmbedded ? 'p-3 pt-0' : ''}`}>
           {targetPost.content && (
             <div className="text-sm leading-relaxed prose prose-sm max-w-none mb-3">
-              <ClientSanitizedHtml htmlContent={targetPost.content} />
+              <ClientSanitizedHtml htmlContent={targetPost.content} className="text-foreground/90" />
             </div>
           )}
           {targetPost.mediaUrl && (

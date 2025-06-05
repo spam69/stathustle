@@ -17,6 +17,8 @@ import ReactionButton from './reaction-button';
 import { useFeed } from '@/contexts/feed-context';
 import type { ReactionType } from '@/lib/reactions';
 import { useAuth } from '@/contexts/auth-context';
+import React from 'react'; // Import React for Fragment
+import { parseMentions } from '@/lib/text-processing'; // Import for parsing mentions
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
   const username = author.username;
@@ -48,8 +50,6 @@ export default function CommentRepliesModal() {
   useEffect(() => {
     if (isCommentRepliesModalOpen) {
       setNewReplyText('');
-      // Focus input when modal opens, if applicable
-      // setTimeout(() => replyInputRef.current?.focus(), 100);
     }
   }, [isCommentRepliesModalOpen]);
 
@@ -68,10 +68,9 @@ export default function CommentRepliesModal() {
     addCommentToFeedPost({
       postId: post.id,
       content: newReplyText.trim(),
-      parentId: topLevelComment.id, // All replies go to the top-level comment
+      parentId: topLevelComment.id,
     });
     setNewReplyText('');
-    // Toast for success/error is handled by FeedContext's useMutation
   };
 
   const handleReactToSpecificComment = (commentId: string, reactionType: ReactionType | null) => {
@@ -84,10 +83,11 @@ export default function CommentRepliesModal() {
 
   const directReplies = (post.comments || [])
     .filter(reply => reply.parentId === topLevelComment.id)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // Show oldest first
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   const topLevelCommentAuthorInfo = getAuthorDisplayInfo(topLevelComment.author);
   const currentUserInfo = getAuthorDisplayInfo(currentUser);
+  const processedTopLevelCommentContent = parseMentions(topLevelComment.content);
 
   return (
     <Dialog open={isCommentRepliesModalOpen} onOpenChange={(open) => !open && closeCommentRepliesModal()}>
@@ -104,7 +104,6 @@ export default function CommentRepliesModal() {
         </DialogHeader>
 
         <ScrollArea className="flex-grow overflow-y-auto px-4">
-          {/* Display the top-level comment */}
           <div className="py-3 border-b border-border/30 bg-muted/20 -mx-4 px-4 sticky top-0 z-10">
             <div className="flex items-start gap-2 sm:gap-3">
               <Link href={`/profile/${topLevelCommentAuthorInfo.username}`} passHref>
@@ -125,7 +124,9 @@ export default function CommentRepliesModal() {
                     {formatDistanceToNow(new Date(topLevelComment.createdAt), { addSuffix: true })}
                   </span>
                 </div>
-                <p className="text-sm mb-1">{topLevelComment.content}</p>
+                <p className="text-sm mb-1">
+                  {processedTopLevelCommentContent.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
+                </p>
                  <ReactionButton
                     reactions={topLevelComment.detailedReactions}
                     onReact={(reactionType) => handleReactToSpecificComment(topLevelComment.id, reactionType)}
@@ -138,10 +139,10 @@ export default function CommentRepliesModal() {
             </div>
           </div>
 
-          {/* Display replies */}
           {directReplies.length > 0 ? (
             directReplies.map(reply => {
               const replyAuthorInfo = getAuthorDisplayInfo(reply.author);
+              const processedReplyContent = parseMentions(reply.content);
               return (
                 <div key={reply.id} className="py-3 border-b border-border/20 last:border-b-0">
                   <div className="flex items-start gap-2 sm:gap-3">
@@ -163,7 +164,9 @@ export default function CommentRepliesModal() {
                           {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
                         </span>
                       </div>
-                      <p className="text-sm mb-1">{reply.content}</p>
+                      <p className="text-sm mb-1">
+                        {processedReplyContent.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
+                      </p>
                       <ReactionButton
                         reactions={reply.detailedReactions}
                         onReact={(reactionType) => handleReactToSpecificComment(reply.id, reactionType)}

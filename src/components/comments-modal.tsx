@@ -16,12 +16,13 @@ import { Badge } from './ui/badge';
 import ReactionButton from './reaction-button';
 import { useFeed } from '@/contexts/feed-context';
 import type { ReactionType } from '@/lib/reactions';
+import React from 'react'; // Import React for Fragment
+import { parseMentions } from '@/lib/text-processing'; // Import for parsing mentions
 
 interface CommentsModalProps {
   post: Post | null;
   isOpen: boolean;
   onClose: () => void;
-  // onCommentSubmit and onReactToComment are now primarily handled via useFeed context
   currentUser: User | Identity | null;
 }
 
@@ -39,7 +40,7 @@ const getInitials = (name: string = "") => {
 
 export default function CommentsModal({ post, isOpen, onClose, currentUser }: CommentsModalProps) {
   const [newCommentText, setNewCommentText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<CommentType | null>(null); // Only for top-level comments
+  const [replyingTo, setReplyingTo] = useState<CommentType | null>(null);
   const { toast } = useToast();
   const { 
     addCommentToFeedPost, 
@@ -65,16 +66,13 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser }: Co
       toast({ title: "Error", description: "Comment cannot be empty and you must be logged in.", variant: "destructive" });
       return;
     }
-    // If replyingTo is set, its ID is the parentId (must be a top-level comment).
-    // Otherwise, it's a new top-level comment.
     addCommentToFeedPost({ postId: post.id, content: newCommentText.trim(), parentId: replyingTo?.id });
     setNewCommentText('');
     setReplyingTo(null);
-    // Toast for success/error is handled by FeedContext's useMutation
   };
 
   const startReplyToTopLevelComment = (commentToReply: CommentType) => {
-    setReplyingTo(commentToReply); // This comment must be a top-level comment
+    setReplyingTo(commentToReply);
     if (commentInputRef.current) {
       commentInputRef.current.focus();
     }
@@ -101,6 +99,7 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser }: Co
     const authorInfo = getAuthorDisplayInfo(comment.author);
     const directReplies = (post.comments || []).filter(reply => reply.parentId === comment.id);
     const repliesCount = directReplies.length;
+    const processedCommentContent = parseMentions(comment.content);
 
     return (
       <div key={comment.id} className="py-3 border-b border-border/30 last:border-b-0">
@@ -123,7 +122,9 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser }: Co
                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
               </span>
             </div>
-            <p className="text-sm mb-1">{comment.content}</p>
+            <p className="text-sm mb-1">
+              {processedCommentContent.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
+            </p>
             <div className="flex items-center gap-1 sm:gap-2 text-xs text-muted-foreground">
               <ReactionButton
                 reactions={comment.detailedReactions}
@@ -213,5 +214,3 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser }: Co
     </Dialog>
   );
 }
-
-    

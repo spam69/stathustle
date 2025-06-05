@@ -10,26 +10,15 @@ import type { Blog, Identity, BlogShareDetails } from '@/types';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, Share2, Award, Newspaper } from 'lucide-react';
-import DOMPurify from 'dompurify';
+// DOMPurify import removed as ClientSanitizedHtml will handle it
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { useFeed } from '@/contexts/feed-context';
 import { useToast } from '@/hooks/use-toast';
+import ClientSanitizedHtml from '@/components/client-sanitized-html'; // Import the shared component
 
-const ClientSanitizedHtml = ({ htmlContent }: { htmlContent: string }) => {
-  const [sanitizedHtml, setSanitizedHtml] = useState('');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setSanitizedHtml(DOMPurify.sanitize(htmlContent, { USE_PROFILES: { html: true } }));
-    } else {
-      setSanitizedHtml(htmlContent.replace(/<script.*?>.*?<\/script>/gi, ''));
-    }
-  }, [htmlContent]);
-
-  return <div className="prose prose-lg max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />;
-};
+// Local ClientSanitizedHtml definition removed
 
 const fetchBlog = async (username: string, blogSlug: string): Promise<Blog> => {
   const response = await fetch(`/api/blogs/${username}/${blogSlug}`);
@@ -188,7 +177,7 @@ export default function BlogPostPage() {
         </div>
       )}
       
-      <ClientSanitizedHtml htmlContent={blog.content} />
+      <ClientSanitizedHtml htmlContent={blog.content} className="prose prose-lg max-w-none dark:prose-invert" />
 
       <footer className="mt-12 border-t pt-6">
         <div className="flex justify-between items-center">
