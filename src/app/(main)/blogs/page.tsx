@@ -5,7 +5,10 @@ import BlogCard from '@/components/blog-card';
 import type { Blog } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, PlusCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { useAuth } from '@/contexts/auth-context';
 
 const fetchBlogs = async (): Promise<Blog[]> => {
   const response = await fetch('/api/blogs');
@@ -16,6 +19,7 @@ const fetchBlogs = async (): Promise<Blog[]> => {
 };
 
 export default function BlogsPage() {
+  const { user } = useAuth(); // Get current user
   const { data: blogs, isLoading, error } = useQuery<Blog[], Error>({
     queryKey: ['blogs'],
     queryFn: fetchBlogs,
@@ -24,7 +28,16 @@ export default function BlogsPage() {
   if (isLoading) {
     return (
       <div>
-        <h1 className="text-3xl font-bold mb-8 font-headline text-primary">Blogs</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold font-headline text-primary">Blogs</h1>
+          {user && (
+            <Button asChild>
+              <Link href="/blogs/create">
+                <PlusCircle className="mr-2 h-4 w-4" /> Write your own blog
+              </Link>
+            </Button>
+          )}
+        </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map(i => (
             <div key={i} className="flex flex-col space-y-3">
@@ -52,7 +65,16 @@ export default function BlogsPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-8 font-headline text-primary">Blogs</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold font-headline text-primary">Blogs</h1>
+        {user && (
+          <Button asChild variant="default" size="default" className="font-headline">
+            <Link href="/blogs/create">
+              <PlusCircle className="mr-2 h-5 w-5" /> Write your own blog
+            </Link>
+          </Button>
+        )}
+      </div>
       {blogs && blogs.length > 0 ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
           {blogs.map(blog => (
