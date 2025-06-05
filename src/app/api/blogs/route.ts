@@ -10,13 +10,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { title, slug, content, excerpt, coverImageUrl, authorId } = await request.json();
+    const { title, slug, content, excerpt, coverImageUrl, authorId } = await request.json(); // Slug is now expected from client (as UUID)
 
     if (!title || !slug || !content || !authorId) {
       return NextResponse.json({ message: 'Title, slug, content, and authorId are required.' }, { status: 400 });
     }
 
-    // Find the author: can be a User or an Identity
     let author: User | Identity | undefined = mockUsers.find(u => u.id === authorId);
     if (!author) {
       author = mockIdentities.find(i => i.id === authorId);
@@ -26,19 +25,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Author not found.' }, { status: 404 });
     }
 
-    // Basic slug uniqueness check (per author for mock, real DB would handle this better)
+    // With UUIDs for slugs, collisions are highly unlikely.
+    // The existing authorSlugExists check will verify if this author somehow submitted the same UUID twice.
     const authorSlugExists = mockBlogs.some(
       blog => blog.author.id === author!.id && blog.slug.toLowerCase() === slug.toLowerCase()
     );
     if (authorSlugExists) {
-      return NextResponse.json({ message: `Slug "${slug}" already exists for this author.` }, { status: 409 });
+      // This should theoretically almost never happen with UUIDs
+      return NextResponse.json({ message: `Slug (UUID) "${slug}" already exists for this author. This is highly unusual.` }, { status: 409 });
     }
-    // More robust global slug check (optional for mock)
+    
+    // Global slug check is also less relevant for UUIDs but harmless for mock
     const globalSlugExists = mockBlogs.some(blog => blog.slug.toLowerCase() === slug.toLowerCase() && blog.author.username.toLowerCase() !== author!.username.toLowerCase());
     if (globalSlugExists) {
-        // Potentially append a random string or suggest a different slug
-        // For now, we'll just warn, but in a real system this would need more handling
-        console.warn(`Slug "${slug}" exists globally for a different author. This might cause issues.`);
+        console.warn(`UUID Slug "${slug}" collision with a different author detected. This is extremely rare.`);
     }
 
 
@@ -46,14 +46,14 @@ export async function POST(request: Request) {
       id: `blog-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       author,
       title,
-      slug,
+      slug, // Use the client-provided UUID slug
       content,
       excerpt: excerpt || undefined,
       coverImageUrl: coverImageUrl || undefined,
       createdAt: new Date().toISOString(),
     };
 
-    mockBlogs.unshift(newBlog); // Add to the beginning of the array for newest first
+    mockBlogs.unshift(newBlog); 
 
     return NextResponse.json(newBlog, { status: 201 });
 

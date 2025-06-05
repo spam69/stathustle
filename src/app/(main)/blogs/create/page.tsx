@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from '@/components/ui/input'; // Will be removed for coverImageUrl
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -17,15 +16,13 @@ import { useToast } from '@/hooks/use-toast';
 import type { Blog } from '@/types';
 import { mockIdentities } from '@/lib/mock-data';
 import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';
-import Image from 'next/image'; // For preview
+import Image from 'next/image'; 
 import { handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState } from '@/lib/image-upload-utils';
+import { v4 as uuidv4 } from 'uuid'; // Import UUID
 
 const blogPostSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters.").max(150, "Title must be 150 characters or less."),
-  slug: z.string()
-    .min(3, "Slug must be at least 3 characters.")
-    .max(100, "Slug must be 100 characters or less.")
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug can only contain lowercase letters, numbers, and hyphens."),
+  // Slug is no longer in schema, will be generated
   coverImageUrl: z.string().url("Invalid URL format.").optional().or(z.literal('')).nullable(),
   excerpt: z.string().max(300, "Excerpt must be 300 characters or less.").optional(),
   content: z.string().min(50, "Content must be at least 50 characters."),
@@ -38,7 +35,7 @@ export default function CreateBlogPage() {
   const router = useRouter();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
-  const [isSubmittingForm, setIsSubmittingForm] = useState(false); // For main form submission
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false); 
 
   const [coverImageState, setCoverImageState] = useState<ImageFileState>({ file: null, previewUrl: null, isUploading: false, uploadedUrl: null });
   const coverImageInputRef = useRef<HTMLInputElement>(null);
@@ -67,33 +64,14 @@ export default function CreateBlogPage() {
     resolver: zodResolver(blogPostSchema),
     defaultValues: {
       title: "",
-      slug: "",
+      // slug: "", // Removed slug from default values
       coverImageUrl: "",
       excerpt: "",
       content: "",
     },
   });
 
-  const generateSlug = (title: string) => {
-    return title
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, '-') 
-      .replace(/[^\w-]+/g, '') 
-      .replace(/--+/g, '-'); 
-  };
-
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'title' && value.title) {
-        const currentSlug = form.getValues('slug');
-        if (!currentSlug || currentSlug === generateSlug(form.getValues('title'))) {
-           form.setValue('slug', generateSlug(value.title), { shouldValidate: true });
-        }
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
+  // Removed useEffect for auto-generating slug from title
 
   const onSubmit = async (data: BlogPostFormValues) => {
     if (!authorInfo) {
@@ -107,19 +85,21 @@ export default function CreateBlogPage() {
       const uploadedUrl = await uploadImageToR2(coverImageState, setCoverImageState);
       if (uploadedUrl) {
         finalCoverImageUrl = uploadedUrl;
-      } else { // Upload failed
+      } else { 
         toast({ title: "Cover Image Upload Failed", description: "Please try uploading the cover image again or proceed without it.", variant: "destructive"});
         setIsSubmittingForm(false);
-        return; // Stop submission
+        return; 
       }
-    } else if (coverImageState.previewUrl === null && data.coverImageUrl) { // Image was explicitly removed
+    } else if (coverImageState.previewUrl === null && data.coverImageUrl) { 
         finalCoverImageUrl = null;
     }
 
+    const generatedSlug = uuidv4(); // Generate UUID for slug
 
     try {
       const payload = {
         ...data,
+        slug: generatedSlug, // Add generated UUID slug to payload
         coverImageUrl: finalCoverImageUrl,
         authorId: authorInfo.id,
       };
@@ -137,7 +117,7 @@ export default function CreateBlogPage() {
 
       const newBlog: Blog = await response.json();
       toast({ title: "Blog Post Created!", description: `"${newBlog.title}" has been published.` });
-      resetImageState(setCoverImageState); // Reset image state on success
+      resetImageState(setCoverImageState); 
       router.push(`/blogs/${newBlog.author.username}/${newBlog.slug}`);
 
     } catch (error: any) {
@@ -149,7 +129,7 @@ export default function CreateBlogPage() {
   
   const handleRemoveCoverImage = () => {
     resetImageState(setCoverImageState);
-    form.setValue('coverImageUrl', null); // Signal removal
+    form.setValue('coverImageUrl', null); 
   };
 
 
@@ -179,28 +159,14 @@ export default function CreateBlogPage() {
                   <FormItem>
                     <FormLabel>Title</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your amazing blog post title" {...field} />
+                      <input type="text" placeholder="Your amazing blog post title" {...field} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Slug</FormLabel>
-                    <FormControl>
-                      <Input placeholder="your-blog-post-slug" {...field} />
-                    </FormControl>
-                    <FormDescription>This will be part of the URL. Use lowercase letters, numbers, and hyphens.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Slug Field Removed */}
               
-              {/* Cover Image Upload */}
               <FormItem>
                 <FormLabel>Cover Image (Optional)</FormLabel>
                  <div className="space-y-2">
