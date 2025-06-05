@@ -1,22 +1,24 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/input'; // Will be removed for coverImageUrl
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from "next/link";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import type { Blog, User, Identity } from '@/types';
-import { mockIdentities, mockUsers } from '@/lib/mock-data'; // For author lookup
-import { Loader2 } from 'lucide-react';
+import type { Blog } from '@/types';
+import { mockIdentities } from '@/lib/mock-data';
+import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';
+import Image from 'next/image'; // For preview
+import { handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState } from '@/lib/image-upload-utils';
 
 const blogPostSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters.").max(150, "Title must be 150 characters or less."),
@@ -24,7 +26,7 @@ const blogPostSchema = z.object({
     .min(3, "Slug must be at least 3 characters.")
     .max(100, "Slug must be 100 characters or less.")
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug can only contain lowercase letters, numbers, and hyphens."),
-  coverImageUrl: z.string().url("Invalid URL format.").optional().or(z.literal('')),
+  coverImageUrl: z.string().url("Invalid URL format.").optional().or(z.literal('')).nullable(),
   excerpt: z.string().max(300, "Excerpt must be 300 characters or less.").optional(),
   content: z.string().min(50, "Content must be at least 50 characters."),
 });
@@ -36,7 +38,10 @@ export default function CreateBlogPage() {
   const router = useRouter();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false); // For main form submission
+
+  const [coverImageState, setCoverImageState] = useState<ImageFileState>({ file: null, previewUrl: null, isUploading: false, uploadedUrl: null });
+  const coverImageInputRef = useRef<HTMLInputElement>(null);
 
   const identityId = searchParams.get('identityId');
   const [authorInfo, setAuthorInfo] = useState<{ name: string, type: 'user' | 'identity', id: string } | null>(null);
@@ -48,12 +53,9 @@ export default function CreateBlogPage() {
         setAuthorInfo({ name: identity.displayName || identity.username, type: 'identity', id: identity.id });
       } else {
          toast({ title: "Error", description: "Invalid or unauthorized identity for posting.", variant: "destructive" });
-         router.push('/blogs'); // Or back to settings
+         router.push('/blogs');
       }
     } else if (currentUser) {
-      // Allow regular users to post blogs as themselves.
-      // This part can be adjusted based on whether only identities should post.
-      // For now, enabling it for users directly.
       setAuthorInfo({ name: currentUser.username, type: 'user', id: currentUser.id });
     } else {
        toast({ title: "Authentication Error", description: "You must be logged in to create a blog post.", variant: "destructive" });
@@ -76,17 +78,15 @@ export default function CreateBlogPage() {
     return title
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .replace(/[^\w-]+/g, '') // Remove all non-word chars
-      .replace(/--+/g, '-'); // Replace multiple hyphens with single hyphen
+      .replace(/\s+/g, '-') 
+      .replace(/[^\w-]+/g, '') 
+      .replace(/--+/g, '-'); 
   };
 
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === 'title' && value.title) {
         const currentSlug = form.getValues('slug');
-        // Auto-generate slug only if it's empty or was likely auto-generated from a previous title
-        // This check is basic; more sophisticated logic might be needed if titles are frequently edited after slug generation.
         if (!currentSlug || currentSlug === generateSlug(form.getValues('title'))) {
            form.setValue('slug', generateSlug(value.title), { shouldValidate: true });
         }
@@ -95,17 +95,33 @@ export default function CreateBlogPage() {
     return () => subscription.unsubscribe();
   }, [form]);
 
-
   const onSubmit = async (data: BlogPostFormValues) => {
     if (!authorInfo) {
         toast({ title: "Error", description: "Author information is missing.", variant: "destructive" });
         return;
     }
-    setIsSubmitting(true);
+    setIsSubmittingForm(true);
+
+    let finalCoverImageUrl = data.coverImageUrl;
+    if (coverImageState.file) {
+      const uploadedUrl = await uploadImageToR2(coverImageState, setCoverImageState);
+      if (uploadedUrl) {
+        finalCoverImageUrl = uploadedUrl;
+      } else { // Upload failed
+        toast({ title: "Cover Image Upload Failed", description: "Please try uploading the cover image again or proceed without it.", variant: "destructive"});
+        setIsSubmittingForm(false);
+        return; // Stop submission
+      }
+    } else if (coverImageState.previewUrl === null && data.coverImageUrl) { // Image was explicitly removed
+        finalCoverImageUrl = null;
+    }
+
+
     try {
       const payload = {
         ...data,
-        authorId: authorInfo.id, // This ID will be used by the API to find User or Identity
+        coverImageUrl: finalCoverImageUrl,
+        authorId: authorInfo.id,
       };
 
       const response = await fetch('/api/blogs', {
@@ -121,18 +137,28 @@ export default function CreateBlogPage() {
 
       const newBlog: Blog = await response.json();
       toast({ title: "Blog Post Created!", description: `"${newBlog.title}" has been published.` });
+      resetImageState(setCoverImageState); // Reset image state on success
       router.push(`/blogs/${newBlog.author.username}/${newBlog.slug}`);
 
     } catch (error: any) {
       toast({ title: "Creation Failed", description: error.message, variant: "destructive" });
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingForm(false);
     }
   };
+  
+  const handleRemoveCoverImage = () => {
+    resetImageState(setCoverImageState);
+    form.setValue('coverImageUrl', null); // Signal removal
+  };
+
 
   if (!currentUser || !authorInfo) {
     return <div className="max-w-3xl mx-auto py-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /> <p className="mt-2">Loading author information...</p></div>;
   }
+
+  const isUploadingAnyImage = coverImageState.isUploading;
+  const overallSubmitting = isSubmittingForm || isUploadingAnyImage;
 
   return (
     <div className="max-w-3xl mx-auto py-8">
@@ -173,19 +199,44 @@ export default function CreateBlogPage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="coverImageUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cover Image URL (Optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://example.com/cover.jpg" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              
+              {/* Cover Image Upload */}
+              <FormItem>
+                <FormLabel>Cover Image (Optional)</FormLabel>
+                 <div className="space-y-2">
+                  {(coverImageState.previewUrl || form.getValues('coverImageUrl')) && (
+                    <div className="relative w-full aspect-video rounded-md overflow-hidden border bg-muted">
+                      <Image 
+                        src={coverImageState.previewUrl || form.getValues('coverImageUrl')!} 
+                        alt="Cover image preview" 
+                        layout="fill" 
+                        objectFit="cover" 
+                        data-ai-hint="blog cover"
+                      />
+                    </div>
+                  )}
+                  {!(coverImageState.previewUrl || form.getValues('coverImageUrl')) && (
+                     <div className="w-full aspect-video rounded-md border border-dashed flex items-center justify-center bg-muted">
+                        <ImageIcon className="h-16 w-16 text-muted-foreground" />
+                     </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => coverImageInputRef.current?.click()} disabled={coverImageState.isUploading}>
+                      {coverImageState.isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <UploadCloud className="mr-2 h-4 w-4" /> {coverImageState.file || form.getValues('coverImageUrl') ? "Change" : "Upload"}
+                    </Button>
+                    <input type="file" ref={coverImageInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageFileChange(e, setCoverImageState)} />
+                    {(coverImageState.previewUrl || form.getValues('coverImageUrl') || coverImageState.file) && (
+                      <Button type="button" variant="ghost" size="sm" onClick={handleRemoveCoverImage} className="text-destructive hover:text-destructive/80" disabled={coverImageState.isUploading}>
+                        <CloseIcon className="mr-2 h-4 w-4" /> Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {coverImageState.file && <p className="text-xs text-muted-foreground mt-1">Selected: {coverImageState.file.name}</p>}
+                <FormMessage>{form.formState.errors.coverImageUrl?.message}</FormMessage>
+              </FormItem>
+
               <FormField
                 control={form.control}
                 name="excerpt"
@@ -193,7 +244,7 @@ export default function CreateBlogPage() {
                   <FormItem>
                     <FormLabel>Excerpt (Optional)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="A short summary of your blog post (max 300 characters)." {...field} rows={3} />
+                      <Textarea placeholder="A short summary of your blog post (max 300 characters)." {...field} value={field.value ?? ""} rows={3} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -217,9 +268,9 @@ export default function CreateBlogPage() {
                 <Button variant="outline" asChild type="button">
                   <Link href="/blogs">Cancel</Link>
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isSubmitting ? "Publishing..." : "Publish Post"}
+                <Button type="submit" disabled={overallSubmitting}>
+                  {overallSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmittingForm ? "Publishing..." : (coverImageState.isUploading ? "Uploading Cover..." : "Publish Post")}
                 </Button>
               </div>
             </form>

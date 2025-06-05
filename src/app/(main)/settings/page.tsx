@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/input'; // Keep for other fields if any, or remove if not used
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -17,13 +17,13 @@ import type { SportInterest, User } from '@/types';
 import { availableSports, sportInterestLevels, mockIdentities } from '@/lib/mock-data';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Newspaper, Users, PlusCircle } from 'lucide-react';
-// Toast is handled by AuthContext for updateUserSettings
+import { Newspaper, Users, PlusCircle, Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import Image from 'next/image';
+import { handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState } from '@/lib/image-upload-utils';
+import { useToast } from '@/hooks/use-toast';
 
 const settingsSchema = z.object({
-  // Username and email are not typically updatable via a simple settings form
-  // username: z.string().min(3, { message: "Username must be at least 3 characters." }),
-  // email: z.string().email({ message: "Invalid email address." }),
   bio: z.string().max(300, "Bio cannot exceed 300 characters.").optional().nullable(),
   profilePictureUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')).nullable(),
   bannerImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')).nullable(),
@@ -34,21 +34,28 @@ const settingsSchema = z.object({
   themePreference: z.enum(['light', 'dark', 'system']),
 });
 
-type SettingsFormValues = Omit<z.infer<typeof settingsSchema>, 'username' | 'email'>; // Omit non-updatable fields for form
+type SettingsFormValues = Omit<z.infer<typeof settingsSchema>, 'username' | 'email'>;
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, updateUserSettings, loading: authLoading, isAuthActionLoading } = useAuth();
+  const { user, updateUserSettings, loading: authLoading, isAuthActionLoading: isMainFormSubmitting } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { toast } = useToast();
 
-  const form = useForm<SettingsFormValues>({ // Use the omitted type for form values
-    resolver: zodResolver(settingsSchema.omit({ username: true, email: true })), // Omit for resolver too
+  const [profilePicState, setProfilePicState] = useState<ImageFileState>({ file: null, previewUrl: null, isUploading: false, uploadedUrl: null });
+  const [bannerState, setBannerState] = useState<ImageFileState>({ file: null, previewUrl: null, isUploading: false, uploadedUrl: null });
+
+  const profilePicInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  const form = useForm<SettingsFormValues>({
+    resolver: zodResolver(settingsSchema.omit({ username: true, email: true })),
     defaultValues: {
-      bio: user?.bio || "",
-      profilePictureUrl: user?.profilePictureUrl || "",
-      bannerImageUrl: user?.bannerImageUrl || "",
-      sportInterests: user?.sportInterests || availableSports.map(sport => ({ sport, level: 'no interest' })),
-      themePreference: (user?.themePreference as 'light' | 'dark' | 'system' || theme || 'system')
+      bio: "",
+      profilePictureUrl: "",
+      bannerImageUrl: "",
+      sportInterests: availableSports.map(sport => ({ sport, level: 'no interest' })),
+      themePreference: theme || 'system',
     },
   });
   
@@ -66,33 +73,83 @@ export default function SettingsPage() {
           : availableSports.map(sport => ({ sport, level: 'no interest' })),
         themePreference: (user.themePreference as 'light' | 'dark' | 'system' || theme || 'system'),
       });
+      // Initialize previews with existing URLs if no new file is selected yet
+      if (!profilePicState.file && user.profilePictureUrl) {
+        setProfilePicState(prev => ({ ...prev, previewUrl: user.profilePictureUrl, uploadedUrl: user.profilePictureUrl }));
+      }
+      if (!bannerState.file && user.bannerImageUrl) {
+        setBannerState(prev => ({ ...prev, previewUrl: user.bannerImageUrl, uploadedUrl: user.bannerImageUrl }));
+      }
     }
   }, [user, authLoading, router, form, theme]);
-
 
   const onSubmit = async (data: SettingsFormValues) => {
     if (!user) return;
 
+    let finalProfilePicUrl = data.profilePictureUrl;
+    if (profilePicState.file) {
+      const uploadedUrl = await uploadImageToR2(profilePicState, setProfilePicState);
+      if (uploadedUrl) {
+        finalProfilePicUrl = uploadedUrl;
+      } else if (profilePicState.file) { // Upload failed for a new file
+        toast({ title: "Profile Picture Upload Failed", description: "Your profile picture was not uploaded. Please try again.", variant: "destructive"});
+        return; // Stop submission
+      }
+    } else if (profilePicState.previewUrl === null && data.profilePictureUrl !== null) { // Image was explicitly removed
+        finalProfilePicUrl = null;
+    }
+
+
+    let finalBannerUrl = data.bannerImageUrl;
+    if (bannerState.file) {
+      const uploadedUrl = await uploadImageToR2(bannerState, setBannerState);
+      if (uploadedUrl) {
+        finalBannerUrl = uploadedUrl;
+      } else if (bannerState.file) { // Upload failed
+         toast({ title: "Banner Image Upload Failed", description: "Your banner image was not uploaded. Please try again.", variant: "destructive"});
+        return; // Stop submission
+      }
+    } else if (bannerState.previewUrl === null && data.bannerImageUrl !== null) { // Image was explicitly removed
+        finalBannerUrl = null;
+    }
+    
+
     const settingsToUpdate: Partial<User> = {
+      ...data,
+      profilePictureUrl: finalProfilePicUrl,
+      bannerImageUrl: finalBannerUrl,
       sportInterests: data.sportInterests?.filter(interest => interest.level !== 'no interest') as SportInterest[],
-      themePreference: data.themePreference as User['themePreference'],
-      bio: data.bio,
-      profilePictureUrl: data.profilePictureUrl,
-      bannerImageUrl: data.bannerImageUrl,
     };
     
     const updatedUser = await updateUserSettings(settingsToUpdate);
-    if (updatedUser && updatedUser.themePreference) {
-      setTheme(updatedUser.themePreference as 'light' | 'dark' | 'system');
+    if (updatedUser) {
+      if (updatedUser.themePreference) setTheme(updatedUser.themePreference as 'light' | 'dark' | 'system');
+      // Reset file states as URLs are now persisted
+      if (updatedUser.profilePictureUrl) setProfilePicState({ file: null, previewUrl: updatedUser.profilePictureUrl, uploadedUrl: updatedUser.profilePictureUrl, isUploading: false });
+      else resetImageState(setProfilePicState);
+      if (updatedUser.bannerImageUrl) setBannerState({ file: null, previewUrl: updatedUser.bannerImageUrl, uploadedUrl: updatedUser.bannerImageUrl, isUploading: false });
+      else resetImageState(setBannerState);
     }
-    // Toast for success/error is handled by AuthContext's useMutation
+  };
+
+  const handleRemoveProfilePic = () => {
+    resetImageState(setProfilePicState);
+    form.setValue('profilePictureUrl', null); // Signal removal to form
+  };
+
+  const handleRemoveBanner = () => {
+    resetImageState(setBannerState);
+    form.setValue('bannerImageUrl', null);
   };
 
   const userOwnedIdentity = user ? mockIdentities.find(identity => identity.owner.id === user.id) : null;
 
   if (authLoading || !user) {
-    return <div className="text-center p-10">Loading settings...</div>;
+    return <div className="text-center p-10"><Loader2 className="h-8 w-8 animate-spin mx-auto" /> <p className="mt-2">Loading settings...</p></div>;
   }
+  
+  const currentProfilePicDisplayUrl = profilePicState.previewUrl || user.profilePictureUrl;
+  const currentBannerDisplayUrl = bannerState.previewUrl || user.bannerImageUrl;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -104,7 +161,7 @@ export default function SettingsPage() {
               <CardTitle className="font-headline">Profile Information</CardTitle>
               <CardDescription>Update your personal details. Username: @{user.username}, Email: {user.email}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <FormField
                 control={form.control}
                 name="bio"
@@ -116,28 +173,63 @@ export default function SettingsPage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="profilePictureUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Profile Picture URL</FormLabel>
-                    <FormControl><Input placeholder="https://example.com/avatar.png" {...field} value={field.value ?? ""} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="bannerImageUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Banner Image URL</FormLabel>
-                    <FormControl><Input placeholder="https://example.com/banner.png" {...field} value={field.value ?? ""} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
+              {/* Profile Picture Upload */}
+              <FormItem>
+                <FormLabel>Profile Picture</FormLabel>
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-20 w-20 border">
+                    <AvatarImage src={currentProfilePicDisplayUrl || undefined} alt="Profile Preview" />
+                    <AvatarFallback><ImageIcon className="h-8 w-8 text-muted-foreground" /></AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => profilePicInputRef.current?.click()} disabled={profilePicState.isUploading}>
+                      {profilePicState.isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <UploadCloud className="mr-2 h-4 w-4" /> {profilePicState.file ? "Change" : "Upload"}
+                    </Button>
+                    <input type="file" ref={profilePicInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageFileChange(e, setProfilePicState)} />
+                    {(currentProfilePicDisplayUrl || profilePicState.file) && (
+                      <Button type="button" variant="ghost" size="sm" onClick={handleRemoveProfilePic} className="text-destructive hover:text-destructive/80" disabled={profilePicState.isUploading}>
+                        <CloseIcon className="mr-2 h-4 w-4" /> Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                 {profilePicState.file && <p className="text-xs text-muted-foreground mt-1">Selected: {profilePicState.file.name}</p>}
+                <FormMessage>{form.formState.errors.profilePictureUrl?.message}</FormMessage>
+              </FormItem>
+
+              {/* Banner Image Upload */}
+              <FormItem>
+                <FormLabel>Banner Image</FormLabel>
+                <div className="space-y-2">
+                  {currentBannerDisplayUrl && (
+                    <div className="relative w-full h-32 rounded-md overflow-hidden border bg-muted">
+                      <Image src={currentBannerDisplayUrl} alt="Banner Preview" layout="fill" objectFit="cover" />
+                    </div>
+                  )}
+                  {!currentBannerDisplayUrl && !bannerState.file && (
+                     <div className="w-full h-32 rounded-md border border-dashed flex items-center justify-center bg-muted">
+                        <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                     </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => bannerInputRef.current?.click()} disabled={bannerState.isUploading}>
+                      {bannerState.isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <UploadCloud className="mr-2 h-4 w-4" /> {bannerState.file || currentBannerDisplayUrl ? "Change" : "Upload"}
+                    </Button>
+                    <input type="file" ref={bannerInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageFileChange(e, setBannerState)} />
+                    {(currentBannerDisplayUrl || bannerState.file) && (
+                      <Button type="button" variant="ghost" size="sm" onClick={handleRemoveBanner} className="text-destructive hover:text-destructive/80" disabled={bannerState.isUploading}>
+                        <CloseIcon className="mr-2 h-4 w-4" /> Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {bannerState.file && <p className="text-xs text-muted-foreground mt-1">Selected: {bannerState.file.name}</p>}
+                <FormMessage>{form.formState.errors.bannerImageUrl?.message}</FormMessage>
+              </FormItem>
+
             </CardContent>
           </Card>
 
@@ -209,8 +301,9 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Button type="submit" className="w-full md:w-auto" disabled={isAuthActionLoading}>
-            {isAuthActionLoading ? 'Saving...' : 'Save Changes'}
+          <Button type="submit" className="w-full md:w-auto" disabled={isMainFormSubmitting || profilePicState.isUploading || bannerState.isUploading}>
+            {(isMainFormSubmitting || profilePicState.isUploading || bannerState.isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save Changes
           </Button>
         </form>
       </Form>
@@ -258,5 +351,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    
