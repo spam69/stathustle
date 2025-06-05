@@ -15,7 +15,6 @@ export async function POST(request: Request) {
   }
   if (!R2_PUBLIC_URL_PREFIX) {
     console.warn("/api/upload: CLOUDFLARE_R2_PUBLIC_URL_PREFIX is not set. Uploaded files may not be accessible via public URL.");
-    // Continue upload but URLs might be broken if this isn't set or correctly derived
     return NextResponse.json({ message: 'Public URL prefix is not configured on the server.' }, { status: 500 });
   }
 
@@ -39,7 +38,7 @@ export async function POST(request: Request) {
     const uniqueKey = `${uuidv4()}.${fileExtension}`;
 
     const command = new PutObjectCommand({
-      Bucket: R2_BUCKET_NAME,
+      Bucket: R2_BUCKET_NAME, // The bucket name is still needed for the S3 command
       Key: uniqueKey,
       Body: buffer,
       ContentType: fileType,
@@ -47,10 +46,11 @@ export async function POST(request: Request) {
 
     await r2Client.send(command);
     
-    // Construct the public URL: BASE_PUBLIC_URL/BUCKET_NAME/UNIQUE_KEY
+    // Construct the public URL: BASE_PUBLIC_URL/UNIQUE_KEY
+    // This assumes the custom domain (R2_PUBLIC_URL_PREFIX) directly serves the bucket root.
     // Ensure R2_PUBLIC_URL_PREFIX does not have a trailing slash for this construction.
     const baseUrl = R2_PUBLIC_URL_PREFIX.replace(/\/$/, ''); // Remove trailing slash if present
-    const publicUrl = `${baseUrl}/${R2_BUCKET_NAME}/${uniqueKey}`;
+    const publicUrl = `${baseUrl}/${uniqueKey}`; 
     
     return NextResponse.json({ success: true, url: publicUrl }, { status: 200 });
 
