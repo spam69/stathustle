@@ -43,8 +43,13 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'pub-5756768f216748b3980d8362b0586f74.r2.dev', // For Cloudflare R2
-        pathname: '/**',
+        hostname: 'pub-5756768f216748b3980d8362b0586f74.r2.dev', 
+        pathname: '/**', // Allows /stathustle/*
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.stathustle.com', // New custom domain for R2
+        pathname: '/**', // Allows /stathustle/* or other paths if your custom domain maps directly
       }
     ],
   },
