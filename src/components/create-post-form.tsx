@@ -2,14 +2,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form'; // Import Controller
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Image as ImageIcon, Film, Users, Paperclip, Smile, X, BarChart3, CalendarClock, Loader2, Newspaper } from "lucide-react";
+import { Image as ImageIcon, Film, Users, Paperclip, Smile, X, BarChart3, CalendarClock, Loader2, Newspaper, ArrowRight } from "lucide-react";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Post, BlogShareDetails } from '@/types';
@@ -19,13 +19,13 @@ import Image from 'next/image';
 import GiphyPickerModal from './giphy-picker-modal';
 import type { IGif } from '@giphy/js-types';
 import { useFeed } from '@/contexts/feed-context';
-import EmojiPicker from './emoji-picker'; // Import EmojiPicker
+import EmojiPicker from './emoji-picker';
 
 const postSchema = z.object({
   content: z.string().max(1000, "Post too long.").optional(),
   sharedOriginalPostId: z.string().optional(),
-  blogShareUrl: z.string().url().optional(), // For internal use, not directly submitted if blogShareDetails is present
-}).refine(data => data.content || data.sharedOriginalPostId || data.blogShareUrl, { // Loosen validation slightly if blogShareUrl might imply content
+  blogShareUrl: z.string().url().optional(),
+}).refine(data => data.content || data.sharedOriginalPostId || data.blogShareUrl, {
   message: "Post cannot be empty unless you are sharing something.",
   path: ["content"],
 });
@@ -34,9 +34,8 @@ type PostFormValues = z.infer<typeof postSchema>;
 
 interface CreatePostFormProps {
   onPostCreated: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string, blogShareDetails?: BlogShareDetails }) => void;
-  isSubmitting: boolean; 
+  isSubmitting: boolean;
   isModal?: boolean;
-  // postToShare and onCancelShare are now handled by FeedContext
 }
 
 const SharedPostPreviewCard = ({ post }: { post: Post }) => {
@@ -120,7 +119,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
   const [isUploadingToR2, setIsUploadingToR2] = useState(false);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const contentTextareaRef = useRef<HTMLTextAreaElement>(null); // Ref for textarea
+  const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
@@ -140,8 +139,8 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
       setGifUrl(undefined);
     } else if (pendingBlogShare) {
       form.setValue('sharedOriginalPostId', undefined);
-      form.setValue('content', ""); // User adds their own comment
-      form.setValue('blogShareUrl', pendingBlogShare.url); // Store for validation, not submitted directly
+      form.setValue('content', ""); 
+      form.setValue('blogShareUrl', pendingBlogShare.url); 
       setImageToUpload(null);
       setGifUrl(undefined);
     } else {
@@ -192,10 +191,11 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
       toast({ title: "Error", description: "You must be logged in to post.", variant: "destructive" });
       return;
     }
-    if (!data.content && !imageToUpload && !gifUrl && !data.sharedOriginalPostId && !pendingBlogShare) {
-      toast({ title: "Error", description: "Post cannot be empty.", variant: "destructive" });
-      return;
-    }
+    // Validation is now handled by Zod schema's refine, form.formState.isValid will reflect this
+    // if (!data.content && !imageToUpload && !gifUrl && !data.sharedOriginalPostId && !pendingBlogShare) {
+    //   toast({ title: "Error", description: "Post cannot be empty.", variant: "destructive" });
+    //   return;
+    // }
 
     let finalMediaUrl: string | undefined = gifUrl;
     let finalMediaType: 'image' | 'gif' | undefined = gifUrl ? 'gif' : undefined;
@@ -230,8 +230,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
 
     onPostCreated(postData); 
     
-    // Modal closing is handled by FeedContext after publishPost mutation
-    if (!isModal) { // Reset form only if it's the inline form
+    if (!isModal) { 
         form.reset({ content: "", sharedOriginalPostId: undefined, blogShareUrl: undefined });
         setImageToUpload(null);
         setGifUrl(undefined);
@@ -313,13 +312,22 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
                 <AvatarImage src={user?.profilePictureUrl} alt={user?.username} data-ai-hint="person avatar"/>
                 <AvatarFallback>{getInitials(user?.username)}</AvatarFallback>
               </Avatar>
-              <Textarea
-                {...form.register("content")}
-                ref={contentTextareaRef} // Attach ref
-                placeholder={isRegularSharingMode ? "Add your thoughts to the shared post..." : isBlogSharingMode ? "Add your thoughts about the blog..." : `What's happening, ${user?.username}?`}
-                className="min-h-[70px] flex-1 resize-none shadow-none focus-visible:ring-0 border-0 bg-transparent p-1 text-base"
-                maxLength={1000}
-                disabled={overallSubmitting}
+              <Controller
+                name="content"
+                control={form.control}
+                render={({ field }) => (
+                  <Textarea
+                    {...field}
+                    ref={(e) => {
+                      field.ref(e); // RHF's internal ref
+                      contentTextareaRef.current = e; // Your custom ref
+                    }}
+                    placeholder={isRegularSharingMode ? "Add your thoughts to the shared post..." : isBlogSharingMode ? "Add your thoughts about the blog..." : `What's happening, ${user?.username}?`}
+                    className="min-h-[70px] flex-1 resize-none shadow-none focus-visible:ring-0 border-0 bg-transparent p-1 text-base"
+                    maxLength={1000}
+                    disabled={overallSubmitting}
+                  />
+                )}
               />
             </div>
             {form.formState.errors.content && (
@@ -372,7 +380,6 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
           </CardContent>
           <CardFooter className={`flex justify-between items-center p-4 ${isModal ? 'pt-2' : 'pt-2 border-t border-border'}`}>
             <div className="flex gap-0">
-              {/* Disable media buttons if sharing a blog post or regular post */}
               {!isRegularSharingMode && !isBlogSharingMode && (
                 <>
                   <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Add Image" onClick={handleImageUploadClick} disabled={hasMediaSelected || overallSubmitting}>
@@ -399,7 +406,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
             </div>
             <Button 
               type="submit" 
-              disabled={overallSubmitting || (!form.getValues("content") && !imageToUpload && !gifUrl && !isRegularSharingMode && !isBlogSharingMode) || (!form.formState.isValid && form.formState.isSubmitted)}
+              disabled={overallSubmitting || (!form.getValues("content")?.trim() && !imageToUpload && !gifUrl && !isRegularSharingMode && !isBlogSharingMode && !pendingBlogShare) || (!form.formState.isValid && form.formState.isSubmitted)}
               className="font-headline rounded-full px-6"
             >
               {overallSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -416,3 +423,5 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     </>
   );
 }
+
+      
