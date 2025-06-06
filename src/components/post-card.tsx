@@ -210,7 +210,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
         )}
 
 
-        {sharedOriginalPostId && !blogShareDetails && !isEmbedded && ( // Ensure this doesn't render if it's a blog share
+        {sharedOriginalPostId && !blogShareDetails && !isEmbedded && ( // Ensure this doesn't render if it's a blog share post
           <div 
             className="mt-0 mb-3 mx-4 p-0 border border-border/80 rounded-xl hover:border-primary/50 cursor-pointer transition-all overflow-hidden"
             onClick={handleSharedPostClick}
@@ -246,6 +246,9 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                     popoverSide="top"
                 />
             </div>
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center" onClick={handleToggleCommentsModal}>
+              <MessageCircle className="h-5 w-5 mr-1.5" /> <span className="text-xs">{repliesCount || 0}</span>
+            </Button>
             <Button 
               variant="ghost" 
               size="sm" 
@@ -255,9 +258,6 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
             >
               {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
               <span className="text-xs">{shares || 0}</span>
-            </Button>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center" onClick={handleToggleCommentsModal}>
-              <MessageCircle className="h-5 w-5 mr-1.5" /> <span className="text-xs">{repliesCount || 0}</span>
             </Button>
             <Button 
               variant="ghost" 
@@ -283,3 +283,4 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     </>
   );
 }
+
