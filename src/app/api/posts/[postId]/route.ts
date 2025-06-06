@@ -4,8 +4,100 @@ import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
 import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
-import CommentModel from '@/models/Comment.model'; // For populating comments
-import type { User as UserType, Identity as IdentityType, Post as PostType } from '@/types';
+import CommentModel from '@/models/Comment.model';
+import type { Post as PostType, User as UserType, Identity as IdentityType, Comment as CommentClientType, ReactionEntry as ReactionEntryClientType } from '@/types';
+
+// Helper function to transform author data
+const transformAuthor = (authorDoc: any): UserType | IdentityType | undefined => {
+  if (!authorDoc) return undefined;
+  // If authorDoc is already populated (object with _id), use its fields.
+  // If it's just an ObjectId string (should not happen with proper populate), this won't work well.
+  return {
+    ...authorDoc, // Spread the lean object
+    id: authorDoc._id?.toString(),
+    username: authorDoc.username,
+    profilePictureUrl: authorDoc.profilePictureUrl,
+    isIdentity: authorDoc.isIdentity || false,
+    displayName: authorDoc.displayName,
+  };
+};
+
+// Helper function to transform reaction entries
+const transformReaction = (reactionDoc: any): ReactionEntryClientType => ({
+  ...reactionDoc,
+  userId: reactionDoc.userId?.toString(),
+  createdAt: reactionDoc.createdAt?.toISOString(),
+});
+
+// Helper function to transform comment data
+const transformComment = (commentDoc: any): CommentClientType | undefined => {
+  if (!commentDoc) return undefined;
+  return {
+    ...commentDoc,
+    id: commentDoc._id?.toString(),
+    author: transformAuthor(commentDoc.author), // author should be populated by the query
+    detailedReactions: commentDoc.detailedReactions?.map(transformReaction) || [],
+    createdAt: commentDoc.createdAt?.toISOString(),
+  };
+};
+
+// Helper function to transform a single post
+const transformPost = (postDoc: any): PostType => {
+  if (!postDoc) {
+    // This case should ideally be handled before calling transformPost,
+    // e.g., by returning 404 if postDoc is null.
+    // However, to satisfy PostType, we return a structure that indicates an issue.
+    console.error("transformPost called with null or undefined postDoc");
+    // Fallback or throw error, depending on desired behavior for "not found"
+    // For now, let's assume this function is only called with a valid document.
+    // If it can be null, the return type should be PostType | null.
+  }
+
+  let sharedOriginalPostTransformed: PostType | undefined = undefined;
+  let sharedOriginalPostIdString: string | undefined = undefined;
+
+  if (postDoc.sharedOriginalPostId) {
+    const sharedData = postDoc.sharedOriginalPostId; // This is the populated object from .lean()
+    if (sharedData && sharedData._id) {
+      sharedOriginalPostIdString = sharedData._id.toString();
+      sharedOriginalPostTransformed = {
+        ...sharedData,
+        id: sharedOriginalPostIdString,
+        author: transformAuthor(sharedData.author), // Author of shared post should be populated
+        detailedReactions: sharedData.detailedReactions?.map(transformReaction) || [],
+        comments: (sharedData.comments || []).map(transformComment), // Transform comments of shared post if populated
+        repliesCount: sharedData.repliesCount || 0,
+        content: sharedData.content || "",
+        createdAt: sharedData.createdAt?.toISOString(),
+        shares: sharedData.shares || 0,
+        mediaUrl: sharedData.mediaUrl,
+        mediaType: sharedData.mediaType,
+        blogShareDetails: sharedData.blogShareDetails,
+      };
+    } else if (sharedData) { // Is an ObjectId string
+        sharedOriginalPostIdString = sharedData.toString();
+    }
+  }
+
+  return {
+    ...postDoc,
+    id: postDoc._id.toString(),
+    author: transformAuthor(postDoc.author), // Author of main post should be populated
+    comments: postDoc.comments?.map(transformComment) || [],
+    detailedReactions: postDoc.detailedReactions?.map(transformReaction) || [],
+    sharedOriginalPostId: sharedOriginalPostIdString,
+    sharedOriginalPost: sharedOriginalPostTransformed,
+    createdAt: postDoc.createdAt?.toISOString(),
+    content: postDoc.content || "",
+    shares: postDoc.shares || 0,
+    repliesCount: postDoc.repliesCount || 0,
+    blogShareDetails: postDoc.blogShareDetails,
+    mediaUrl: postDoc.mediaUrl,
+    mediaType: postDoc.mediaType,
+    teamSnapshot: postDoc.teamSnapshot,
+    tags: postDoc.tags,
+  };
+};
 
 
 export async function GET(
@@ -21,23 +113,21 @@ export async function GET(
     }
 
     const post = await PostModel.findById(postId)
-      // Populate author - this will use refPath if authorModel is part of the schema
       .populate({
-        path: 'author',
-        // model: // Will be determined by refPath 'authorModel' in PostSchema
+        path: 'author', // Populates author based on authorModel
       })
       .populate({
-        path: 'sharedOriginalPostId', // Assuming this is the correct field name
+        path: 'sharedOriginalPostId',
         populate: {
-          path: 'author',
-          // model: // Also determined by refPath 'authorModel' in the shared post's schema
+          path: 'author', // Populates author of shared post
+          // Populate comments of shared post if needed, and their authors
+          // populate: { path: 'comments', populate: { path: 'author' }} // Example for deeper nesting
         }
       })
       .populate({
-        path: 'comments', // Assuming 'comments' is an array of Comment ObjectIds
+        path: 'comments',
         populate: {
-          path: 'author',
-          // model: // Determined by refPath 'authorModel' in CommentSchema
+          path: 'author', // Populates author of comments
         }
       })
       .lean();
@@ -45,40 +135,11 @@ export async function GET(
     if (!post) {
       return NextResponse.json({ message: 'Post not found' }, { status: 404 });
     }
-
-    // Manual population step by step if deep/dynamic population is complex
-    if (post.author && post.authorModel) {
-      const AuthorModel = post.authorModel === 'User' ? UserModel : IdentityModel;
-      post.author = await AuthorModel.findById(post.author._id).lean() as UserType | IdentityType;
-    }
-
-    if (post.sharedOriginalPostId && post.sharedOriginalPostId.author && post.sharedOriginalPostId.authorModel) {
-      const SharedPostAuthorModel = post.sharedOriginalPostId.authorModel === 'User' ? UserModel : IdentityModel;
-      post.sharedOriginalPostId.author = await SharedPostAuthorModel.findById(post.sharedOriginalPostId.author._id).lean() as UserType | IdentityType;
-    }
     
-    if (post.comments && post.comments.length > 0) {
-        const populatedComments = [];
-        for (const commentRef of post.comments as any[]) { // commentRef could be an ID or a populated doc
-            let commentDoc = commentRef;
-            // If commentRef is just an ID, fetch the full comment document
-            if (!(commentRef instanceof CommentModel) && !commentRef.authorModel) { 
-                commentDoc = await CommentModel.findById(commentRef._id || commentRef).lean();
-            }
-            if (commentDoc && commentDoc.author && commentDoc.authorModel) {
-                const CommentAuthorModel = commentDoc.authorModel === 'User' ? UserModel : IdentityModel;
-                commentDoc.author = await CommentAuthorModel.findById(commentDoc.author._id || commentDoc.author).lean() as UserType | IdentityType;
-            }
-            populatedComments.push(commentDoc);
-        }
-        post.comments = populatedComments;
-    }
-    
-    const postWithId = { ...post, id: post._id.toString() };
+    return NextResponse.json(transformPost(post));
 
-    return NextResponse.json(postWithId);
   } catch (error: any) {
-    console.error(`Get Post API error for postId ${params.postId}:`, error);
-    return NextResponse.json({ message: error.message || 'An unexpected error occurred' }, { status: 500 });
+    console.error(`[API/POSTS/${params.postId} GET] Error fetching post:`, error, error.stack);
+    return NextResponse.json({ message: error.message || 'An unexpected error occurred while fetching the post.' }, { status: 500 });
   }
 }
