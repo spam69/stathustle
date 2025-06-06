@@ -236,19 +236,6 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
 
         {!isEmbedded && (
           <CardFooter className="flex justify-around items-center p-2 pt-1">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center" onClick={handleToggleCommentsModal}>
-              <MessageCircle className="h-5 w-5 mr-1.5" /> <span className="text-xs">{repliesCount || 0}</span>
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-muted-foreground hover:text-green-500 flex-1 justify-center" 
-              disabled={!currentUser || isPreparingShare || !!blogShareDetails} // Disable if it's a blog share post
-              onClick={handleInitiateShare}
-            >
-              {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
-              <span className="text-xs">{shares || 0}</span>
-            </Button>
             <div className="flex-1 justify-center flex">
                 <ReactionButton
                     reactions={detailedReactions}
@@ -259,6 +246,19 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                     popoverSide="top"
                 />
             </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-muted-foreground hover:text-green-500 flex-1 justify-center" 
+              disabled={!currentUser || isPreparingShare || !!blogShareDetails} // Disable if it's a blog share post
+              onClick={handleInitiateShare}
+            >
+              {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
+              <span className="text-xs">{shares || 0}</span>
+            </Button>
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center" onClick={handleToggleCommentsModal}>
+              <MessageCircle className="h-5 w-5 mr-1.5" /> <span className="text-xs">{repliesCount || 0}</span>
+            </Button>
             <Button 
               variant="ghost" 
               size="sm" 

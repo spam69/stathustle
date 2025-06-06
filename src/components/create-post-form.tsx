@@ -284,7 +284,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
 
   const handleEmojiSelectForPost = (emoji: string) => {
     const currentContent = form.getValues("content") || "";
-    form.setValue("content", currentContent + emoji);
+    form.setValue("content", currentContent + emoji, { shouldDirty: true, shouldValidate: true });
     contentTextareaRef.current?.focus();
   };
 
