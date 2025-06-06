@@ -19,6 +19,7 @@ import Image from 'next/image';
 import GiphyPickerModal from './giphy-picker-modal';
 import type { IGif } from '@giphy/js-types';
 import { useFeed } from '@/contexts/feed-context';
+import EmojiPicker from './emoji-picker'; // Import EmojiPicker
 
 const postSchema = z.object({
   content: z.string().max(1000, "Post too long.").optional(),
@@ -119,6 +120,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
   const [isUploadingToR2, setIsUploadingToR2] = useState(false);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null); // Ref for textarea
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
@@ -280,6 +282,12 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     setGifUrl(undefined);
   }
 
+  const handleEmojiSelectForPost = (emoji: string) => {
+    const currentContent = form.getValues("content") || "";
+    form.setValue("content", currentContent + emoji);
+    contentTextareaRef.current?.focus();
+  };
+
   if (!user && !isModal) {
     return (
       <Card className={`mb-6 p-4 text-center ${isModal ? 'border-0 shadow-none' : 'border border-border'}`}>
@@ -307,6 +315,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
               </Avatar>
               <Textarea
                 {...form.register("content")}
+                ref={contentTextareaRef} // Attach ref
                 placeholder={isRegularSharingMode ? "Add your thoughts to the shared post..." : isBlogSharingMode ? "Add your thoughts about the blog..." : `What's happening, ${user?.username}?`}
                 className="min-h-[70px] flex-1 resize-none shadow-none focus-visible:ring-0 border-0 bg-transparent p-1 text-base"
                 maxLength={1000}
@@ -378,9 +387,12 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
               <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Poll (mock)" disabled={overallSubmitting}>
                 <BarChart3 className="h-5 w-5" />
               </Button>
-              <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Emoji (mock)" disabled={overallSubmitting}>
-                <Smile className="h-5 w-5" />
-              </Button>
+              <EmojiPicker 
+                onEmojiSelect={handleEmojiSelectForPost} 
+                triggerButtonSize="icon" 
+                triggerButtonVariant="ghost"
+                popoverSide="top"
+              />
                <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Schedule (mock)" disabled={overallSubmitting}>
                 <CalendarClock className="h-5 w-5" />
               </Button>

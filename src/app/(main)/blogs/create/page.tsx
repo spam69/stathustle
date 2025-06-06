@@ -15,10 +15,11 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Blog } from '@/types';
 import { mockIdentities } from '@/lib/mock-data';
-import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';
+import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon, Smile } from 'lucide-react'; // Added Smile
 import Image from 'next/image'; 
 import { handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState } from '@/lib/image-upload-utils';
 import { v4 as uuidv4 } from 'uuid'; // Import UUID
+import EmojiPicker from '@/components/emoji-picker'; // Import EmojiPicker
 
 const blogPostSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters.").max(150, "Title must be 150 characters or less."),
@@ -39,6 +40,7 @@ export default function CreateBlogPage() {
 
   const [coverImageState, setCoverImageState] = useState<ImageFileState>({ file: null, previewUrl: null, isUploading: false, uploadedUrl: null });
   const coverImageInputRef = useRef<HTMLInputElement>(null);
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null); // Ref for content textarea
 
   const identityId = searchParams.get('identityId');
   const [authorInfo, setAuthorInfo] = useState<{ name: string, type: 'user' | 'identity', id: string } | null>(null);
@@ -118,6 +120,7 @@ export default function CreateBlogPage() {
       const newBlog: Blog = await response.json();
       toast({ title: "Blog Post Created!", description: `"${newBlog.title}" has been published.` });
       resetImageState(setCoverImageState); 
+      form.reset(); // Reset the form fields
       router.push(`/blogs/${newBlog.author.username}/${newBlog.slug}`);
 
     } catch (error: any) {
@@ -130,6 +133,12 @@ export default function CreateBlogPage() {
   const handleRemoveCoverImage = () => {
     resetImageState(setCoverImageState);
     form.setValue('coverImageUrl', null); 
+  };
+
+  const handleEmojiSelectForBlogContent = (emoji: string) => {
+    const currentContent = form.getValues("content") || "";
+    form.setValue("content", currentContent + emoji);
+    contentTextareaRef.current?.focus();
   };
 
 
@@ -221,9 +230,22 @@ export default function CreateBlogPage() {
                 name="content"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Content</FormLabel>
+                    <div className="flex justify-between items-center mb-1">
+                      <FormLabel>Content</FormLabel>
+                      <EmojiPicker 
+                        onEmojiSelect={handleEmojiSelectForBlogContent} 
+                        triggerButtonSize="xs"
+                        triggerButtonVariant="outline"
+                        popoverSide="bottom"
+                      />
+                    </div>
                     <FormControl>
-                      <Textarea placeholder="Write your blog post content here..." {...field} rows={15} />
+                      <Textarea 
+                        ref={contentTextareaRef}
+                        placeholder="Write your blog post content here..." 
+                        {...field} 
+                        rows={15} 
+                      />
                     </FormControl>
                     <FormDescription>Markdown is not yet supported. Use plain text for now.</FormDescription>
                     <FormMessage />

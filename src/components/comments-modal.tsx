@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Send, X, Award, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { MessageSquare, Send, X, Award, ChevronDown, ChevronRight, Users, Smile } from 'lucide-react'; // Added Smile
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +18,7 @@ import { useFeed } from '@/contexts/feed-context';
 import type { ReactionType } from '@/lib/reactions';
 import React from 'react'; // Import React for Fragment
 import { parseMentions } from '@/lib/text-processing'; // Import for parsing mentions
+import EmojiPicker from './emoji-picker'; // Import EmojiPicker
 
 interface CommentsModalProps {
   post: Post | null;
@@ -93,6 +94,11 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser }: Co
 
   const handleOpenRepliesModal = (topLevelComment: CommentType) => {
     openCommentRepliesModal(post, topLevelComment);
+  };
+
+  const handleEmojiSelectForComment = (emoji: string) => {
+    setNewCommentText(prev => prev + emoji);
+    commentInputRef.current?.focus();
   };
 
   const renderTopLevelComment = (comment: CommentType) => {
@@ -197,9 +203,17 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser }: Co
                   rows={2}
                   disabled={isCommenting}
                 />
-                <Button type="submit" size="icon" className="h-10 w-10 shrink-0" disabled={isCommenting || !newCommentText.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
+                <div className="flex flex-col gap-1">
+                    <EmojiPicker 
+                        onEmojiSelect={handleEmojiSelectForComment} 
+                        triggerButtonSize="icon"
+                        triggerButtonVariant="ghost"
+                        popoverSide="top"
+                    />
+                    <Button type="submit" size="icon" className="h-10 w-10 shrink-0" disabled={isCommenting || !newCommentText.trim()}>
+                        <Send className="h-4 w-4" />
+                    </Button>
+                </div>
               </div>
             </form>
           </DialogFooter>

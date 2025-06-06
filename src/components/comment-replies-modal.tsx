@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Award, X } from 'lucide-react';
+import { Send, Award, X, Smile } from 'lucide-react'; // Added Smile
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +19,7 @@ import type { ReactionType } from '@/lib/reactions';
 import { useAuth } from '@/contexts/auth-context';
 import React from 'react'; // Import React for Fragment
 import { parseMentions } from '@/lib/text-processing'; // Import for parsing mentions
+import EmojiPicker from './emoji-picker'; // Import EmojiPicker
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
   const username = author.username;
@@ -79,6 +80,11 @@ export default function CommentRepliesModal() {
         return;
     }
     reactToComment({ postId: post.id, commentId, reactionType });
+  };
+
+  const handleEmojiSelectForReply = (emoji: string) => {
+    setNewReplyText(prev => prev + emoji);
+    replyInputRef.current?.focus();
   };
 
   const directReplies = (post.comments || [])
@@ -202,9 +208,17 @@ export default function CommentRepliesModal() {
                 rows={2}
                 disabled={isCommenting}
               />
-              <Button type="submit" size="icon" className="h-10 w-10 shrink-0" disabled={isCommenting || !newReplyText.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
+              <div className="flex flex-col gap-1">
+                 <EmojiPicker 
+                    onEmojiSelect={handleEmojiSelectForReply} 
+                    triggerButtonSize="icon"
+                    triggerButtonVariant="ghost"
+                    popoverSide="top"
+                  />
+                <Button type="submit" size="icon" className="h-10 w-10 shrink-0" disabled={isCommenting || !newReplyText.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </form>
         </DialogFooter>
