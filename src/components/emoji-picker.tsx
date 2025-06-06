@@ -41,7 +41,7 @@ export default function EmojiPicker({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant={triggerButtonVariant} size={triggerButtonSize} aria-label="Add emoji" title="Add emoji">
+        <Button variant={triggerButtonVariant} size={triggerButtonSize} className="text-primary hover:bg-primary/10" aria-label="Add emoji" title="Add emoji">
           <Smile className={triggerButtonSize === "xs" ? "h-4 w-4" : "h-5 w-5"} />
         </Button>
       </PopoverTrigger>

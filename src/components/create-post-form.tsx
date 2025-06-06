@@ -391,18 +391,12 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
                   </Button>
                 </>
               )}
-              <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Poll (mock)" disabled={overallSubmitting}>
-                <BarChart3 className="h-5 w-5" />
-              </Button>
               <EmojiPicker 
                 onEmojiSelect={handleEmojiSelectForPost} 
                 triggerButtonSize="icon" 
                 triggerButtonVariant="ghost"
                 popoverSide="top"
               />
-               <Button type="button" variant="ghost" size="icon" className="text-primary hover:bg-primary/10" title="Schedule (mock)" disabled={overallSubmitting}>
-                <CalendarClock className="h-5 w-5" />
-              </Button>
             </div>
             <Button 
               type="submit" 
