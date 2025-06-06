@@ -1,5 +1,6 @@
 
 import { NextResponse } from 'next/server';
+import mongoose from 'mongoose'; // Added mongoose import
 import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
 import UserModel from '@/models/User.model';
@@ -10,34 +11,37 @@ import { mockAdminUser } from '@/lib/mock-data';
 
 // Helper function to transform author data
 const transformAuthor = (authorDoc: any): UserType | IdentityType | undefined => {
-  if (!authorDoc) return undefined;
+  if (!authorDoc || typeof authorDoc !== 'object' || !authorDoc._id) { 
+    return undefined;
+  }
   return {
-    ...authorDoc, // Spread the lean object
-    id: authorDoc._id?.toString(),
-    // Ensure essential fields, even if they are undefined in the doc
-    username: authorDoc.username,
+    id: authorDoc._id.toString(),
+    username: authorDoc.username || 'Unknown',
     profilePictureUrl: authorDoc.profilePictureUrl,
-    isIdentity: authorDoc.isIdentity || false,
-    displayName: authorDoc.displayName,
+    isIdentity: !!authorDoc.isIdentity,
+    displayName: authorDoc.displayName || authorDoc.username || 'Unknown',
   };
 };
 
 // Helper function to transform reaction entries
 const transformReaction = (reactionDoc: any): ReactionEntryClientType => ({
-  ...reactionDoc,
-  userId: reactionDoc.userId?.toString(),
+  userId: reactionDoc.userId?.toString(), // userId should be an ObjectId from schema, convert to string
+  reactionType: reactionDoc.reactionType,
   createdAt: reactionDoc.createdAt?.toISOString(),
 });
 
 // Helper function to transform comment data
 const transformComment = (commentDoc: any): CommentClientType | undefined => {
-  if (!commentDoc) return undefined;
+  if (!commentDoc || typeof commentDoc !== 'object' || !commentDoc._id) {
+    return undefined;
+  }
   return {
-    ...commentDoc,
-    id: commentDoc._id?.toString(),
-    author: transformAuthor(commentDoc.author),
-    detailedReactions: commentDoc.detailedReactions?.map(transformReaction) || [],
+    id: commentDoc._id.toString(),
+    author: transformAuthor(commentDoc.author), // author should be populated
+    content: commentDoc.content || "",
     createdAt: commentDoc.createdAt?.toISOString(),
+    parentId: commentDoc.parentId?.toString(),
+    detailedReactions: commentDoc.detailedReactions?.map(transformReaction) || [],
   };
 };
 
@@ -47,49 +51,46 @@ const transformPost = (postDoc: any): PostType => {
   let sharedOriginalPostIdString: string | undefined = undefined;
 
   if (postDoc.sharedOriginalPostId) {
-    // If sharedOriginalPostId was populated, it's an object.
-    // If it wasn't (e.g., ref missing or ID invalid), it might be an ObjectId string.
     const sharedData = postDoc.sharedOriginalPostId;
-    if (sharedData && sharedData._id) { // Indicates it's a populated object
+    if (sharedData && sharedData._id) { 
       sharedOriginalPostIdString = sharedData._id.toString();
       sharedOriginalPostTransformed = {
-        ...sharedData,
         id: sharedOriginalPostIdString,
         author: transformAuthor(sharedData.author),
-        detailedReactions: sharedData.detailedReactions?.map(transformReaction) || [],
-        comments: [], // Keep shared post comments minimal in this context
-        repliesCount: sharedData.repliesCount || 0,
         content: sharedData.content || "",
-        createdAt: sharedData.createdAt?.toISOString(),
-        shares: sharedData.shares || 0,
         mediaUrl: sharedData.mediaUrl,
         mediaType: sharedData.mediaType,
-        blogShareDetails: sharedData.blogShareDetails, // Assuming BlogShareDetails doesn't need deep transformation here
-        // Other necessary fields from PostType
+        createdAt: sharedData.createdAt?.toISOString(),
+        detailedReactions: sharedData.detailedReactions?.map(transformReaction) || [],
+        shares: sharedData.shares || 0,
+        repliesCount: sharedData.repliesCount || 0,
+        comments: (sharedData.comments || []).map(transformComment).filter(c => c !== undefined) as CommentClientType[],
+        blogShareDetails: sharedData.blogShareDetails, 
+        tags: sharedData.tags,
+        teamSnapshot: sharedData.teamSnapshot,
+        // Ensure all other fields from PostType are present or defaulted
       };
-    } else if (sharedData) { // It's likely an ObjectId string
+    } else if (sharedData) { 
       sharedOriginalPostIdString = sharedData.toString();
     }
   }
 
   return {
-    ...postDoc,
     id: postDoc._id.toString(),
     author: transformAuthor(postDoc.author),
-    comments: postDoc.comments?.map(transformComment) || [],
-    detailedReactions: postDoc.detailedReactions?.map(transformReaction) || [],
-    sharedOriginalPostId: sharedOriginalPostIdString,
-    sharedOriginalPost: sharedOriginalPostTransformed,
-    createdAt: postDoc.createdAt?.toISOString(),
-    content: postDoc.content || "", // Ensure content is always a string
-    shares: postDoc.shares || 0,
-    repliesCount: postDoc.repliesCount || 0,
-    blogShareDetails: postDoc.blogShareDetails, // Pass through if present
-    // Ensure all other fields from PostType are present or defaulted
+    content: postDoc.content || "",
     mediaUrl: postDoc.mediaUrl,
     mediaType: postDoc.mediaType,
     teamSnapshot: postDoc.teamSnapshot,
     tags: postDoc.tags,
+    createdAt: postDoc.createdAt?.toISOString(),
+    detailedReactions: postDoc.detailedReactions?.map(transformReaction) || [],
+    shares: postDoc.shares || 0,
+    repliesCount: postDoc.repliesCount || 0,
+    comments: (postDoc.comments || []).map(transformComment).filter(c => c !== undefined) as CommentClientType[],
+    sharedOriginalPostId: sharedOriginalPostIdString,
+    sharedOriginalPost: sharedOriginalPostTransformed,
+    blogShareDetails: postDoc.blogShareDetails,
   };
 };
 
@@ -99,18 +100,18 @@ export async function GET() {
   try {
     const postsFromDB = await PostModel.find({})
       .populate({
-        path: 'author', // Mongoose uses authorModel from PostSchema
+        path: 'author', 
       })
       .populate({
         path: 'sharedOriginalPostId',
-        populate: { path: 'author' /* Mongoose uses authorModel from PostSchema for the shared post's author */ },
+        populate: { path: 'author' },
       })
       .populate({
         path: 'comments',
-        populate: { path: 'author' /* Mongoose uses authorModel from CommentSchema */ },
+        populate: { path: 'author' },
       })
       .sort({ createdAt: -1 })
-      .lean();
+      .lean({ virtuals: true }); // Ensure virtuals like 'id' are included if defined, though we manually map _id
 
     const transformedPosts = postsFromDB.map(transformPost);
     return NextResponse.json(transformedPosts);
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
         authorId?: string;
         mediaUrl?: string;
         mediaType?: 'image' | 'gif';
-        sharedOriginalPostId?: string; // This will be an ID string from client
+        sharedOriginalPostId?: string; 
         blogShareDetails?: BlogShareDetails;
     };
 
@@ -151,15 +152,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Author not found' }, { status: 404 });
     }
 
-    const newPostData: any = { // Use 'any' temporarily for Mongoose model creation
-      author: authorDoc._id, // Store ObjectId
+    const newPostData: any = { 
+      author: authorDoc._id, 
       authorModel: authorModelType,
-      content: content || "",
+      content: content || "", // Ensure content is at least an empty string if not provided
       detailedReactions: [],
       shares: 0,
       repliesCount: 0,
       comments: [],
-      // createdAt will be set by timestamps: true
     };
 
     if (mediaUrl) newPostData.mediaUrl = mediaUrl;
@@ -167,34 +167,32 @@ export async function POST(request: Request) {
     if (blogShareDetails) newPostData.blogShareDetails = blogShareDetails;
 
     if (sharedOriginalPostId) {
-      // Validate sharedOriginalPostId is a valid ObjectId string
       if (!mongoose.Types.ObjectId.isValid(sharedOriginalPostId)) {
         return NextResponse.json({ message: 'Invalid sharedOriginalPostId format' }, { status: 400 });
       }
       const originalPost = await PostModel.findById(sharedOriginalPostId);
       if (originalPost) {
-        newPostData.sharedOriginalPostId = originalPost._id; // Store ObjectId
+        newPostData.sharedOriginalPostId = originalPost._id; 
         originalPost.shares = (originalPost.shares || 0) + 1;
         await originalPost.save();
       } else {
         console.warn(`Original post with ID ${sharedOriginalPostId} not found for sharing count update.`);
-        // Decide if this should be an error or if post can be created without linking
-        // For now, let's allow creation but without the link if original is not found
-        delete newPostData.sharedOriginalPostId;
+        // Do not set sharedOriginalPostId if the original post is not found
       }
     }
 
     const post = new PostModel(newPostData);
     await post.save();
     
-    // Populate author for the response, and potentially the shared post if it was just created
     let populatedPost = await PostModel.findById(post._id)
       .populate({ path: 'author' })
-      .populate({ path: 'sharedOriginalPostId', populate: { path: 'author' }})
-      .lean();
+      .populate({ 
+          path: 'sharedOriginalPostId', 
+          populate: { path: 'author' }
+      })
+      .lean({ virtuals: true });
 
     if (!populatedPost) {
-        // This should ideally not happen if save was successful
         console.error(`[API/POSTS POST] Failed to re-fetch post ${post._id} after saving.`);
         return NextResponse.json({ message: 'Post created but failed to retrieve for response.' }, { status: 500 });
     }
