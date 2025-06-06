@@ -3,6 +3,10 @@ import { ThumbsUp, Heart, SmilePlus, Sparkles, Frown, Angry, type LucideIcon } f
 
 export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
 
+// Export this array for use in Mongoose enums
+export const reactionTypesArray: ReactionType[] = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
+
+
 export interface ReactionDefinition {
   type: ReactionType;
   label: string;
