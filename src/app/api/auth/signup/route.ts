@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import UserModel from '@/models/User.model';
-import type { User as UserType } from '@/types'; // Keep for request body typing
+import type { User as UserType } from '@/types'; 
 
 export async function POST(request: Request) {
   await dbConnect();
@@ -14,21 +14,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Username, email, and password are required' }, { status: 400 });
     }
 
-    const existingEmail = await UserModel.findOne({ email: email.toLowerCase() });
+    // MongoDB unique indexes will handle existingUser checks if configured correctly
+    // For better UX, checking here can provide more specific error messages
+
+    const existingEmail = await UserModel.findOne({ email: email.toLowerCase() }).lean();
     if (existingEmail) {
       return NextResponse.json({ message: 'User with this email already exists' }, { status: 409 });
     }
-    const existingUsername = await UserModel.findOne({ username: new RegExp(`^${username}$`, 'i') }); // Case-insensitive check
+    // Case-insensitive regex for username check
+    const existingUsername = await UserModel.findOne({ username: new RegExp(`^${username}$`, 'i') }).lean();
     if (existingUsername) {
       return NextResponse.json({ message: 'Username already taken' }, { status: 409 });
     }
-
-    // Password hashing should be done here or in pre-save hook
-    // For now, storing as is, but THIS IS NOT SECURE FOR PRODUCTION
+    
+    // Password will be hashed by the pre-save hook in User.model.ts
     const newUser = new UserModel({
       username,
       email: email.toLowerCase(),
-      password: password, // Store plain password for now, add hashing!
+      password: password, 
       sportInterests: sportInterests || [],
       profilePictureUrl: profilePictureUrl || `https://placehold.co/200x200.png?text=${username[0]?.toUpperCase() || 'U'}`,
       bannerImageUrl: bannerImageUrl || `https://placehold.co/1200x300.png?text=Banner`,
@@ -46,12 +49,10 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Signup API error:', error);
     if (error.code === 11000) { // MongoDB duplicate key error
-      if (error.keyPattern?.email) {
-        return NextResponse.json({ message: 'User with this email already exists.' }, { status: 409 });
-      }
-      if (error.keyPattern?.username) {
-        return NextResponse.json({ message: 'Username already taken.' }, { status: 409 });
-      }
+      let field = 'unknown';
+      if (error.keyPattern?.email) field = 'email';
+      if (error.keyPattern?.username) field = 'username';
+      return NextResponse.json({ message: `An account with this ${field} already exists.` }, { status: 409 });
     }
     return NextResponse.json({ message: error.message || 'An unexpected error occurred' }, { status: 500 });
   }

@@ -1,5 +1,6 @@
 
 import mongoose, { Schema, Document, models, Model } from 'mongoose';
+import bcrypt from 'bcryptjs';
 import type { User as UserType, SportInterest, SocialLink } from '@/types'; // Using UserType to avoid naming conflict
 
 // We need to define interfaces for Mongoose documents that extend our types and Mongoose's Document
@@ -10,6 +11,7 @@ export interface IUserSchema extends Omit<UserType, 'id' | 'sportInterests' | 's
   // Mongoose adds createdAt and updatedAt automatically with timestamps: true
   createdAt: Date;
   updatedAt: Date;
+  comparePassword: (candidatePassword: string) => Promise<boolean>;
 }
 
 const SportInterestSchema = new Schema<SportInterest>({
@@ -25,7 +27,7 @@ const SocialLinkSchema = new Schema<SocialLink>({
 const UserSchema = new Schema<IUserSchema>({
   username: { type: String, required: true, unique: true, trim: true, index: true },
   email: { type: String, required: true, unique: true, trim: true, lowercase: true, index: true },
-  password: { type: String, required: true }, // Password hashing should be handled via middleware
+  password: { type: String, required: true },
   profilePictureUrl: { type: String },
   bannerImageUrl: { type: String },
   socialLinks: [SocialLinkSchema],
@@ -55,19 +57,29 @@ const UserSchema = new Schema<IUserSchema>({
   }
 });
 
-// TODO: Add pre-save middleware for password hashing
-// UserSchema.pre('save', async function(next) {
-//   if (!this.isModified('password') || !this.password) {
-//     return next();
-//   }
-//   try {
-//     const salt = await bcrypt.genSalt(10);
-//     this.password = await bcrypt.hash(this.password, salt);
-//     return next();
-//   } catch (err) {
-//     return next(err as Error);
-//   }
-// });
+UserSchema.pre<IUserSchema>('save', async function(next) {
+  if (!this.isModified('password') || !this.password) {
+    return next();
+  }
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    return next();
+  } catch (err) {
+    // If err is not an Error instance, wrap it or pass a generic error
+    if (err instanceof Error) {
+        return next(err);
+    }
+    return next(new Error('Password hashing failed'));
+  }
+});
+
+UserSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
+  if (!this.password) {
+    return false;
+  }
+  return bcrypt.compare(candidatePassword, this.password);
+};
 
 // Ensure virtual 'id' is included
 UserSchema.virtual('id').get(function() {

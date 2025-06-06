@@ -5,8 +5,9 @@ import type { User as AppUserType, SportInterest } from '@/types';
 import React, { createContext, useContext, ReactNode, useCallback, useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { mockUsers, mockAdminUser } from '@/lib/mock-data';
-import { useRouter } from 'next/navigation'; // Import for redirects
+// mockUsers and mockAdminUser are no longer primary sources for login/signup
+// import { mockUsers, mockAdminUser } from '@/lib/mock-data'; 
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: AppUserType | null;
@@ -20,59 +21,66 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-async function updateUserDataInMock(userId: string, settings: Partial<AppUserType>): Promise<AppUserType> {
-  const userIndex = mockUsers.findIndex(u => u.id === userId);
-  if (userIndex === -1) {
-    throw new Error('User not found in mock data for update');
-  }
-  mockUsers[userIndex] = { ...mockUsers[userIndex], ...settings };
-  const { password, ...updatedUserNoPassword } = mockUsers[userIndex];
-  return updatedUserNoPassword as AppUserType;
-}
+// Mock function removed, actual API calls will be made for settings.
+// async function updateUserDataInMock(userId: string, settings: Partial<AppUserType>): Promise<AppUserType> { ... }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AppUserType | null>(null);
-  const [loading, setLoading] = useState(true); // For initial user check
+  const [loading, setLoading] = useState(true); // For initial user check from session/local storage
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  // Simulate checking for a logged-in user on mount (e.g., from localStorage or a persistent mock)
   useEffect(() => {
-    // For this simple mock, we can set the admin user as default or check localStorage
-    // For now, let's start with no user logged in unless we implement a persistent mock.
-    // To simulate admin always logged in for dev:
-    // setUser(mockAdminUser as AppUserType); 
+    // Simulate checking for a persisted session (e.g., from localStorage)
+    // For now, this simple example doesn't persist session across reloads.
+    // A real app would check a token or localStorage here.
+    // To persist user state for demo, you could use localStorage:
+    const storedUser = localStorage.getItem('stathustleUser');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        localStorage.removeItem('stathustleUser');
+      }
+    }
     setLoading(false);
   }, []);
 
+  const loginMutation = useMutation<AppUserType, Error, { emailOrUsername: string; password?: string }>({
+    mutationFn: async (credentials) => {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Login failed');
+      }
+      return response.json();
+    },
+  });
+
   const login = async (credentials: { emailOrUsername: string; password?: string }): Promise<AppUserType | null> => {
-    setLoading(true);
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const foundUser = mockUsers.find(
-      u => (u.email.toLowerCase() === credentials.emailOrUsername.toLowerCase() ||
-            u.username.toLowerCase() === credentials.emailOrUsername.toLowerCase()) &&
-           u.password === credentials.password // Simple password check for mock
-    );
-
-    if (foundUser) {
-      const { password, ...userToSet } = foundUser;
-      setUser(userToSet as AppUserType);
-      setLoading(false);
-      return userToSet as AppUserType;
-    } else {
+    try {
+      const loggedInUser = await loginMutation.mutateAsync(credentials);
+      setUser(loggedInUser);
+      localStorage.setItem('stathustleUser', JSON.stringify(loggedInUser)); // Persist user
+      return loggedInUser;
+    } catch (error: any) {
       setUser(null);
-      setLoading(false);
+      localStorage.removeItem('stathustleUser'); // Clear persisted user on error
+      // Toast is handled by the page component to show "Invalid email/username or password"
       return null;
     }
   };
 
   const logout = () => {
     setUser(null);
-    queryClient.clear(); // Clear react-query cache on logout
-    router.push('/login'); // Redirect to login page
+    localStorage.removeItem('stathustleUser'); // Clear persisted user
+    queryClient.clear(); 
+    router.push('/login'); 
   };
 
   const signupMutation = useMutation<AppUserType, Error, Omit<AppUserType, 'id' | 'themePreference' | 'isIdentity'> & { password?: string }>({
@@ -97,8 +105,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         title: "Account Created!",
         description: "You can now log in with your new credentials.",
       });
-      // Optionally, you could auto-login the user here by calling login()
-      // For now, redirect to login page
       router.push('/login');
       return signedUpUser;
     } catch (error: any) {
@@ -106,15 +112,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return null;
     }
   };
-
+  
   const updateSettingsMutation = useMutation<AppUserType, Error, Partial<AppUserType> & { userId: string }>({
-    mutationFn: (settingsWithId) => {
-       const { userId, ...settings } = settingsWithId;
-       // In a real app, this would be an API call. For mock, we update mockUsers directly.
-       return updateUserDataInMock(userId, settings);
+    mutationFn: async (settingsWithId) => {
+        // This API route doesn't exist yet in the migration to Mongoose.
+        // Placeholder for API call for user settings update
+        // For now, this will simulate local update and show success
+        // throw new Error("User settings update API endpoint not yet migrated to Mongoose.");
+        console.warn("User settings update API endpoint not yet migrated to Mongoose. Simulating local update.");
+        if (!user || user.id !== settingsWithId.userId) throw new Error("User mismatch or not logged in.");
+        const updatedLocalUser = { ...user, ...settingsWithId };
+        // Simulating a successful API response:
+        await new Promise(resolve => setTimeout(resolve, 300)); 
+        return updatedLocalUser as AppUserType;
     },
     onSuccess: (data) => {
-      setUser(data); // Update user in context
+      setUser(data);
+      localStorage.setItem('stathustleUser', JSON.stringify(data)); // Update persisted user
       toast({ title: "Settings Updated", description: "Your profile settings have been saved." });
       queryClient.invalidateQueries({ queryKey: ['profile', data.username] });
     },
@@ -123,12 +137,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     },
   });
 
+
   const updateUserSettings = useCallback(async (settings: Partial<Pick<AppUserType, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl'>>) => {
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to update settings.", variant: "destructive" });
       return null;
     }
     try {
+      // Note: The API for user settings update (/api/user/settings) still needs to be migrated to Mongoose.
+      // The mutationFn in updateSettingsMutation will need to call a Mongoose-backed API.
       const updatedUser = await updateSettingsMutation.mutateAsync({ ...settings, userId: user.id });
       return updatedUser;
     } catch (e) {
@@ -136,7 +153,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user, updateSettingsMutation, toast, queryClient]);
 
-  const isAuthActionLoading = signupMutation.isPending || updateSettingsMutation.isPending;
+  const isAuthActionLoading = loginMutation.isPending || signupMutation.isPending || updateSettingsMutation.isPending;
 
   return (
     <AuthContext.Provider value={{
@@ -145,8 +162,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       logout,
       signup,
       updateUserSettings,
-      loading, // General loading for context initialization
-      isAuthActionLoading, // Specific for form submissions
+      loading, 
+      isAuthActionLoading, 
     }}>
       {children}
     </AuthContext.Provider>
