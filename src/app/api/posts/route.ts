@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import mongoose from 'mongoose'; // Added mongoose import
+import mongoose from 'mongoose';
 import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
 import UserModel from '@/models/User.model';
@@ -10,39 +10,45 @@ import type { Post as PostType, User as UserType, Identity as IdentityType, Comm
 import { mockAdminUser } from '@/lib/mock-data';
 
 // Helper function to transform author data
-const transformAuthor = (authorDoc: any): UserType | IdentityType | undefined => {
-  if (!authorDoc || typeof authorDoc !== 'object' || !authorDoc._id) { 
-    return undefined;
+const transformAuthor = (authorData: any): UserType | IdentityType | undefined => {
+  if (!authorData) return undefined;
+  // Check if it's a populated document (has _id and is an object)
+  if (typeof authorData === 'object' && authorData._id) {
+    return {
+      id: authorData._id.toString(),
+      username: authorData.username || 'Unknown User',
+      profilePictureUrl: authorData.profilePictureUrl,
+      isIdentity: !!authorData.isIdentity,
+      displayName: authorData.displayName || authorData.username || 'Unknown Display Name',
+    };
   }
-  return {
-    id: authorDoc._id.toString(),
-    username: authorDoc.username || 'Unknown',
-    profilePictureUrl: authorDoc.profilePictureUrl,
-    isIdentity: !!authorDoc.isIdentity,
-    displayName: authorDoc.displayName || authorDoc.username || 'Unknown',
-  };
+  // If it's just an ObjectId string or Mongoose ObjectId type, population likely failed.
+  // console.warn(`[transformAuthor] Received unpopulated or malformed author data: ${JSON.stringify(authorData)}`);
+  return undefined;
 };
 
 // Helper function to transform reaction entries
 const transformReaction = (reactionDoc: any): ReactionEntryClientType => ({
-  userId: reactionDoc.userId?.toString(), // userId should be an ObjectId from schema, convert to string
+  userId: reactionDoc.userId?.toString(),
   reactionType: reactionDoc.reactionType,
   createdAt: reactionDoc.createdAt?.toISOString(),
 });
 
 // Helper function to transform comment data
-const transformComment = (commentDoc: any): CommentClientType | undefined => {
-  if (!commentDoc || typeof commentDoc !== 'object' || !commentDoc._id) {
-    return undefined;
+const transformComment = (commentData: any): CommentClientType | undefined => {
+  if (!commentData) return undefined;
+  if (typeof commentData === 'object' && commentData._id) {
+    return {
+      id: commentData._id.toString(),
+      author: transformAuthor(commentData.author),
+      content: commentData.content || "",
+      createdAt: commentData.createdAt?.toISOString(),
+      parentId: commentData.parentId?.toString(),
+      detailedReactions: commentData.detailedReactions?.map(transformReaction) || [],
+    };
   }
-  return {
-    id: commentDoc._id.toString(),
-    author: transformAuthor(commentDoc.author), // author should be populated
-    content: commentDoc.content || "",
-    createdAt: commentDoc.createdAt?.toISOString(),
-    parentId: commentDoc.parentId?.toString(),
-    detailedReactions: commentDoc.detailedReactions?.map(transformReaction) || [],
-  };
+  // console.warn(`[transformComment] Received unpopulated or malformed comment data: ${JSON.stringify(commentData)}`);
+  return undefined;
 };
 
 // Helper function to transform a single post
@@ -51,8 +57,8 @@ const transformPost = (postDoc: any): PostType => {
   let sharedOriginalPostIdString: string | undefined = undefined;
 
   if (postDoc.sharedOriginalPostId) {
-    const sharedData = postDoc.sharedOriginalPostId;
-    if (sharedData && sharedData._id) { 
+    const sharedData = postDoc.sharedOriginalPostId; // This should be the populated object
+    if (typeof sharedData === 'object' && sharedData !== null && sharedData._id) {
       sharedOriginalPostIdString = sharedData._id.toString();
       sharedOriginalPostTransformed = {
         id: sharedOriginalPostIdString,
@@ -64,19 +70,20 @@ const transformPost = (postDoc: any): PostType => {
         detailedReactions: sharedData.detailedReactions?.map(transformReaction) || [],
         shares: sharedData.shares || 0,
         repliesCount: sharedData.repliesCount || 0,
-        comments: (sharedData.comments || []).map(transformComment).filter(c => c !== undefined) as CommentClientType[],
-        blogShareDetails: sharedData.blogShareDetails, 
+        // Omit comments for shared post preview in the main feed to keep payload smaller
+        comments: [], // Or: (sharedData.comments || []).map(transformComment).filter(Boolean) as CommentClientType[],
+        blogShareDetails: sharedData.blogShareDetails,
         tags: sharedData.tags,
         teamSnapshot: sharedData.teamSnapshot,
-        // Ensure all other fields from PostType are present or defaulted
       };
-    } else if (sharedData) { 
+    } else if (sharedData) { // Is an ObjectId string or Mongoose ObjectId type
       sharedOriginalPostIdString = sharedData.toString();
+      // sharedOriginalPostTransformed remains undefined
     }
   }
 
   return {
-    id: postDoc._id.toString(),
+    id: postDoc._id.toString(), // Assuming _id is always present on postDoc
     author: transformAuthor(postDoc.author),
     content: postDoc.content || "",
     mediaUrl: postDoc.mediaUrl,
@@ -87,7 +94,7 @@ const transformPost = (postDoc: any): PostType => {
     detailedReactions: postDoc.detailedReactions?.map(transformReaction) || [],
     shares: postDoc.shares || 0,
     repliesCount: postDoc.repliesCount || 0,
-    comments: (postDoc.comments || []).map(transformComment).filter(c => c !== undefined) as CommentClientType[],
+    comments: (postDoc.comments || []).map(transformComment).filter(Boolean) as CommentClientType[],
     sharedOriginalPostId: sharedOriginalPostIdString,
     sharedOriginalPost: sharedOriginalPostTransformed,
     blogShareDetails: postDoc.blogShareDetails,
@@ -97,28 +104,45 @@ const transformPost = (postDoc: any): PostType => {
 
 export async function GET() {
   await dbConnect();
+  let currentProcessingPostId: string | null = null;
   try {
     const postsFromDB = await PostModel.find({})
       .populate({
-        path: 'author', 
+        path: 'author', // Populates author based on authorModel in each Post document
       })
       .populate({
         path: 'sharedOriginalPostId',
-        populate: { path: 'author' },
+        populate: {
+          path: 'author', // Populates author based on authorModel in each sharedOriginalPostId document
+        },
       })
       .populate({
         path: 'comments',
-        populate: { path: 'author' },
+        populate: {
+          path: 'author', // Populates author based on authorModel in each Comment sub-document
+        },
       })
       .sort({ createdAt: -1 })
-      .lean({ virtuals: true }); // Ensure virtuals like 'id' are included if defined, though we manually map _id
+      .lean({ virtuals: true });
 
-    const transformedPosts = postsFromDB.map(transformPost);
+    const transformedPosts = postsFromDB.map(postDoc => {
+      currentProcessingPostId = postDoc._id?.toString() || 'unknown';
+      try {
+        return transformPost(postDoc);
+      } catch (transformError: any) {
+        console.error(`[API/POSTS GET] Error transforming post with ID ${currentProcessingPostId}:`, transformError.message, transformError.stack);
+        console.error(`[API/POSTS GET] Problematic postDoc for ID ${currentProcessingPostId}:`, JSON.stringify(postDoc, null, 2));
+        // To avoid crashing the entire feed, we can return null or a special error object for this post
+        // For now, re-throwing to be caught by the outer handler, which will result in 500 for the whole request.
+        // Consider returning a partial list if one post fails.
+        throw transformError;
+      }
+    });
     return NextResponse.json(transformedPosts);
 
   } catch (error: any) {
-    console.error("[API/POSTS GET] Error fetching or transforming posts:", error, error.stack);
-    return NextResponse.json({ message: 'Error: Could not retrieve posts data.', error: error.message }, { status: 500 });
+    console.error(`[API/POSTS GET] Overall error. Last post ID processed or being processed: ${currentProcessingPostId || 'N/A'}. Error:`, error.message, error.stack);
+    return NextResponse.json({ message: 'Error: Could not retrieve posts data.', error: error.message, details: `Error occurred near post ID: ${currentProcessingPostId || 'N/A'}` }, { status: 500 });
   }
 }
 
@@ -130,11 +154,11 @@ export async function POST(request: Request) {
         authorId?: string;
         mediaUrl?: string;
         mediaType?: 'image' | 'gif';
-        sharedOriginalPostId?: string; 
+        sharedOriginalPostId?: string;
         blogShareDetails?: BlogShareDetails;
     };
 
-    const authorIdToUse = providedAuthorId || mockAdminUser.id; 
+    const authorIdToUse = providedAuthorId || mockAdminUser.id;
 
     if (!authorIdToUse || (!content && !sharedOriginalPostId && !blogShareDetails) ) {
       return NextResponse.json({ message: 'Author ID and content (or share details) are required' }, { status: 400 });
@@ -152,10 +176,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Author not found' }, { status: 404 });
     }
 
-    const newPostData: any = { 
-      author: authorDoc._id, 
+    const newPostData: any = {
+      author: authorDoc._id,
       authorModel: authorModelType,
-      content: content || "", // Ensure content is at least an empty string if not provided
+      content: content || "",
       detailedReactions: [],
       shares: 0,
       repliesCount: 0,
@@ -172,22 +196,21 @@ export async function POST(request: Request) {
       }
       const originalPost = await PostModel.findById(sharedOriginalPostId);
       if (originalPost) {
-        newPostData.sharedOriginalPostId = originalPost._id; 
+        newPostData.sharedOriginalPostId = originalPost._id;
         originalPost.shares = (originalPost.shares || 0) + 1;
         await originalPost.save();
       } else {
         console.warn(`Original post with ID ${sharedOriginalPostId} not found for sharing count update.`);
-        // Do not set sharedOriginalPostId if the original post is not found
       }
     }
 
     const post = new PostModel(newPostData);
     await post.save();
-    
+
     let populatedPost = await PostModel.findById(post._id)
       .populate({ path: 'author' })
-      .populate({ 
-          path: 'sharedOriginalPostId', 
+      .populate({
+          path: 'sharedOriginalPostId',
           populate: { path: 'author' }
       })
       .lean({ virtuals: true });
@@ -196,7 +219,7 @@ export async function POST(request: Request) {
         console.error(`[API/POSTS POST] Failed to re-fetch post ${post._id} after saving.`);
         return NextResponse.json({ message: 'Post created but failed to retrieve for response.' }, { status: 500 });
     }
-    
+
     return NextResponse.json(transformPost(populatedPost), { status: 201 });
 
   } catch (error: any) {
@@ -204,3 +227,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: error.message || 'An unexpected error occurred while creating the post.' }, { status: 500 });
   }
 }
+    
