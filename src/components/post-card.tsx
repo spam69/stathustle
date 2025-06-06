@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Repeat, Upload, MoreHorizontal, Award, Link2, Loader2, Heart, Newspaper, ArrowRight } from "lucide-react";
+import { MessageCircle, Repeat, MoreHorizontal, Award, Link2, Loader2, Newspaper, ArrowRight } from "lucide-react"; // Upload icon removed
 import type { Post } from "@/types";
 import { formatDistanceToNow } from 'date-fns';
 import { useEffect, useState, useRef } from 'react';
@@ -24,17 +24,11 @@ interface PostCardProps {
   isEmbedded?: boolean; 
 }
 
-// Local ClientSanitizedHtml definition removed, will use shared component
-
-
 export default function PostCard({ post: initialPost, isEmbedded = false }: PostCardProps) {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const {
-    addCommentToFeedPost,
     reactToPost, 
-    reactToComment,
-    isReactingToPost, 
     openCreatePostModal,
     fetchSinglePost,
     isPreparingShare,
@@ -49,7 +43,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     setCurrentPost(initialPost);
   }, [initialPost]);
 
-  const { author, content, createdAt, mediaUrl, mediaType, shares, repliesCount, detailedReactions, comments, sharedOriginalPostId, blogShareDetails } = currentPost;
+  const { author, content, createdAt, mediaUrl, mediaType, shares, repliesCount, detailedReactions, sharedOriginalPostId, blogShareDetails } = currentPost;
   const postToDisplayAsShared = currentPost.sharedOriginalPost;
 
   const authorUsername = author.username;
@@ -259,15 +253,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
               {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
               <span className="text-xs">{shares || 0}</span>
             </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-muted-foreground hover:text-blue-500 flex-1 justify-center" 
-              disabled={!currentUser || isPreparingShare || !!blogShareDetails}  // Disable if it's a blog share post
-              onClick={handleInitiateShare} 
-            >
-              {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Upload className="h-5 w-5" />}
-            </Button>
+            {/* Fourth button (Upload icon) removed */}
           </CardFooter>
         )}
       </Card>
@@ -283,4 +269,3 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     </>
   );
 }
-
