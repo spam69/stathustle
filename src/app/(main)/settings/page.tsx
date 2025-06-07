@@ -7,7 +7,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // Keep for other fields if any, or remove if not used
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -17,16 +16,14 @@ import type { SportInterest, User } from '@/types';
 import { availableSports, sportInterestLevels, mockIdentities } from '@/lib/mock-data';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Newspaper, Users, PlusCircle, Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import Image from 'next/image';
-import { handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState } from '@/lib/image-upload-utils';
+import { Newspaper, Users, PlusCircle, Loader2 } from 'lucide-react';
+// Image related imports removed: UploadCloud, X as CloseIcon, Image as ImageIcon, Avatar, AvatarFallback, AvatarImage, Image
+// Image util imports removed: handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState
 import { useToast } from '@/hooks/use-toast';
 
 const settingsSchema = z.object({
   bio: z.string().max(300, "Bio cannot exceed 300 characters.").optional().nullable(),
-  profilePictureUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')).nullable(),
-  bannerImageUrl: z.string().url({ message: "Invalid URL." }).optional().or(z.literal('')).nullable(),
+  // profilePictureUrl and bannerImageUrl removed from schema for this form
   sportInterests: z.array(z.object({
     sport: z.string(),
     level: z.enum(['very interested', 'somewhat interested', 'no interest']),
@@ -42,18 +39,14 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
 
-  const [profilePicState, setProfilePicState] = useState<ImageFileState>({ file: null, previewUrl: null, isUploading: false, uploadedUrl: null });
-  const [bannerState, setBannerState] = useState<ImageFileState>({ file: null, previewUrl: null, isUploading: false, uploadedUrl: null });
-
-  const profilePicInputRef = useRef<HTMLInputElement>(null);
-  const bannerInputRef = useRef<HTMLInputElement>(null);
+  // Removed profilePicState, bannerState, profilePicInputRef, bannerInputRef
 
   const form = useForm<SettingsFormValues>({
-    resolver: zodResolver(settingsSchema.omit({ username: true, email: true })),
+    resolver: zodResolver(settingsSchema), // Schema no longer includes username/email
     defaultValues: {
       bio: "",
-      profilePictureUrl: "",
-      bannerImageUrl: "",
+      // profilePictureUrl: "", // Removed
+      // bannerImageUrl: "", // Removed
       sportInterests: availableSports.map(sport => ({ sport, level: 'no interest' })),
       themePreference: theme || 'system',
     },
@@ -66,81 +59,37 @@ export default function SettingsPage() {
     if (user) {
       form.reset({
         bio: user.bio || "",
-        profilePictureUrl: user.profilePictureUrl || "",
-        bannerImageUrl: user.bannerImageUrl || "",
+        // profilePictureUrl: user.profilePictureUrl || "", // Removed
+        // bannerImageUrl: user.bannerImageUrl || "", // Removed
         sportInterests: user.sportInterests && user.sportInterests.length > 0 
           ? user.sportInterests 
           : availableSports.map(sport => ({ sport, level: 'no interest' })),
         themePreference: (user.themePreference as 'light' | 'dark' | 'system' || theme || 'system'),
       });
-      // Initialize previews with existing URLs if no new file is selected yet
-      if (!profilePicState.file && user.profilePictureUrl) {
-        setProfilePicState(prev => ({ ...prev, previewUrl: user.profilePictureUrl, uploadedUrl: user.profilePictureUrl }));
-      }
-      if (!bannerState.file && user.bannerImageUrl) {
-        setBannerState(prev => ({ ...prev, previewUrl: user.bannerImageUrl, uploadedUrl: user.bannerImageUrl }));
-      }
+      // Removed image state initialization logic
     }
   }, [user, authLoading, router, form, theme]);
 
   const onSubmit = async (data: SettingsFormValues) => {
     if (!user) return;
 
-    let finalProfilePicUrl = data.profilePictureUrl;
-    if (profilePicState.file) {
-      const uploadedUrl = await uploadImageToR2(profilePicState, setProfilePicState);
-      if (uploadedUrl) {
-        finalProfilePicUrl = uploadedUrl;
-      } else if (profilePicState.file) { // Upload failed for a new file
-        toast({ title: "Profile Picture Upload Failed", description: "Your profile picture was not uploaded. Please try again.", variant: "destructive"});
-        return; // Stop submission
-      }
-    } else if (profilePicState.previewUrl === null && data.profilePictureUrl !== null) { // Image was explicitly removed
-        finalProfilePicUrl = null;
-    }
-
-
-    let finalBannerUrl = data.bannerImageUrl;
-    if (bannerState.file) {
-      const uploadedUrl = await uploadImageToR2(bannerState, setBannerState);
-      if (uploadedUrl) {
-        finalBannerUrl = uploadedUrl;
-      } else if (bannerState.file) { // Upload failed
-         toast({ title: "Banner Image Upload Failed", description: "Your banner image was not uploaded. Please try again.", variant: "destructive"});
-        return; // Stop submission
-      }
-    } else if (bannerState.previewUrl === null && data.bannerImageUrl !== null) { // Image was explicitly removed
-        finalBannerUrl = null;
-    }
+    // Removed image upload logic and finalProfilePicUrl/finalBannerUrl
     
-
-    const settingsToUpdate: Partial<User> = {
-      ...data,
-      profilePictureUrl: finalProfilePicUrl,
-      bannerImageUrl: finalBannerUrl,
+    const settingsToUpdate: Partial<Pick<User, 'bio' | 'sportInterests' | 'themePreference'>> = {
+      bio: data.bio,
       sportInterests: data.sportInterests?.filter(interest => interest.level !== 'no interest') as SportInterest[],
+      themePreference: data.themePreference,
+      // profilePictureUrl and bannerImageUrl are no longer sent from this form
     };
     
     const updatedUser = await updateUserSettings(settingsToUpdate);
     if (updatedUser) {
       if (updatedUser.themePreference) setTheme(updatedUser.themePreference as 'light' | 'dark' | 'system');
-      // Reset file states as URLs are now persisted
-      if (updatedUser.profilePictureUrl) setProfilePicState({ file: null, previewUrl: updatedUser.profilePictureUrl, uploadedUrl: updatedUser.profilePictureUrl, isUploading: false });
-      else resetImageState(setProfilePicState);
-      if (updatedUser.bannerImageUrl) setBannerState({ file: null, previewUrl: updatedUser.bannerImageUrl, uploadedUrl: updatedUser.bannerImageUrl, isUploading: false });
-      else resetImageState(setBannerState);
+      // Removed reset of image states
     }
   };
 
-  const handleRemoveProfilePic = () => {
-    resetImageState(setProfilePicState);
-    form.setValue('profilePictureUrl', null); // Signal removal to form
-  };
-
-  const handleRemoveBanner = () => {
-    resetImageState(setBannerState);
-    form.setValue('bannerImageUrl', null);
-  };
+  // Removed handleRemoveProfilePic and handleRemoveBanner functions
 
   const userOwnedIdentity = user ? mockIdentities.find(identity => identity.owner.id === user.id) : null;
 
@@ -148,8 +97,7 @@ export default function SettingsPage() {
     return <div className="text-center p-10"><Loader2 className="h-8 w-8 animate-spin mx-auto" /> <p className="mt-2">Loading settings...</p></div>;
   }
   
-  const currentProfilePicDisplayUrl = profilePicState.previewUrl || user.profilePictureUrl;
-  const currentBannerDisplayUrl = bannerState.previewUrl || user.bannerImageUrl;
+  // Removed currentProfilePicDisplayUrl and currentBannerDisplayUrl
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -174,61 +122,8 @@ export default function SettingsPage() {
                 )}
               />
 
-              {/* Profile Picture Upload */}
-              <FormItem>
-                <FormLabel>Profile Picture</FormLabel>
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-20 w-20 border">
-                    <AvatarImage src={currentProfilePicDisplayUrl || undefined} alt="Profile Preview" />
-                    <AvatarFallback><ImageIcon className="h-8 w-8 text-muted-foreground" /></AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => profilePicInputRef.current?.click()} disabled={profilePicState.isUploading}>
-                      {profilePicState.isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      <UploadCloud className="mr-2 h-4 w-4" /> {profilePicState.file ? "Change" : "Upload"}
-                    </Button>
-                    <input type="file" ref={profilePicInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageFileChange(e, setProfilePicState)} />
-                    {(currentProfilePicDisplayUrl || profilePicState.file) && (
-                      <Button type="button" variant="ghost" size="sm" onClick={handleRemoveProfilePic} className="text-destructive hover:text-destructive/80" disabled={profilePicState.isUploading}>
-                        <CloseIcon className="mr-2 h-4 w-4" /> Remove
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                 {profilePicState.file && <p className="text-xs text-muted-foreground mt-1">Selected: {profilePicState.file.name}</p>}
-                <FormMessage>{form.formState.errors.profilePictureUrl?.message}</FormMessage>
-              </FormItem>
-
-              {/* Banner Image Upload */}
-              <FormItem>
-                <FormLabel>Banner Image</FormLabel>
-                <div className="space-y-2">
-                  {currentBannerDisplayUrl && (
-                    <div className="relative w-full h-32 rounded-md overflow-hidden border bg-muted">
-                      <Image src={currentBannerDisplayUrl} alt="Banner Preview" layout="fill" objectFit="cover" />
-                    </div>
-                  )}
-                  {!currentBannerDisplayUrl && !bannerState.file && (
-                     <div className="w-full h-32 rounded-md border border-dashed flex items-center justify-center bg-muted">
-                        <ImageIcon className="h-10 w-10 text-muted-foreground" />
-                     </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => bannerInputRef.current?.click()} disabled={bannerState.isUploading}>
-                      {bannerState.isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      <UploadCloud className="mr-2 h-4 w-4" /> {bannerState.file || currentBannerDisplayUrl ? "Change" : "Upload"}
-                    </Button>
-                    <input type="file" ref={bannerInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageFileChange(e, setBannerState)} />
-                    {(currentBannerDisplayUrl || bannerState.file) && (
-                      <Button type="button" variant="ghost" size="sm" onClick={handleRemoveBanner} className="text-destructive hover:text-destructive/80" disabled={bannerState.isUploading}>
-                        <CloseIcon className="mr-2 h-4 w-4" /> Remove
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                {bannerState.file && <p className="text-xs text-muted-foreground mt-1">Selected: {bannerState.file.name}</p>}
-                <FormMessage>{form.formState.errors.bannerImageUrl?.message}</FormMessage>
-              </FormItem>
+              {/* Profile Picture Upload Section Removed */}
+              {/* Banner Image Upload Section Removed */}
 
             </CardContent>
           </Card>
@@ -301,8 +196,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Button type="submit" className="w-full md:w-auto" disabled={isMainFormSubmitting || profilePicState.isUploading || bannerState.isUploading}>
-            {(isMainFormSubmitting || profilePicState.isUploading || bannerState.isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" className="w-full md:w-auto" disabled={isMainFormSubmitting}>
+            {isMainFormSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save Changes
           </Button>
         </form>
