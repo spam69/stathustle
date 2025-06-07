@@ -283,7 +283,6 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
 
         {!isEmbedded && (
            <CardFooter className="flex flex-col p-0">
-            {(totalReactionsCount > 0 || repliesCount > 0 || shares > 0) && (
               <div className="flex justify-between items-center w-full px-4 py-2.5 text-xs text-muted-foreground">
                 <div className="flex items-center">
                   {totalReactionsCount > 0 ? (
@@ -296,19 +295,14 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                       <span className="hover:underline cursor-pointer">{totalReactionsCount}</span>
                     </>
                   ) : (
-                     <span className="h-[14px]">&nbsp;</span> // Maintain height if no reactions but other counts exist
+                     <span className="h-[14px]">0 Reacts</span> // Maintain height if no reactions but other counts exist
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  {repliesCount > 0 && (
                     <span className="hover:underline cursor-pointer" onClick={handleToggleCommentsModal}>{pluralize(repliesCount, 'comment', 'comments')}</span>
-                  )}
-                  {shares > 0 && (
                     <span className="hover:underline cursor-pointer">{pluralize(shares, 'share', 'shares')}</span>
-                  )}
                 </div>
               </div>
-            )}
 
             {(totalReactionsCount > 0 || repliesCount > 0 || shares > 0) && (
               <Separator className="my-0 bg-border/50" />
@@ -326,7 +320,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                   />
               </div>
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center py-2 h-auto" onClick={handleToggleCommentsModal}>
-                <MessageCircle className="h-5 w-5 mr-1.5" /> <span className="text-xs">Comment</span>
+                <MessageCircle className="h-5 w-5 mr-1.5" />
               </Button>
               <Button 
                 variant="ghost" 
@@ -336,7 +330,6 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                 onClick={handleInitiateShare}
               >
                 {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
-                <span className="text-xs">Share</span>
               </Button>
             </div>
           </CardFooter>

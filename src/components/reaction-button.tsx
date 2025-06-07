@@ -76,10 +76,7 @@ export default function ReactionButton({
       });
   }, [reactionCounts]);
 
-  const totalReactions = reactions.length;
-
   const TriggerButtonIcon = currentUserReactionDef ? currentUserReactionDef.Icon : ThumbsUp;
-  const triggerButtonLabel = currentUserReactionDef ? currentUserReactionDef.label : "React";
   const triggerButtonColorClass = currentUserReactionDef ? currentUserReactionDef.colorClass : "text-muted-foreground";
 
   return (
@@ -98,7 +95,7 @@ export default function ReactionButton({
             )}
           >
             <TriggerButtonIcon className={cn("mr-1.5", buttonSize === 'xs' ? "h-3.5 w-3.5" : "h-4 w-4")} />
-            {buttonSize !== 'xs' && triggerButtonLabel}
+            {buttonSize !== 'xs'}
           </Button>
         </PopoverTrigger>
         <PopoverContent side={popoverSide} className="w-auto p-1 rounded-full shadow-xl bg-background border border-border" sideOffset={5}>
@@ -122,15 +119,6 @@ export default function ReactionButton({
           </div>
         </PopoverContent>
       </Popover>
-
-      {totalReactions > 0 && (
-        <div className="flex items-center text-xs text-muted-foreground mt-1 pl-1">
-          {topReactions.map(r => (
-            <r.Icon key={r.type} className={cn("h-3.5 w-3.5 -ml-0.5", r.colorClass)} />
-          ))}
-          <span className="ml-1.5">{totalReactions}</span>
-        </div>
-      )}
     </div>
   );
 }
