@@ -99,19 +99,6 @@ export default function SidebarNav() {
         </SidebarMenu>
       </SidebarGroup>
       
-      {user && (
-        <SidebarGroup className="px-2 py-4 group-data-[collapsible=icon]:px-1">
-            <Button 
-                variant="default" 
-                className="w-full h-12 rounded-full font-headline text-lg group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:p-0"
-                onClick={() => openCreatePostModal()}
-            >
-                <PlusSquare className="h-6 w-6 group-data-[collapsible=expanded]:mr-2" />
-                <span className="group-data-[collapsible=icon]:hidden">Post</span>
-            </Button>
-        </SidebarGroup>
-      )}
-      
       <div className="mt-auto">
         <SidebarGroup className="p-2">
           <SidebarMenu className="gap-1">
