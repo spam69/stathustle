@@ -1,5 +1,5 @@
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
 import UserModel from '@/models/User.model';
@@ -7,7 +7,6 @@ import IdentityModel from '@/models/Identity.model';
 import { createNotification } from '@/lib/mock-data';
 import type { ReactionEntry, User as UserType, Identity as IdentityType, Post as PostType } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
-import { mockAdminUser } from '@/lib/mock-data'; // Placeholder for authenticated user
 import mongoose from 'mongoose';
 
 // Helper to transform populated post to client-side PostType
@@ -17,12 +16,18 @@ const transformPostForClient = async (postDoc: any): Promise<PostType | null> =>
   const transformAuthor = async (authorRef: any, authorModelType: 'User' | 'Identity'): Promise<UserType | IdentityType | undefined> => {
     if (!authorRef) return undefined;
     const Model = authorModelType === 'User' ? UserModel : IdentityModel;
-    const author = await Model.findById(authorRef._id || authorRef).lean();
+    // Ensure authorRef itself is not already the final object due to .lean() on parent and direct assignment
+    const authorIdToFetch = authorRef._id || authorRef;
+    const author = await Model.findById(authorIdToFetch).lean();
     if (!author) return undefined;
     return {
       ...author,
       id: author._id.toString(),
       isIdentity: authorModelType === 'Identity',
+      // Ensure all required fields for UserType/IdentityType are present or defaulted
+      username: author.username || 'Unknown',
+      profilePictureUrl: author.profilePictureUrl,
+      displayName: author.displayName,
     } as UserType | IdentityType;
   };
 
@@ -33,33 +38,36 @@ const transformPostForClient = async (postDoc: any): Promise<PostType | null> =>
   });
 
   const author = await transformAuthor(postDoc.author, postDoc.authorModel);
-  if (!author) return null; // Critical: post must have a valid author
+  if (!author) {
+    console.error(`[API/POSTS/${postDoc._id}/REACT] Post author could not be transformed. AuthorRef:`, postDoc.author, `AuthorModel:`, postDoc.authorModel);
+    return null; 
+  }
 
   let sharedOriginalPostTransformed: PostType | undefined = undefined;
-  if (postDoc.sharedOriginalPostId) {
-    const sharedPostDoc = await PostModel.findById(postDoc.sharedOriginalPostId)
-      .populate('author') // Relies on authorModel in shared post
-      .lean();
-    if (sharedPostDoc) {
-      const sharedAuthor = await transformAuthor(sharedPostDoc.author, sharedPostDoc.authorModel);
-      if (sharedAuthor) {
-        sharedOriginalPostTransformed = {
-          ...sharedPostDoc,
-          id: sharedPostDoc._id.toString(),
-          author: sharedAuthor,
-          detailedReactions: (sharedPostDoc.detailedReactions || []).map(transformReaction),
-          comments: [], // Simplified for shared post preview
-          createdAt: sharedPostDoc.createdAt?.toISOString(),
-          content: sharedPostDoc.content,
-          shares: sharedPostDoc.shares,
-          repliesCount: sharedPostDoc.repliesCount,
-          mediaUrl: sharedPostDoc.mediaUrl,
-          mediaType: sharedPostDoc.mediaType,
-          blogShareDetails: sharedPostDoc.blogShareDetails,
-        };
-      }
+  if (postDoc.sharedOriginalPostId && typeof postDoc.sharedOriginalPostId === 'object' && postDoc.sharedOriginalPostId !== null) {
+    // If sharedOriginalPostId is already a populated object (due to .populate().lean())
+    const sharedPostDoc = postDoc.sharedOriginalPostId;
+    const sharedAuthor = await transformAuthor(sharedPostDoc.author, sharedPostDoc.authorModel);
+    if (sharedAuthor) {
+      sharedOriginalPostTransformed = {
+        ...sharedPostDoc,
+        id: sharedPostDoc._id.toString(),
+        author: sharedAuthor,
+        detailedReactions: (sharedPostDoc.detailedReactions || []).map(transformReaction),
+        comments: [], 
+        createdAt: sharedPostDoc.createdAt?.toISOString(),
+        content: sharedPostDoc.content,
+        shares: sharedPostDoc.shares,
+        repliesCount: sharedPostDoc.repliesCount,
+        mediaUrl: sharedPostDoc.mediaUrl,
+        mediaType: sharedPostDoc.mediaType,
+        blogShareDetails: sharedPostDoc.blogShareDetails,
+      };
     }
+  } else if (postDoc.sharedOriginalPostId) {
+     // If it's just an ID, it won't be transformed here, client might need to fetch or it's pre-populated
   }
+
 
   return {
     id: postDoc._id.toString(),
@@ -73,8 +81,8 @@ const transformPostForClient = async (postDoc: any): Promise<PostType | null> =>
     detailedReactions: (postDoc.detailedReactions || []).map(transformReaction),
     shares: postDoc.shares,
     repliesCount: postDoc.repliesCount,
-    comments: [], // Comments are typically fetched separately or on demand for feed performance
-    sharedOriginalPostId: postDoc.sharedOriginalPostId?.toString(),
+    comments: [], 
+    sharedOriginalPostId: postDoc.sharedOriginalPostId?._id?.toString() || postDoc.sharedOriginalPostId?.toString(),
     sharedOriginalPost: sharedOriginalPostTransformed,
     blogShareDetails: postDoc.blogShareDetails,
   };
@@ -82,24 +90,23 @@ const transformPostForClient = async (postDoc: any): Promise<PostType | null> =>
 
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { postId: string } }
 ) {
   await dbConnect();
   try {
     const { postId } = params;
-    const { reactionType } = (await request.json()) as { reactionType: ReactionType | null };
+    const { reactionType, userId: reactingUserId } = (await request.json()) as { reactionType: ReactionType | null, userId: string };
     
-    // --- Placeholder for authenticated user ---
-    // In a real app, get reactingUserId from session/token
-    const reactingUserId = mockAdminUser.id; 
     if (!reactingUserId) {
-      return NextResponse.json({ message: 'Authentication required.' }, { status: 401 });
+      return NextResponse.json({ message: 'User ID is required to react.' }, { status: 400 });
     }
-    // --- End Placeholder ---
-
+    
     if (!mongoose.Types.ObjectId.isValid(postId)) {
       return NextResponse.json({ message: 'Invalid Post ID format' }, { status: 400 });
+    }
+    if (!mongoose.Types.ObjectId.isValid(reactingUserId)) {
+      return NextResponse.json({ message: 'Invalid User ID format for reactor' }, { status: 400 });
     }
 
     const post = await PostModel.findById(postId).populate('author'); // Populate author for notification check
@@ -112,6 +119,7 @@ export async function POST(
     if (!reactingUserDoc) {
       return NextResponse.json({ message: 'Reacting user not found' }, { status: 404 });
     }
+    // Ensure reactingUserDoc has an id string property for comparison and notification
     const reactingUser = { ...reactingUserDoc, id: reactingUserDoc._id.toString() } as UserType | IdentityType;
 
 
@@ -120,7 +128,7 @@ export async function POST(
     }
 
     const existingReactionIndex = post.detailedReactions.findIndex(
-      r => r.userId.toString() === reactingUser.id // Compare with string ID from fetched user
+      r => r.userId.toString() === reactingUser.id 
     );
 
     let previousReactionType: ReactionType | null = null;
@@ -142,7 +150,7 @@ export async function POST(
         }
       } else { // New reaction
         post.detailedReactions.push({
-          userId: reactingUserDoc._id, // Store ObjectId of the reacting user
+          userId: reactingUserDoc._id, 
           reactionType,
           createdAt: new Date(),
         });
@@ -152,25 +160,38 @@ export async function POST(
     await post.save();
 
     // Notification logic
-    // The post.author is already populated.
-    // Ensure post.author has _id (it should if populated correctly)
     if (post.author && post.author._id && reactingUser.id.toString() !== post.author._id.toString()) {
       if (reactionType && reactionType !== previousReactionType) {
+        // Ensure post.author is an object with _id, not just an ObjectId string after lean().
+        // If populated correctly, post.author is an object.
         const postAuthorObject = post.author.toObject ? post.author.toObject() : post.author;
-        createNotification(
-            'new_reaction_post', 
-            reactingUser, 
-            postAuthorObject._id.toString(), 
-            // To pass PostType, we need to transform the post document
-            // For simplicity in notification data, we might only pass essential fields or ID
-            { ...post.toObject(), id: post._id.toString(), author: postAuthorObject } as PostType
-        );
+        if (postAuthorObject && postAuthorObject._id) {
+            createNotification(
+                'new_reaction_post', 
+                reactingUser, 
+                postAuthorObject._id.toString(), 
+                { ...post.toObject(), id: post._id.toString(), author: postAuthorObject } as PostType
+            );
+        } else {
+            console.warn(`[API/POSTS/${postId}/REACT] Post author data incomplete for notification. Author:`, post.author);
+        }
       }
     }
     
-    const clientPost = await transformPostForClient(post);
+    // Re-fetch the post to get all populations correctly for the client transformation
+    const updatedPostFromDB = await PostModel.findById(postId)
+      .populate({ path: 'author' })
+      .populate({ path: 'sharedOriginalPostId', populate: { path: 'author' }})
+      // Comments are not directly returned with post reactions, client usually refetches if needed or updates local state
+      .lean();
+
+    if(!updatedPostFromDB){
+        return NextResponse.json({ message: 'Error processing post after reaction: Post not found after save.' }, { status: 500 });
+    }
+    
+    const clientPost = await transformPostForClient(updatedPostFromDB);
     if (!clientPost) {
-        return NextResponse.json({ message: 'Error processing post after reaction.' }, { status: 500 });
+        return NextResponse.json({ message: 'Error processing post after reaction: Transformation failed.' }, { status: 500 });
     }
     return NextResponse.json(clientPost);
 

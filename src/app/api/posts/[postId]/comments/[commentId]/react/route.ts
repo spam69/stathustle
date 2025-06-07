@@ -1,34 +1,41 @@
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
 import CommentModel from '@/models/Comment.model';
 import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
 import { createNotification } from '@/lib/mock-data';
-import type { ReactionEntry, User as UserType, Identity as IdentityType, Post as PostType, Comment as CommentType } from '@/types';
+import type { ReactionEntry, User as UserType, Identity as IdentityType, Post as PostType, Comment as CommentTypeClient } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
-import { mockAdminUser } from '@/lib/mock-data'; // Placeholder
 import mongoose from 'mongoose';
 
-// Helper to transform populated post to client-side PostType
-// This is a simplified version for context, main post transformation is complex
-const transformCommentAuthor = async (authorRef: any, authorModelType: 'User' | 'Identity'): Promise<UserType | IdentityType | undefined> => {
+// Helper to transform author for client consumption
+const transformClientAuthor = async (authorRef: any, authorModelType: 'User' | 'Identity'): Promise<UserType | IdentityType | undefined> => {
   if (!authorRef) return undefined;
   const Model = authorModelType === 'User' ? UserModel : IdentityModel;
-  const author = await Model.findById(authorRef._id || authorRef).lean();
+  // Ensure authorRef itself is not already the final object due to .lean() on parent and direct assignment
+  const authorIdToFetch = authorRef._id || authorRef;
+  const author = await Model.findById(authorIdToFetch).lean();
   if (!author) return undefined;
   return {
     ...author,
     id: author._id.toString(),
     isIdentity: authorModelType === 'Identity',
+    username: author.username || 'Unknown',
+    profilePictureUrl: author.profilePictureUrl,
+    displayName: author.displayName,
   } as UserType | IdentityType;
 };
 
-const transformClientComment = async (commentDoc: any): Promise<CommentType | null> => {
+// Helper to transform comment for client consumption
+const transformClientComment = async (commentDoc: any): Promise<CommentTypeClient | null> => {
     if (!commentDoc) return null;
-    const author = await transformCommentAuthor(commentDoc.author, commentDoc.authorModel);
-    if (!author) return null;
+    const author = await transformClientAuthor(commentDoc.author, commentDoc.authorModel);
+    if (!author) {
+        console.warn(`[API/REACT_COMMENT] Failed to transform author for comment ${commentDoc._id}. AuthorRef:`, commentDoc.author, `AuthorModel:`, commentDoc.authorModel);
+        return null;
+    }
 
     return {
         id: commentDoc._id.toString(),
@@ -44,28 +51,81 @@ const transformClientComment = async (commentDoc: any): Promise<CommentType | nu
     };
 };
 
+// Helper to transform the entire post for client consumption
+const transformPostForClient = async (postDoc: any): Promise<PostType | null> => {
+  if (!postDoc) return null;
+  const postAuthor = await transformClientAuthor(postDoc.author, postDoc.authorModel);
+  if (!postAuthor) {
+    console.error(`[API/REACT_COMMENT] Post author could not be transformed for post ${postDoc._id}. AuthorRef:`, postDoc.author, `AuthorModel:`, postDoc.authorModel);
+    return null; // Or handle as appropriate
+  }
+
+  const clientComments = await Promise.all(
+      (postDoc.comments || []).map(async (c: any) => await transformClientComment(c))
+  );
+  
+  let sharedOriginalPostTransformed: PostType | undefined = undefined;
+  if (postDoc.sharedOriginalPostId && typeof postDoc.sharedOriginalPostId === 'object' && postDoc.sharedOriginalPostId !== null) {
+    const sharedPostDoc = postDoc.sharedOriginalPostId;
+    const sharedAuthor = await transformClientAuthor(sharedPostDoc.author, sharedPostDoc.authorModel);
+    if (sharedAuthor) {
+      sharedOriginalPostTransformed = {
+        ...sharedPostDoc,
+        id: sharedPostDoc._id.toString(),
+        author: sharedAuthor,
+        content: sharedPostDoc.content,
+        mediaUrl: sharedPostDoc.mediaUrl,
+        mediaType: sharedPostDoc.mediaType,
+        createdAt: sharedPostDoc.createdAt?.toISOString(),
+        detailedReactions: (sharedPostDoc.detailedReactions || []).map((r: any) => ({ userId: r.userId?.toString(), reactionType: r.reactionType, createdAt: r.createdAt?.toISOString() })),
+        shares: sharedPostDoc.shares,
+        repliesCount: sharedPostDoc.repliesCount,
+        comments: [], // Simplified for shared post preview
+        blogShareDetails: sharedPostDoc.blogShareDetails,
+        tags: sharedPostDoc.tags,
+        teamSnapshot: sharedPostDoc.teamSnapshot,
+      };
+    }
+  }
+
+  return {
+      ...postDoc,
+      id: postDoc._id.toString(),
+      author: postAuthor,
+      comments: clientComments.filter(c => c !== null) as CommentTypeClient[],
+      detailedReactions: (postDoc.detailedReactions || []).map((r: any) => ({
+          userId: r.userId?.toString(),
+          reactionType: r.reactionType,
+          createdAt: r.createdAt?.toISOString(),
+      })),
+      createdAt: postDoc.createdAt.toISOString(),
+      sharedOriginalPostId: postDoc.sharedOriginalPostId?._id?.toString() || postDoc.sharedOriginalPostId?.toString(),
+      sharedOriginalPost: sharedOriginalPostTransformed,
+  };
+};
+
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { postId: string; commentId: string } }
 ) {
   await dbConnect();
   try {
     const { postId, commentId } = params;
-    const { reactionType } = (await request.json()) as { reactionType: ReactionType | null };
+    const { reactionType, userId: reactingUserId } = (await request.json()) as { reactionType: ReactionType | null, userId: string };
     
-    // --- Placeholder for authenticated user ---
-    const reactingUserId = mockAdminUser.id; 
-     if (!reactingUserId) {
-      return NextResponse.json({ message: 'Authentication required.' }, { status: 401 });
+    if (!reactingUserId) {
+      return NextResponse.json({ message: 'User ID is required to react.' }, { status: 400 });
     }
-    // --- End Placeholder ---
-
+    
     if (!mongoose.Types.ObjectId.isValid(postId)) {
       return NextResponse.json({ message: 'Invalid Post ID format' }, { status: 400 });
     }
     if (!mongoose.Types.ObjectId.isValid(commentId)) {
       return NextResponse.json({ message: 'Invalid Comment ID format' }, { status: 400 });
+    }
+    if (!mongoose.Types.ObjectId.isValid(reactingUserId)) {
+      return NextResponse.json({ message: 'Invalid User ID format for reactor' }, { status: 400 });
     }
 
     const comment = await CommentModel.findById(commentId).populate('author');
@@ -73,18 +133,16 @@ export async function POST(
       return NextResponse.json({ message: 'Comment not found' }, { status: 404 });
     }
     
-    const post = await PostModel.findById(postId).populate('author'); // For notification context & returning updated post
+    const post = await PostModel.findById(postId).populate('author'); 
     if (!post) {
       return NextResponse.json({ message: 'Parent post not found' }, { status: 404 });
     }
 
-    // Fetch the reacting user/identity from DB
     let reactingUserDoc = await UserModel.findById(reactingUserId).lean() || await IdentityModel.findById(reactingUserId).lean();
     if (!reactingUserDoc) {
       return NextResponse.json({ message: 'Reacting user not found' }, { status: 404 });
     }
     const reactingUser = { ...reactingUserDoc, id: reactingUserDoc._id.toString() } as UserType | IdentityType;
-
 
     if (!comment.detailedReactions) {
       comment.detailedReactions = [];
@@ -99,21 +157,21 @@ export async function POST(
       previousReactionType = comment.detailedReactions[existingReactionIndex].reactionType;
     }
 
-    if (reactionType === null) { // Unreact
+    if (reactionType === null) { 
       if (existingReactionIndex !== -1) {
         comment.detailedReactions.splice(existingReactionIndex, 1);
       }
-    } else { // React or change reaction
+    } else { 
       if (existingReactionIndex !== -1) {
-        if (comment.detailedReactions[existingReactionIndex].reactionType === reactionType) { // Clicked same
+        if (comment.detailedReactions[existingReactionIndex].reactionType === reactionType) { 
           comment.detailedReactions.splice(existingReactionIndex, 1);
-        } else { // Changed
+        } else { 
           comment.detailedReactions[existingReactionIndex].reactionType = reactionType;
           comment.detailedReactions[existingReactionIndex].createdAt = new Date();
         }
-      } else { // New
+      } else { 
         comment.detailedReactions.push({
-          userId: reactingUserDoc._id, // Store ObjectId
+          userId: reactingUserDoc._id, 
           reactionType,
           createdAt: new Date(),
         });
@@ -121,17 +179,13 @@ export async function POST(
     }
     await comment.save();
 
-    // Notification logic
-    // comment.author is populated from CommentModel.findById().populate('author')
-    // Ensure comment.author has _id (it should if populated correctly)
     if (comment.author && comment.author._id && reactingUser.id.toString() !== comment.author._id.toString()) {
       if (reactionType && reactionType !== previousReactionType) {
          const commentAuthorObject = comment.author.toObject ? comment.author.toObject() : comment.author;
          const postAuthorObject = post.author.toObject ? post.author.toObject() : post.author;
          
-         // Transform comment for notification
          const clientCommentForNotification = await transformClientComment(comment.toObject());
-         if (clientCommentForNotification) {
+         if (clientCommentForNotification && postAuthorObject?._id) {
             createNotification(
                 'new_reaction_comment',
                 reactingUser,
@@ -139,64 +193,32 @@ export async function POST(
                 { ...post.toObject(), id: post._id.toString(), author: postAuthorObject } as PostType,
                 clientCommentForNotification
             );
+         } else {
+           console.warn(`[API/REACT_COMMENT] Notification for comment reaction skipped. Missing data. CommentAuthor:`, commentAuthorObject, `PostAuthor:`, postAuthorObject, `ClientComment:`, clientCommentForNotification)
          }
       }
     }
 
-    // Fetch the updated post to return, ensuring the comment changes are reflected
     const updatedPost = await PostModel.findById(postId)
-      .populate({ 
-        path: 'author', 
-        // model: post.authorModel === 'User' ? UserModel : IdentityModel // Relies on authorModel on Post
-      })
+      .populate({ path: 'author' })
       .populate({
         path: 'comments',
-        populate: { 
-          path: 'author', 
-          // model: CommentModel uses its own refPath 'authorModel'
-        }
+        populate: { path: 'author' }
       })
       .populate({
         path: 'sharedOriginalPostId',
-        populate: { 
-          path: 'author', 
-          // model: PostModel uses its own refPath 'authorModel' for shared posts
-        }
+        populate: { path: 'author' }
       })
       .lean();
     
-    // This part is complex due to needing to re-transform the entire post structure for the client.
-    // For simplicity of this API, we are relying on the client's cache invalidation and refetch of the post
-    // to get the most up-to-date comment reactions.
-    // However, a more robust API would return the fully transformed post.
-    // For now, let's construct a simplified version of the updated post for return.
-
     if (!updatedPost) {
-        return NextResponse.json({ message: 'Failed to retrieve updated post.' }, { status: 500 });
+        return NextResponse.json({ message: 'Failed to retrieve updated post after comment reaction.' }, { status: 500 });
     }
     
-    const clientPostAuthor = await transformCommentAuthor(updatedPost.author, updatedPost.authorModel);
-    if (!clientPostAuthor) return NextResponse.json({ message: 'Failed to process post author.' }, { status: 500 });
-
-    const clientComments = await Promise.all(
-        (updatedPost.comments || []).map(async (c: any) => await transformClientComment(c))
-    );
-
-    const finalPostForClient: PostType = {
-        ...updatedPost,
-        id: updatedPost._id.toString(),
-        author: clientPostAuthor,
-        comments: clientComments.filter(c => c !== null) as CommentType[],
-        detailedReactions: (updatedPost.detailedReactions || []).map((r: any) => ({
-            userId: r.userId?.toString(),
-            reactionType: r.reactionType,
-            createdAt: r.createdAt?.toISOString(),
-        })),
-        createdAt: updatedPost.createdAt.toISOString(),
-        // Handle sharedOriginalPost if present
-        sharedOriginalPostId: updatedPost.sharedOriginalPostId?._id?.toString(),
-        // sharedOriginalPost: (if populated, would need similar transformation)
-    };
+    const finalPostForClient = await transformPostForClient(updatedPost);
+     if (!finalPostForClient) {
+        return NextResponse.json({ message: 'Error transforming post after comment reaction.' }, { status: 500 });
+    }
     
     return NextResponse.json(finalPostForClient);
 

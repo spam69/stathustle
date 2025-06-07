@@ -63,7 +63,7 @@ const fetchPostsAPI = async (): Promise<Post[]> => {
 const createPostAPI = async (newPostData: { content: string; authorId: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string, blogShareDetails?: BlogShareDetails }): Promise<Post> => {
   const response = await fetch('/api/posts', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' }, // Token will be added by middleware or directly if needed
     body: JSON.stringify(newPostData),
   });
   if (!response.ok) {
@@ -77,7 +77,7 @@ const addCommentAPI = async (commentData: { postId: string; content: string; aut
   const { postId, ...payload } = commentData;
   const response = await fetch(`/api/posts/${postId}/comments`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' }, // Token will be added by middleware or directly
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
@@ -129,7 +129,7 @@ interface FeedProviderProps {
 }
 
 export const FeedProvider = ({ children }: FeedProviderProps) => {
-  const { user } = useAuth();
+  const { user } = useAuth(); // Removed token from here as it's not used directly in this context after JWT removal
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
@@ -179,7 +179,7 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
   }, [queryClient, toast]);
 
   const openCreatePostModal = useCallback(async (data?: { postToShare?: Post; blogToShare?: BlogShareDetails }) => {
-    if (isPreparingShare && !data?.blogToShare) return; // Only allow blog shares to bypass isPreparingShare for now
+    if (isPreparingShare && !data?.blogToShare) return; 
 
     if (data?.postToShare) {
       setIsPreparingShare(true);
@@ -206,7 +206,7 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     } else if (data?.blogToShare) {
       setPostToShare(null);
       setPendingBlogShare(data.blogToShare);
-      setIsPreparingShare(false); // No async prep needed for blog details
+      setIsPreparingShare(false); 
     } else {
       setPostToShare(null);
       setPendingBlogShare(null);
