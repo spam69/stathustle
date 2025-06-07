@@ -9,7 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { MessageCircle, Repeat, MoreHorizontal, Award, Link2, Loader2, Newspaper, ArrowRight } from "lucide-react";
 import type { Post } from "@/types";
 import { formatDistanceToNow } from 'date-fns';
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react'; // Added React and useMemo
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import CommentsModal from './comments-modal';
@@ -18,11 +18,22 @@ import ReactionButton from './reaction-button';
 import { useFeed } from '@/contexts/feed-context';
 import { Skeleton } from './ui/skeleton'; 
 import ClientSanitizedHtml from './client-sanitized-html'; 
+import { Separator } from "@/components/ui/separator"; // Added Separator
+import { cn } from "@/lib/utils"; // Added cn
+import { type ReactionType, getReactionDefinition, REACTION_DEFINITIONS } from '@/lib/reactions'; // Added reaction utils
 
 interface PostCardProps {
   post: Post;
   isEmbedded?: boolean; 
 }
+
+interface ReactionSummaryDisplayItem {
+  type: ReactionType;
+  Icon: React.ElementType;
+  count: number;
+  colorClass: string;
+}
+
 
 export default function PostCard({ post: initialPost, isEmbedded = false }: PostCardProps) {
   const { user: currentUser } = useAuth();
@@ -32,7 +43,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     openCreatePostModal,
     fetchSinglePost,
     isPreparingShare,
-    isReactingToPost, // Added isReactingToPost here
+    isReactingToPost,
   } = useFeed();
 
   const [currentPost, setCurrentPost] = useState<Post>(initialPost);
@@ -55,6 +66,47 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const getInitials = (name: string = "") => name.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U';
   const timeAgo = formatDistanceToNow(new Date(createdAt), { addSuffix: true });
 
+  // Reaction Summary Calculation
+  const reactionCounts = useMemo(() => {
+    if (!currentPost.detailedReactions || currentPost.detailedReactions.length === 0) {
+      return {} as Record<ReactionType, number>;
+    }
+    const counts = REACTION_DEFINITIONS.reduce((acc, def) => {
+      acc[def.type] = 0;
+      return acc;
+    }, {} as Record<ReactionType, number>);
+
+    currentPost.detailedReactions.forEach(r => {
+      if (counts[r.reactionType] !== undefined) {
+        counts[r.reactionType]++;
+      }
+    });
+    return counts;
+  }, [currentPost.detailedReactions]);
+
+  const topReactionsSummary: ReactionSummaryDisplayItem[] = useMemo(() => {
+    return Object.entries(reactionCounts)
+      .filter(([, count]) => count > 0)
+      .sort(([, aCount], [, bCount]) => bCount - aCount)
+      .slice(0, 3) // Show top 3 reaction icons
+      .map(([type, count]) => {
+        const def = getReactionDefinition(type as ReactionType);
+        return {
+          type: type as ReactionType,
+          Icon: def!.Icon,
+          count,
+          colorClass: def!.colorClass,
+        };
+      });
+  }, [reactionCounts]);
+
+  const totalReactionsCount = currentPost.detailedReactions?.length || 0;
+
+  const pluralize = (count: number, singular: string, plural: string) => {
+    return `${count} ${count === 1 ? singular : plural}`;
+  };
+
+
   const handleToggleCommentsModal = () => {
     if (!currentUser) {
       toast({ title: "Login Required", description: "Please login to view comments.", variant: "destructive" });
@@ -63,7 +115,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     setIsCommentsModalOpen(prev => !prev);
   };
 
-  const handleReactToPostMain = (reactionType: import("@/lib/reactions").ReactionType | null) => {
+  const handleReactToPostMain = (reactionType: ReactionType | null) => {
     if (!currentUser) {
       toast({ title: "Login Required", description: "Please login to react.", variant: "destructive" });
       return;
@@ -102,7 +154,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     }
   };
 
-  const renderPostContent = (targetPost: Post, isMainPost: boolean) => {
+  const renderPostContent = (targetPost: Post, isMainPostRender: boolean) => {
     const postAuthorInfo = 'isIdentity' in targetPost.author && targetPost.author.displayName ? targetPost.author.displayName : targetPost.author.username;
     const postAuthorUsername = targetPost.author.username;
     const postAuthorProfilePic = targetPost.author.profilePictureUrl;
@@ -132,7 +184,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
             )}
             <p className="text-xs text-muted-foreground">{postTimeAgo}</p>
           </div>
-          {isMainPost && !isEmbedded && (
+          {isMainPostRender && !isEmbedded && (
             <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-muted-foreground hover:text-primary">
               <MoreHorizontal className="h-4 w-4" />
               <span className="sr-only">More options</span>
@@ -230,30 +282,63 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
         )}
 
         {!isEmbedded && (
-          <CardFooter className="flex justify-around items-center p-2 pt-1">
-            <div className="flex-1 justify-center flex">
-                <ReactionButton
-                    reactions={detailedReactions}
-                    onReact={handleReactToPostMain}
-                    currentUserId={currentUser?.id}
-                    isSubmitting={isReactingToPost}
-                    buttonSize="sm" 
-                    popoverSide="top"
-                />
+           <CardFooter className="flex flex-col p-0">
+            {(totalReactionsCount > 0 || repliesCount > 0 || shares > 0) && (
+              <div className="flex justify-between items-center w-full px-4 py-2.5 text-xs text-muted-foreground">
+                <div className="flex items-center">
+                  {totalReactionsCount > 0 ? (
+                    <>
+                      <div className="flex items-center mr-1.5">
+                        {topReactionsSummary.slice(0, 3).map(r => (
+                          <r.Icon key={r.type} className={cn("h-3.5 w-3.5 -ml-1 first:ml-0", r.colorClass)} />
+                        ))}
+                      </div>
+                      <span className="hover:underline cursor-pointer">{totalReactionsCount}</span>
+                    </>
+                  ) : (
+                     <span className="h-[14px]">&nbsp;</span> // Maintain height if no reactions but other counts exist
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {repliesCount > 0 && (
+                    <span className="hover:underline cursor-pointer" onClick={handleToggleCommentsModal}>{pluralize(repliesCount, 'comment', 'comments')}</span>
+                  )}
+                  {shares > 0 && (
+                    <span className="hover:underline cursor-pointer">{pluralize(shares, 'share', 'shares')}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(totalReactionsCount > 0 || repliesCount > 0 || shares > 0) && (
+              <Separator className="my-0 bg-border/50" />
+            )}
+            
+            <div className="flex justify-around items-center p-1.5 pt-1 w-full">
+              <div className="flex-1 justify-center flex">
+                  <ReactionButton
+                      reactions={detailedReactions}
+                      onReact={handleReactToPostMain}
+                      currentUserId={currentUser?.id}
+                      isSubmitting={isReactingToPost}
+                      buttonSize="sm" 
+                      popoverSide="top"
+                  />
+              </div>
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center py-2 h-auto" onClick={handleToggleCommentsModal}>
+                <MessageCircle className="h-5 w-5 mr-1.5" /> <span className="text-xs">Comment</span>
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-muted-foreground hover:text-green-500 flex-1 justify-center py-2 h-auto" 
+                disabled={!currentUser || isPreparingShare || !!blogShareDetails} 
+                onClick={handleInitiateShare}
+              >
+                {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
+                <span className="text-xs">Share</span>
+              </Button>
             </div>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center" onClick={handleToggleCommentsModal}>
-              <MessageCircle className="h-5 w-5 mr-1.5" /> <span className="text-xs">{repliesCount || 0}</span>
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-muted-foreground hover:text-green-500 flex-1 justify-center" 
-              disabled={!currentUser || isPreparingShare || !!blogShareDetails} 
-              onClick={handleInitiateShare}
-            >
-              {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
-              <span className="text-xs">{shares || 0}</span>
-            </Button>
           </CardFooter>
         )}
       </Card>
@@ -269,3 +354,5 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     </>
   );
 }
+
+    
