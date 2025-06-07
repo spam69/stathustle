@@ -50,7 +50,7 @@ export default function SocialFeedPageContent() {
 
   if (isPostsLoading && !isRefreshing) { // Don't show main skeleton if only refreshing
     return (
-      <div className="w-full max-w-2xl mx-auto border-x border-border min-h-screen">
+      <div className="w-full border-x border-border min-h-screen"> {/* Removed max-w-2xl mx-auto */}
         <header className="sticky top-0 z-10 backdrop-blur-md bg-background/80 p-4 border-b border-border">
           <h1 className="text-xl font-bold font-headline text-foreground">Home</h1>
         </header>
@@ -77,7 +77,7 @@ export default function SocialFeedPageContent() {
 
   if (postsError && !isRefreshing) {
     return (
-      <div className="w-full max-w-2xl mx-auto border-x border-border min-h-screen">
+      <div className="w-full border-x border-border min-h-screen"> {/* Removed max-w-2xl mx-auto */}
          <header className="sticky top-0 z-10 backdrop-blur-md bg-background/80 p-4 border-b border-border">
           <h1 className="text-xl font-bold font-headline text-foreground">Home</h1>
         </header>
@@ -95,7 +95,7 @@ export default function SocialFeedPageContent() {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto border-x border-border min-h-screen"> {/* Max width for main content, border */}
+    <div className="w-full border-x border-border min-h-screen"> {/* Removed max-w-2xl mx-auto */}
       <header className="sticky top-0 z-10 backdrop-blur-md bg-background/80 p-4 border-b border-border flex justify-between items-center">
         <h1 className="text-xl font-bold font-headline text-foreground">Home</h1>
         <Button onClick={handleRefresh} variant="ghost" size="icon" disabled={isRefreshing} aria-label="Refresh feed">
