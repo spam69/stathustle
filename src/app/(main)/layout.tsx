@@ -1,12 +1,9 @@
+
 "use client";
 import type { ReactNode } from 'react';
-import { useState, useEffect } from 'react';
 import Header from '@/components/layout/header';
 import SidebarNav from '@/components/layout/sidebar-nav';
-// RightSidebar import removed
 import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { LifeBuoy, Loader2 } from 'lucide-react';
 import { FeedProvider } from '@/contexts/feed-context';
 import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -23,7 +20,7 @@ function CreatePostModal() {
     publishPost, 
     isPublishingPost,
     postToShare, 
-    pendingBlogShare, // Added pendingBlogShare
+    pendingBlogShare,
   } = useFeed();
   const { user } = useAuth();
 
@@ -51,7 +48,6 @@ function CreatePostModal() {
             onPostCreated={handleModalPostCreated} 
             isSubmitting={isPublishingPost} 
             isModal={true}
-            // postToShare and pendingBlogShare are now read from FeedContext by CreatePostForm directly
             onCancelShare={handleModalClose} 
         />
       </DialogContent>
@@ -71,19 +67,17 @@ export default function MainLayout({
         <div className="flex min-h-screen flex-col bg-background">
           <Header /> 
           <div className="flex flex-1 pt-16"> 
-            <Sidebar collapsible="icon" className="md:flex lg:flex"> {/* Ensure left sidebar is always potentially available for desktop */}
+            <Sidebar collapsible="icon"> {/* Removed md:flex lg:flex - component handles its own desktop visibility */}
               <SidebarContent>
                 <SidebarNav />
               </SidebarContent>
             </Sidebar>
             
-            <SidebarInset> 
-              <main className="flex-1 p-0 overflow-y-auto h-[calc(100vh_-_4rem)]"> 
-                {children}
-              </main>
+            {/* SidebarInset renders a <main> tag. Apply layout classes directly to it. */}
+            <SidebarInset className="flex-1 p-0 overflow-y-auto h-[calc(100vh_-_4rem)]"> 
+              {children} {/* children are rendered directly inside SidebarInset's <main> */}
             </SidebarInset>
 
-            {/* RightSidebar and its container div removed */}
           </div>
           <CreatePostModal />
           <NotificationDisplayModal />
