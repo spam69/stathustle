@@ -13,12 +13,13 @@ import { mockUsers, mockIdentities } from '@/lib/mock-data'; // Import actual us
 import type { User, Identity } from '@/types';
 import { useAuth } from '@/contexts/auth-context';
 
-const mockTrendingTopics = [
-  { id: "t1", name: "#FantasyFootballDraft", category: "Football - 12.1k Posts" },
-  { id: "t2", name: "PlayerInjuryUpdates", category: "Sports - 8.7k Posts" },
-  { id: "t3", name: "#NBAPlayoffs", category: "Basketball - 22.5k Posts" },
-  { id: "t4", name: "NewSignings", category: "Sports - 5.2k Posts" },
-];
+// Trending Topics section removed
+// const mockTrendingTopics = [
+//   { id: "t1", name: "#FantasyFootballDraft", category: "Football - 12.1k Posts" },
+//   { id: "t2", name: "PlayerInjuryUpdates", category: "Sports - 8.7k Posts" },
+//   { id: "t3", name: "#NBAPlayoffs", category: "Basketball - 22.5k Posts" },
+//   { id: "t4", name: "NewSignings", category: "Sports - 5.2k Posts" },
+// ];
 
 // Expanded list for "Who to Follow"
 const initialMockWhoToFollow: (User | Identity)[] = [
@@ -140,6 +141,8 @@ export default function RightSidebar() {
         </Card>
       ) : (
         <>
+          {/* Trending Topics Card Removed */}
+          {/*
           <Card className="bg-card/50 shadow-none border-none">
             <CardHeader className="px-2 pt-4 pb-2">
               <CardTitle className="text-lg font-headline flex items-center"><TrendingUp className="mr-2 h-5 w-5 text-primary" /> Trending Topics</CardTitle>
@@ -151,9 +154,9 @@ export default function RightSidebar() {
                   <p className="text-xs text-muted-foreground">{topic.category}</p>
                 </Link>
               ))}
-              {/* Consider removing "Show more" for topics unless more are added */}
             </CardContent>
           </Card>
+          */}
 
           <Card className="bg-card/50 shadow-none border-none">
             <CardHeader className="px-2 pt-4 pb-2">
