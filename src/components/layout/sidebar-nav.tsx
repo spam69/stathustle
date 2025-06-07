@@ -179,29 +179,6 @@ export default function SidebarNav() {
 
   return (
     <>
-      <SidebarHeader className="group-data-[collapsible=icon]:hidden !p-2 border-b border-sidebar-border">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-sidebar-foreground/60" />
-          <Input
-            type="search"
-            placeholder="Search StatHustle..."
-            className="pl-8 pr-8 h-8 text-xs bg-sidebar-background focus:bg-sidebar-background/90 border-sidebar-border focus-visible:ring-sidebar-ring"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
-              onClick={handleClearSearch}
-            >
-              <X className="h-3.5 w-3.5 text-sidebar-foreground/60" />
-            </Button>
-          )}
-        </div>
-      </SidebarHeader>
-
       <SidebarContent className="flex-1">
         {debouncedSearchTerm.trim() && (
           <SidebarGroup className="pt-0 pb-1 px-2 group-data-[collapsible=icon]:hidden">
@@ -231,6 +208,26 @@ export default function SidebarNav() {
             <SidebarSeparator className="my-1 group-data-[collapsible=icon]:hidden"/>
             <SidebarGroup className="pt-1 pb-1 px-2 group-data-[collapsible=icon]:hidden">
               <SidebarGroupLabel className="text-xs !h-auto !py-1 !px-1 text-sidebar-foreground/80">Who to Follow</SidebarGroupLabel>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-sidebar-foreground/60" />
+                <Input
+                  type="search"
+                  placeholder="Search User/Identity"
+                  className="pl-8 pr-8 h-8 text-xs bg-sidebar-background focus:bg-sidebar-background/90 border-sidebar-border focus-visible:ring-sidebar-ring"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                    onClick={handleClearSearch}
+                  >
+                    <X className="h-3.5 w-3.5 text-sidebar-foreground/60" />
+                  </Button>
+                )}
+              </div>
               <SidebarGroupContent className="space-y-0.5">
                 {isLoadingProfiles ? (
                   Array.from({ length: VISIBLE_SUGGESTIONS_COUNT }).map((_, i) => <Skeleton key={`follow-skel-${i}`} className="h-10 w-full rounded-md bg-sidebar-accent/30" />)

@@ -102,11 +102,6 @@ export default function CommentRepliesModal() {
           <DialogTitle className="font-headline">
             Replies to {topLevelCommentAuthorInfo.displayName}'s comment
           </DialogTitle>
-           <DialogClose asChild>
-              <Button variant="ghost" size="icon" className="absolute right-3 top-3 h-7 w-7">
-                <X className="h-4 w-4" />
-              </Button>
-            </DialogClose>
         </DialogHeader>
 
         <ScrollArea className="flex-grow overflow-y-auto px-4">
