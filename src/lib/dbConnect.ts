@@ -1,5 +1,15 @@
-
+// src/lib/dbConnect.ts
 import mongoose from 'mongoose';
+
+// Ensure all models are imported here to register them with Mongoose
+import '@/models/User.model';
+import '@/models/Identity.model';
+import '@/models/Post.model';
+import '@/models/Comment.model'; // <<< This is important
+import '@/models/Blog.model';
+import '@/models/Player.model';
+import '@/models/PlayerChatMessage.model';
+import '@/models/Notification.model';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 

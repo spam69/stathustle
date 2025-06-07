@@ -6,7 +6,7 @@ import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
 import CommentModel from '@/models/Comment.model'; // Ensure CommentModel is imported
 import type { Post as PostType, User as UserType, Identity as IdentityType, Comment as CommentClientType, ReactionEntry as ReactionEntryClientType, BlogShareDetails } from '@/types';
-import { mockAdminUser } from '@/lib/mock-data';
+import { NextResponse } from 'next/server';
 
 // Helper function to transform author data
 const transformAuthor = (authorData: any): UserType | IdentityType | undefined => {
@@ -227,7 +227,7 @@ export async function POST(request: Request) {
         blogShareDetails?: BlogShareDetails;
     };
 
-    const authorIdToUse = providedAuthorId || mockAdminUser.id; // Replace mockAdminUser.id with actual authenticated user ID
+    const authorIdToUse = providedAuthorId; // Replace mockAdminUser.id with actual authenticated user ID
 
     if (!authorIdToUse || (!content && !sharedOriginalPostId && !blogShareDetails && !mediaUrl) ) { // Also check mediaUrl for emptiness
       return NextResponse.json({ message: 'Author ID and content (or share details/media) are required' }, { status: 400 });
