@@ -253,20 +253,6 @@ export default function SidebarNav() {
       </SidebarContent>
 
       <div className="mt-auto border-t border-sidebar-border">
-        {currentUser && (
-        <div className="p-3 group-data-[collapsible=icon]:p-2">
-          <Button
-            variant="default"
-            className="w-full font-headline bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0"
-            onClick={openCreatePostModal}
-            disabled={!currentUser}
-            title="Create Post"
-          >
-            <PlusSquare className="h-5 w-5 group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:mr-0 mr-2" />
-            <span className="group-data-[collapsible=icon]:hidden">Post</span>
-          </Button>
-        </div>
-        )}
         <SidebarGroup className="p-2 pt-0">
           <SidebarMenu className="gap-1">
             {bottomNavItems.map(item => renderNavItem(item))}
