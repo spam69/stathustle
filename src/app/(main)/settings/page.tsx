@@ -57,13 +57,19 @@ export default function SettingsPage() {
       router.push('/login');
     }
     if (user) {
+      const initialSportInterests = availableSports.map(sportName => {
+        const userInterest = user.sportInterests?.find(interest => interest.sport === sportName);
+        return {
+          sport: sportName,
+          level: userInterest ? userInterest.level : 'no interest',
+        };
+      });
+
       form.reset({
         bio: user.bio || "",
         // profilePictureUrl: user.profilePictureUrl || "", // Removed
         // bannerImageUrl: user.bannerImageUrl || "", // Removed
-        sportInterests: user.sportInterests && user.sportInterests.length > 0 
-          ? user.sportInterests 
-          : availableSports.map(sport => ({ sport, level: 'no interest' })),
+        sportInterests: initialSportInterests,
         themePreference: (user.themePreference as 'light' | 'dark' | 'system' || theme || 'system'),
       });
       // Removed image state initialization logic
