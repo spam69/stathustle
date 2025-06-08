@@ -17,6 +17,7 @@ import { availableSports, sportInterestLevels } from '@/lib/mock-data';
 import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Added missing import
 import { handleImageFileChange, uploadImageToR2 as uploadImageUtil, resetImageState as resetImageUtil, type ImageFileState } from '@/lib/image-upload-utils'; // Renamed for clarity
 import { useToast } from '@/hooks/use-toast';
 
