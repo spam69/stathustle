@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Mail, Link as LinkIcon, MapPin, Briefcase, BarChartBig, Edit3, Users, Award, Edit2 } from "lucide-react";
+import { Mail, Link as LinkIcon, MapPin, Briefcase, BarChartBig, Edit3, Users, Award, Edit2, ImageIcon } from "lucide-react";
 import type { User, Identity } from "@/types";
 import { useAuth } from '@/contexts/auth-context';
 import { Badge } from '@/components/ui/badge';
@@ -77,35 +77,37 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
   return (
     <>
       <Card className="mb-6 shadow-xl">
-        <CardHeader className="relative p-0 h-48 md:h-64 group"> {/* Added group for hover state */}
-          {profileUser.bannerImageUrl ? (
-            <Image
-              src={profileUser.bannerImageUrl}
-              alt={`${displayName}'s banner`}
-              layout="fill"
-              objectFit="cover"
-              className="rounded-t-lg"
-              data-ai-hint="banner landscape"
-              key={profileUser.bannerImageUrl} // Key to force re-render on change
-            />
-          ) : (
-            <div className="h-full w-full bg-muted rounded-t-lg flex items-center justify-center text-muted-foreground/30" data-ai-hint="abstract pattern">
-                <ImageIcon className="h-24 w-24" />
-            </div>
-          )}
-          {isCurrentUserProfile && (
-            <Button
-              variant="secondary"
-              size="icon"
-              className="absolute top-2 right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-              onClick={() => openImageUploadModal('banner')}
-              aria-label="Edit banner image"
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
-          )}
+        <CardHeader className="relative p-0 h-48 md:h-64"> {/* Group class removed from here */}
+          <div className="relative w-full h-full group"> {/* New group for banner image + button */}
+            {profileUser.bannerImageUrl ? (
+              <Image
+                src={profileUser.bannerImageUrl}
+                alt={`${displayName}'s banner`}
+                layout="fill"
+                objectFit="cover"
+                className="rounded-t-lg"
+                data-ai-hint="banner landscape"
+                key={profileUser.bannerImageUrl} // Key to force re-render on change
+              />
+            ) : (
+              <div className="h-full w-full bg-muted rounded-t-lg flex items-center justify-center text-muted-foreground/30" data-ai-hint="abstract pattern">
+                  <ImageIcon className="h-24 w-24" />
+              </div>
+            )}
+            {isCurrentUserProfile && (
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute top-2 right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                onClick={() => openImageUploadModal('banner')}
+                aria-label="Edit banner image"
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2">
-            <div className="relative group"> {/* Group for avatar edit button */}
+            <div className="relative group"> {/* This group is for the avatar and its button */}
               <Avatar className="h-24 w-24 md:h-32 md:w-32 border-4 border-background rounded-full shadow-lg">
                 <AvatarImage src={profileUser.profilePictureUrl} alt={displayName} data-ai-hint="person portrait" key={profileUser.profilePictureUrl}/>
                 <AvatarFallback className="text-3xl md:text-4xl">{getInitials(displayName)}</AvatarFallback>
@@ -171,7 +173,7 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
           {isCurrentUserProfile && isIdentityProfile && ( /* For Identity owners */
                <div className="mt-4 space-x-2">
                   <Button asChild>
-                    <Link href="/settings">
+                    <Link href="/settings"> {/* TODO: This should likely go to a dedicated identity edit page */}
                         <Edit3 className="mr-2 h-4 w-4" /> Edit Identity (Bio, Links)
                     </Link>
                   </Button>
@@ -220,3 +222,4 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
     </>
   );
 }
+
