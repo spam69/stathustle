@@ -12,12 +12,17 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
-import type { SportInterest, SportInterestLevel } from '@/types';
+import type { SportInterest } from '@/types';
 import { availableSports, sportInterestLevels } from '@/lib/mock-data';
-// Toast is now handled by AuthContext
+import { useState, useRef } from 'react';
+import Image from 'next/image';
+import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';
+import { handleImageFileChange, uploadImageToR2 as uploadImageUtil, resetImageState as resetImageUtil, type ImageFileState } from '@/lib/image-upload-utils'; // Renamed for clarity
+import { useToast } from '@/hooks/use-toast';
 
 const signupSchema = z.object({
   username: z.string().min(3, { message: "Username must be at least 3 characters." }),
+  displayName: z.string().max(50, { message: "Display Name cannot exceed 50 characters." }).optional(),
   email: z.string().email({ message: "Invalid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   sportInterests: z.array(z.object({
@@ -31,11 +36,16 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 export default function SignupPage() {
   const router = useRouter();
   const { signup, isAuthActionLoading } = useAuth();
+  const { toast } = useToast();
+
+  const [profilePicState, setProfilePicState] = useState<ImageFileState>({ file: null, previewUrl: null, isUploading: false, uploadedUrl: null });
+  const profilePicInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
       username: "",
+      displayName: "",
       email: "",
       password: "",
       sportInterests: availableSports.map(sport => ({ sport, level: 'no interest' })),
@@ -43,20 +53,46 @@ export default function SignupPage() {
   });
 
   const onSubmit = async (data: SignupFormValues) => {
+    let finalProfilePicUrl: string | undefined = undefined;
+
+    if (profilePicState.file) {
+      setProfilePicState(prev => ({ ...prev, isUploading: true }));
+      const uploadedUrl = await uploadImageUtil(profilePicState, setProfilePicState);
+      if (uploadedUrl) {
+        finalProfilePicUrl = uploadedUrl;
+      } else {
+        toast({ title: "Profile Picture Upload Failed", description: "Please try uploading again or proceed without it.", variant: "destructive" });
+        setProfilePicState(prev => ({ ...prev, isUploading: false })); // Ensure uploading state is reset
+        return;
+      }
+      setProfilePicState(prev => ({ ...prev, isUploading: false }));
+    }
+
+
     const interests = data.sportInterests?.filter(interest => interest.level !== 'no interest') as SportInterest[];
     
     const signedUpUser = await signup({
       username: data.username,
+      displayName: data.displayName || undefined, // Pass displayName
       email: data.email,
-      password: data.password, // Password sent to API
+      password: data.password,
       sportInterests: interests,
+      profilePictureUrl: finalProfilePicUrl, // Pass uploaded profile picture URL
     });
 
     if (signedUpUser) {
-      router.push('/');
+      resetImageUtil(setProfilePicState);
+      // Toast for success is handled by AuthContext or you can push to login page where login success toast appears
+      // router.push('/login'); // Already done by AuthContext if signup successful
     }
     // Error toast is handled by AuthContext's useMutation
   };
+  
+  const handleRemoveProfilePic = () => {
+    resetImageUtil(setProfilePicState);
+  };
+
+  const overallSubmitting = isAuthActionLoading || profilePicState.isUploading;
 
   return (
     <Card className="w-full max-w-lg">
@@ -74,7 +110,20 @@ export default function SignupPage() {
                 <FormItem className="grid gap-2">
                   <FormLabel htmlFor="username">Username (@)</FormLabel>
                   <FormControl>
-                    <Input id="username" placeholder="your_username" {...field} />
+                    <Input id="username" placeholder="your_username" {...field} disabled={overallSubmitting} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="displayName"
+              render={({ field }) => (
+                <FormItem className="grid gap-2">
+                  <FormLabel htmlFor="displayName">Display Name (Optional)</FormLabel>
+                  <FormControl>
+                    <Input id="displayName" placeholder="Your Public Name" {...field} disabled={overallSubmitting} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -87,7 +136,7 @@ export default function SignupPage() {
                 <FormItem className="grid gap-2">
                   <FormLabel htmlFor="email">Email</FormLabel>
                   <FormControl>
-                    <Input id="email" type="email" placeholder="m@example.com" {...field} />
+                    <Input id="email" type="email" placeholder="m@example.com" {...field} disabled={overallSubmitting} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -100,12 +149,35 @@ export default function SignupPage() {
                 <FormItem className="grid gap-2">
                   <FormLabel htmlFor="password">Password</FormLabel>
                   <FormControl>
-                    <Input id="password" type="password" {...field} />
+                    <Input id="password" type="password" {...field} disabled={overallSubmitting} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            <FormItem>
+              <FormLabel>Profile Picture (Optional)</FormLabel>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-20 w-20 border">
+                  <AvatarImage src={profilePicState.previewUrl || undefined} alt="Profile preview" data-ai-hint="avatar person" />
+                  <AvatarFallback><ImageIcon className="h-10 w-10 text-muted-foreground" /></AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => profilePicInputRef.current?.click()} disabled={profilePicState.isUploading || overallSubmitting}>
+                    {profilePicState.isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <UploadCloud className="mr-2 h-4 w-4" /> {profilePicState.file ? "Change" : "Upload"}
+                  </Button>
+                  <input type="file" ref={profilePicInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageFileChange(e, setProfilePicState)} />
+                  {profilePicState.previewUrl && (
+                    <Button type="button" variant="ghost" size="sm" onClick={handleRemoveProfilePic} className="text-destructive hover:text-destructive/80" disabled={profilePicState.isUploading || overallSubmitting}>
+                      <CloseIcon className="mr-2 h-4 w-4" /> Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {profilePicState.file && <p className="text-xs text-muted-foreground mt-1">Selected: {profilePicState.file.name}</p>}
+            </FormItem>
             
             <div className="space-y-2">
               <FormLabel className="font-headline">Sport Interests</FormLabel>
@@ -120,7 +192,7 @@ export default function SignupPage() {
                       <FormItem>
                         <FormLabel className="text-sm font-medium">{sport}</FormLabel>
                         <input type="hidden" {...form.register(`sportInterests.${index}.sport`)} value={sport} />
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={overallSubmitting}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select interest" />
@@ -144,8 +216,8 @@ export default function SignupPage() {
 
           </CardContent>
           <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full" disabled={isAuthActionLoading}>
-              {isAuthActionLoading ? 'Signing up...' : 'Sign Up'}
+            <Button type="submit" className="w-full" disabled={overallSubmitting}>
+              {overallSubmitting ? (profilePicState.isUploading ? 'Uploading...' : 'Signing up...') : 'Sign Up'}
             </Button>
             <div className="mt-4 text-center text-sm">
               Already have an account?{' '}
@@ -159,5 +231,3 @@ export default function SignupPage() {
     </Card>
   );
 }
-
-    

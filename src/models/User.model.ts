@@ -6,6 +6,7 @@ import type { User as UserType, SportInterest, SocialLink } from '@/types'; // U
 // We need to define interfaces for Mongoose documents that extend our types and Mongoose's Document
 export interface IUserSchema extends Omit<UserType, 'id' | 'sportInterests' | 'socialLinks'>, Document {
   id: string; // Mongoose _id will be mapped to id
+  displayName?: string; // Added optional displayName
   sportInterests?: Array<{ sport: string; level: string; _id?: mongoose.Types.ObjectId }>;
   socialLinks?: Array<{ platform: string; url: string; _id?: mongoose.Types.ObjectId }>;
   // Mongoose adds createdAt and updatedAt automatically with timestamps: true
@@ -26,6 +27,7 @@ const SocialLinkSchema = new Schema<SocialLink>({
 
 const UserSchema = new Schema<IUserSchema>({
   username: { type: String, required: true, unique: true, trim: true, index: true },
+  displayName: { type: String, trim: true }, // Added displayName
   email: { type: String, required: true, unique: true, trim: true, lowercase: true, index: true },
   password: { type: String, required: true },
   profilePictureUrl: { type: String },

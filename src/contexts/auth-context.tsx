@@ -6,21 +6,16 @@ import React, { createContext, useContext, ReactNode, useCallback, useState, use
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import jwtDecode from 'jwt-decode'; // Import jwt-decode
+// jwtDecode import removed
 
-interface DecodedToken {
-  id: string;
-  username: string;
-  exp: number; // Expiration time (timestamp)
-  iat: number; // Issued at time (timestamp)
-}
+// DecodedToken interface removed
 
 interface AuthContextType {
   user: AppUserType | null;
   login: (credentials: { emailOrUsername: string; password?: string }) => Promise<AppUserType | null>;
   logout: () => void;
-  signup: (signupData: Omit<AppUserType, 'id' | 'themePreference' | 'isIdentity'> & { password?: string }) => Promise<AppUserType | null>;
-  updateUserSettings: (settings: Partial<Pick<AppUserType, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl'>>) => Promise<AppUserType | null>;
+  signup: (signupData: Omit<AppUserType, 'id' | 'themePreference' | 'isIdentity'> & { password?: string; displayName?: string; profilePictureUrl?: string }) => Promise<AppUserType | null>;
+  updateUserSettings: (settings: Partial<Pick<AppUserType, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl' | 'displayName'>>) => Promise<AppUserType | null>;
   loading: boolean; // General loading state for context initialization
   isAuthActionLoading: boolean; // Specific for login/signup/update actions
 }
@@ -39,30 +34,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (storedUserJson) {
       try {
         const storedUser = JSON.parse(storedUserJson) as AppUserType;
-        // For non-JWT setup, we trust the stored user.
-        // If JWT was used, we'd validate token expiry here.
-        // const token = localStorage.getItem('stathustleToken');
-        // if (token) {
-        //   const decodedToken = jwtDecode<DecodedToken>(token);
-        //   if (decodedToken.exp * 1000 < Date.now()) { // Check if token is expired
-        //     localStorage.removeItem('stathustleUser');
-        //     localStorage.removeItem('stathustleToken');
-        //     setUser(null);
-        //   } else if (decodedToken.id === storedUser.id) { // Basic check
-        //     setUser(storedUser);
-        //   } else { // Mismatch or other issue
-        //     localStorage.removeItem('stathustleUser');
-        //     localStorage.removeItem('stathustleToken');
-        //     setUser(null);
-        //   }
-        // } else { // No token, but user data exists - clear it
-        //   localStorage.removeItem('stathustleUser');
-        //   setUser(null);
-        // }
-        setUser(storedUser); // Directly set user for non-JWT setup
+        setUser(storedUser);
       } catch (e) {
         localStorage.removeItem('stathustleUser');
-        // localStorage.removeItem('stathustleToken');
         setUser(null);
       }
     }
@@ -89,12 +63,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const loggedInUser = await loginMutation.mutateAsync(credentials);
       setUser(loggedInUser);
       localStorage.setItem('stathustleUser', JSON.stringify(loggedInUser));
-      // No token to store in non-JWT setup
       return loggedInUser;
     } catch (error: any) {
       setUser(null);
       localStorage.removeItem('stathustleUser');
-      // localStorage.removeItem('stathustleToken');
       return null;
     }
   };
@@ -102,12 +74,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('stathustleUser');
-    // localStorage.removeItem('stathustleToken');
     queryClient.clear(); 
     router.push('/login'); 
   };
 
-  const signupMutation = useMutation<AppUserType, Error, Omit<AppUserType, 'id' | 'themePreference' | 'isIdentity'> & { password?: string }>({
+  const signupMutation = useMutation<AppUserType, Error, Omit<AppUserType, 'id' | 'themePreference' | 'isIdentity'> & { password?: string; displayName?: string; profilePictureUrl?: string }>({
     mutationFn: async (signupData) => {
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
@@ -122,14 +93,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     },
   });
 
-  const signup = async (signupData: Omit<AppUserType, 'id' | 'themePreference' | 'isIdentity'> & { password?: string }) => {
+  const signup = async (signupData: Omit<AppUserType, 'id' | 'themePreference' | 'isIdentity'> & { password?: string; displayName?: string; profilePictureUrl?: string }) => {
     try {
       const signedUpUser = await signupMutation.mutateAsync(signupData);
       toast({
         title: "Account Created!",
         description: "You can now log in with your new credentials.",
       });
-      router.push('/login');
+      router.push('/login'); // Redirect to login after successful signup
       return signedUpUser;
     } catch (error: any) {
       toast({ title: "Signup Failed", description: error.message || "Could not create account.", variant: "destructive" });
@@ -151,10 +122,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return response.json();
     },
     onSuccess: (data) => {
-      setUser(data);
+      setUser(data); // Update context user state
       localStorage.setItem('stathustleUser', JSON.stringify(data)); 
       toast({ title: "Settings Updated", description: "Your profile settings have been saved." });
+      // Invalidate queries that depend on user data, e.g., profile page
       queryClient.invalidateQueries({ queryKey: ['profile', data.username] });
+      if (data.displayName) { // If display name changed, profile query key might use it or username
+        queryClient.invalidateQueries({ queryKey: ['profile', data.displayName] });
+      }
     },
     onError: (error) => {
       toast({ title: "Update Failed", description: error.message, variant: "destructive" });
@@ -162,12 +137,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
 
 
-  const updateUserSettings = useCallback(async (settings: Partial<Pick<AppUserType, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl'>>) => {
+  const updateUserSettings = useCallback(async (settings: Partial<Pick<AppUserType, 'sportInterests' | 'themePreference' | 'bio' | 'profilePictureUrl' | 'bannerImageUrl' | 'displayName'>>) => {
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to update settings.", variant: "destructive" });
       return null;
     }
     try {
+      // Pass all settings including displayName to the mutation
       const updatedUser = await updateSettingsMutation.mutateAsync({ ...settings, userId: user.id });
       return updatedUser;
     } catch (e) {

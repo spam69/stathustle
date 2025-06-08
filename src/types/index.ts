@@ -13,6 +13,7 @@ export interface User {
   username: string;
   email: string;
   password?: string;
+  displayName?: string; // Added optional displayName
   profilePictureUrl?: string;
   bannerImageUrl?: string;
   socialLinks?: { platform: string; url: string }[];
