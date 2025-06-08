@@ -28,13 +28,13 @@ const TeamMemberSchema = new Schema({
 }, { _id: false });
 
 const IdentitySchema = new Schema<IIdentitySchema>({
-  username: { type: String, required: true, unique: true, trim: true, index: true },
-  displayName: { type: String, trim: true },
-  email: { type: String, trim: true, lowercase: true, sparse: true, index: true }, // Sparse for optional unique
-  profilePictureUrl: { type: String },
-  bannerImageUrl: { type: String },
+  username: { type: String, required: true, unique: true, trim: true, index: true, minlength: 3, maxlength: 30 },
+  displayName: { type: String, trim: true, maxlength: 50 },
+  email: { type: String, trim: true, lowercase: true, sparse: true, index: true, match: [/.+\@.+\..+/, 'Please fill a valid email address'] },
+  profilePictureUrl: { type: String, default: '' },
+  bannerImageUrl: { type: String, default: '' },
   socialLinks: [SocialLinkSchema],
-  bio: { type: String, maxlength: 500 }, // Increased bio length for identities
+  bio: { type: String, maxlength: 500 },
   owner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   teamMembers: [TeamMemberSchema],
   isIdentity: { type: Boolean, default: true, required: true },
@@ -61,6 +61,21 @@ const IdentitySchema = new Schema<IIdentitySchema>({
 
 IdentitySchema.virtual('id').get(function() {
   return this._id.toHexString();
+});
+
+// Set default profile picture and banner image based on username/displayName if not provided
+IdentitySchema.pre<IIdentitySchema>('save', function(next) {
+  if (!this.profilePictureUrl) {
+    const nameForPlaceholder = this.displayName || this.username;
+    this.profilePictureUrl = `https://placehold.co/200x200.png?text=${nameForPlaceholder[0]?.toUpperCase() || 'I'}`;
+  }
+  if (!this.bannerImageUrl) {
+    this.bannerImageUrl = `https://placehold.co/1200x300.png?text=Identity`;
+  }
+  if (!this.displayName) {
+    this.displayName = this.username;
+  }
+  next();
 });
 
 const IdentityModel = (models.Identity as Model<IIdentitySchema, {}, {}, {}, IIdentitySchema>) || mongoose.model<IIdentitySchema>('Identity', IdentitySchema);
