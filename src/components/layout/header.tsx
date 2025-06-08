@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Bell, Search, UserCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2 } from 'lucide-react'; // MessageSquare potentially removed if only for support chat
+import { Bell, Search, UserCircle, PlusCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2 } from 'lucide-react'; // MessageSquare potentially removed if only for support chat
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -319,6 +319,11 @@ export default function Header() { // toggleChat prop removed
                 <Link href={`/profile/${currentUser.username}`}>
                   <UserCircle className="mr-2 h-4 w-4" />
                   Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+              <Link href="/settings/identity/create">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Create New Identity
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
