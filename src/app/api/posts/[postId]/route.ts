@@ -135,6 +135,97 @@ export async function GET(
   }
 }
 
+export async function PUT(
+  request: Request,
+  { params }: { params: { postId: string } }
+) {
+  await dbConnect();
+  try {
+    const { postId } = params;
+    const body = await request.json();
+    const { content, mediaUrl, mediaType, tags } = body;
+
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
+      return NextResponse.json({ message: 'Invalid Post ID format' }, { status: 400 });
+    }
+
+    // TODO: Get authenticated user ID from session/token
+    const authenticatedUserId = "mock-user-id-for-update-placeholder"; // Replace with actual auth logic
+
+    const post = await PostModel.findById(postId);
+
+    if (!post) {
+      return NextResponse.json({ message: 'Post not found' }, { status: 404 });
+    }
+
+    // --- Authorization Check (Placeholder) ---
+    // In a real app, you'd compare post.author._id.toString() with the authenticatedUserId
+    if (post.author.toString() !== authenticatedUserId) {
+      // This is a placeholder check. Real check needed.
+      // For testing, you might comment this out or adjust mockAuthenticatedUserId.
+      // return NextResponse.json({ message: 'Unauthorized to update this post' }, { status: 403 });
+      console.warn(`[API/POSTS/${postId} PUT] Bypassing auth check for mock user.`);
+    }
+    // --- End Authorization Check ---
+
+    if (content !== undefined) {
+      post.content = content;
+    }
+    if (tags !== undefined) {
+      post.tags = Array.isArray(tags) ? tags.map(tag => String(tag).trim()) : [];
+    }
+
+    // Handle media update/removal
+    if (mediaUrl === null || mediaUrl === "") { // Explicitly removing media
+      post.mediaUrl = undefined;
+      post.mediaType = undefined;
+    } else if (mediaUrl !== undefined) { // Updating or adding media
+      post.mediaUrl = mediaUrl;
+      if (mediaType === 'image' || mediaType === 'gif') {
+        post.mediaType = mediaType;
+      } else if (mediaUrl) { 
+        // If mediaUrl is provided but mediaType is not, or invalid, try to infer or default
+        // For simplicity, we'll require mediaType if mediaUrl is set.
+        // Or, you could default or try to infer. Here, we just set it if valid.
+        // If mediaType is missing with a new mediaUrl, it might lead to issues.
+        // For now, if mediaType is not 'image' or 'gif', it will be undefined if mediaUrl is new.
+        // A better approach is to require mediaType if mediaUrl is set.
+        // This part can be refined based on how strict media type handling should be.
+         post.mediaType = undefined; // Or throw error if mediaType is required with mediaUrl
+      }
+    }
+    
+    const updatedPost = await post.save();
+
+    // Re-populate for consistent response structure
+    const populatedPost = await PostModel.findById(updatedPost._id)
+      .populate('author')
+      .populate({
+        path: 'sharedOriginalPostId',
+        populate: { path: 'author' }
+      })
+      .populate({
+        path: 'comments',
+        populate: { path: 'author' }
+      })
+      .lean();
+    
+    if (!populatedPost) {
+        return NextResponse.json({ message: 'Post updated, but failed to retrieve fully for response.' }, { status: 200 });
+    }
+
+    return NextResponse.json(transformPost(populatedPost));
+
+  } catch (error: any) {
+    console.error(`[API/POSTS/${params.postId} PUT] Error updating post:`, error);
+    if (error.name === 'ValidationError') {
+      return NextResponse.json({ message: 'Validation Error', errors: error.errors }, { status: 400 });
+    }
+    return NextResponse.json({ message: error.message || 'An unexpected error occurred while updating the post.' }, { status: 500 });
+  }
+}
+
+
 export async function DELETE(
   request: Request,
   { params }: { params: { postId: string } }
@@ -157,11 +248,13 @@ export async function DELETE(
     }
 
     // --- Authorization Check (Placeholder) ---
-    // In a real app, you'd compare post.author._id with the authenticatedUserId
-    // For now, we'll assume the check passes if the post exists for any mock user.
-    // if (post.author.toString() !== authenticatedUserId) {
-    //   return NextResponse.json({ message: 'Unauthorized to delete this post' }, { status: 403 });
-    // }
+    // In a real app, you'd compare post.author._id.toString() with the authenticatedUserId
+    if (post.author.toString() !== authenticatedUserId) {
+       // This is a placeholder check. Real check needed.
+      // For testing, you might comment this out or adjust mockAuthenticatedUserId.
+      // return NextResponse.json({ message: 'Unauthorized to delete this post' }, { status: 403 });
+       console.warn(`[API/POSTS/${postId} DELETE] Bypassing auth check for mock user.`);
+    }
     // --- End Authorization Check ---
 
     // Delete associated comments
@@ -181,3 +274,4 @@ export async function DELETE(
     return NextResponse.json({ message: error.message || 'An unexpected error occurred while deleting the post.' }, { status: 500 });
   }
 }
+
