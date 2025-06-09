@@ -6,14 +6,13 @@ import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
 import CommentModel from '@/models/Comment.model';
 import type { Post as PostType, User as UserType, Identity as IdentityType, Comment as CommentClientType, ReactionEntry as ReactionEntryClientType } from '@/types';
+import mongoose from 'mongoose';
 
 // Helper function to transform author data
 const transformAuthor = (authorDoc: any): UserType | IdentityType | undefined => {
   if (!authorDoc) return undefined;
-  // If authorDoc is already populated (object with _id), use its fields.
-  // If it's just an ObjectId string (should not happen with proper populate), this won't work well.
   return {
-    ...authorDoc, // Spread the lean object
+    ...authorDoc, 
     id: authorDoc._id?.toString(),
     username: authorDoc.username,
     profilePictureUrl: authorDoc.profilePictureUrl,
@@ -35,7 +34,7 @@ const transformComment = (commentDoc: any): CommentClientType | undefined => {
   return {
     ...commentDoc,
     id: commentDoc._id?.toString(),
-    author: transformAuthor(commentDoc.author), // author should be populated by the query
+    author: transformAuthor(commentDoc.author), 
     detailedReactions: commentDoc.detailedReactions?.map(transformReaction) || [],
     createdAt: commentDoc.createdAt?.toISOString(),
   };
@@ -44,28 +43,22 @@ const transformComment = (commentDoc: any): CommentClientType | undefined => {
 // Helper function to transform a single post
 const transformPost = (postDoc: any): PostType => {
   if (!postDoc) {
-    // This case should ideally be handled before calling transformPost,
-    // e.g., by returning 404 if postDoc is null.
-    // However, to satisfy PostType, we return a structure that indicates an issue.
     console.error("transformPost called with null or undefined postDoc");
-    // Fallback or throw error, depending on desired behavior for "not found"
-    // For now, let's assume this function is only called with a valid document.
-    // If it can be null, the return type should be PostType | null.
   }
 
   let sharedOriginalPostTransformed: PostType | undefined = undefined;
   let sharedOriginalPostIdString: string | undefined = undefined;
 
   if (postDoc.sharedOriginalPostId) {
-    const sharedData = postDoc.sharedOriginalPostId; // This is the populated object from .lean()
+    const sharedData = postDoc.sharedOriginalPostId; 
     if (sharedData && sharedData._id) {
       sharedOriginalPostIdString = sharedData._id.toString();
       sharedOriginalPostTransformed = {
         ...sharedData,
         id: sharedOriginalPostIdString,
-        author: transformAuthor(sharedData.author), // Author of shared post should be populated
+        author: transformAuthor(sharedData.author), 
         detailedReactions: sharedData.detailedReactions?.map(transformReaction) || [],
-        comments: (sharedData.comments || []).map(transformComment), // Transform comments of shared post if populated
+        comments: (sharedData.comments || []).map(transformComment), 
         repliesCount: sharedData.repliesCount || 0,
         content: sharedData.content || "",
         createdAt: sharedData.createdAt?.toISOString(),
@@ -74,7 +67,7 @@ const transformPost = (postDoc: any): PostType => {
         mediaType: sharedData.mediaType,
         blogShareDetails: sharedData.blogShareDetails,
       };
-    } else if (sharedData) { // Is an ObjectId string
+    } else if (sharedData) { 
         sharedOriginalPostIdString = sharedData.toString();
     }
   }
@@ -82,7 +75,7 @@ const transformPost = (postDoc: any): PostType => {
   return {
     ...postDoc,
     id: postDoc._id.toString(),
-    author: transformAuthor(postDoc.author), // Author of main post should be populated
+    author: transformAuthor(postDoc.author), 
     comments: postDoc.comments?.map(transformComment) || [],
     detailedReactions: postDoc.detailedReactions?.map(transformReaction) || [],
     sharedOriginalPostId: sharedOriginalPostIdString,
@@ -108,26 +101,24 @@ export async function GET(
   try {
     const { postId } = params;
 
-    if (!postId.match(/^[0-9a-fA-F]{24}$/)) {
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
       return NextResponse.json({ message: 'Invalid Post ID format' }, { status: 400 });
     }
 
     const post = await PostModel.findById(postId)
       .populate({
-        path: 'author', // Populates author based on authorModel
+        path: 'author', 
       })
       .populate({
         path: 'sharedOriginalPostId',
         populate: {
-          path: 'author', // Populates author of shared post
-          // Populate comments of shared post if needed, and their authors
-          // populate: { path: 'comments', populate: { path: 'author' }} // Example for deeper nesting
+          path: 'author', 
         }
       })
       .populate({
         path: 'comments',
         populate: {
-          path: 'author', // Populates author of comments
+          path: 'author', 
         }
       })
       .lean();
@@ -141,5 +132,52 @@ export async function GET(
   } catch (error: any) {
     console.error(`[API/POSTS/${params.postId} GET] Error fetching post:`, error, error.stack);
     return NextResponse.json({ message: error.message || 'An unexpected error occurred while fetching the post.' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { postId: string } }
+) {
+  await dbConnect();
+  try {
+    const { postId } = params;
+
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
+      return NextResponse.json({ message: 'Invalid Post ID format' }, { status: 400 });
+    }
+
+    // TODO: Get authenticated user ID from session/token
+    const authenticatedUserId = "mock-user-id-for-delete-placeholder"; // Replace with actual auth logic
+
+    const post = await PostModel.findById(postId);
+
+    if (!post) {
+      return NextResponse.json({ message: 'Post not found' }, { status: 404 });
+    }
+
+    // --- Authorization Check (Placeholder) ---
+    // In a real app, you'd compare post.author._id with the authenticatedUserId
+    // For now, we'll assume the check passes if the post exists for any mock user.
+    // if (post.author.toString() !== authenticatedUserId) {
+    //   return NextResponse.json({ message: 'Unauthorized to delete this post' }, { status: 403 });
+    // }
+    // --- End Authorization Check ---
+
+    // Delete associated comments
+    if (post.comments && post.comments.length > 0) {
+      await CommentModel.deleteMany({ _id: { $in: post.comments } });
+    }
+
+    // Delete the post
+    await PostModel.findByIdAndDelete(postId);
+    
+    // TODO: Optionally, find posts that shared this post and update their sharedOriginalPostId to null or handle as desired.
+
+    return NextResponse.json({ message: 'Post deleted successfully' }, { status: 200 });
+
+  } catch (error: any) {
+    console.error(`[API/POSTS/${params.postId} DELETE] Error deleting post:`, error);
+    return NextResponse.json({ message: error.message || 'An unexpected error occurred while deleting the post.' }, { status: 500 });
   }
 }
