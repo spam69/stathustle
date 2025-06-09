@@ -6,10 +6,22 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Repeat, MoreHorizontal, Award, Link2, Loader2, Newspaper, ArrowRight } from "lucide-react";
+import { 
+  MessageCircle, 
+  Repeat, 
+  MoreHorizontal, 
+  Award, 
+  Link2, 
+  Loader2, 
+  Newspaper, 
+  ArrowRight,
+  Edit,
+  Trash2,
+  AlertOctagon
+} from "lucide-react";
 import type { Post } from "@/types";
 import { formatDistanceToNow } from 'date-fns';
-import React, { useEffect, useState, useRef, useMemo } from 'react'; // Added React and useMemo
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import CommentsModal from './comments-modal';
@@ -18,9 +30,28 @@ import ReactionButton from './reaction-button';
 import { useFeed } from '@/contexts/feed-context';
 import { Skeleton } from './ui/skeleton'; 
 import ClientSanitizedHtml from './client-sanitized-html'; 
-import { Separator } from "@/components/ui/separator"; // Added Separator
-import { cn } from "@/lib/utils"; // Added cn
-import { type ReactionType, getReactionDefinition, REACTION_DEFINITIONS } from '@/lib/reactions'; // Added reaction utils
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+import { type ReactionType, getReactionDefinition, REACTION_DEFINITIONS } from '@/lib/reactions';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
 
 interface PostCardProps {
   post: Post;
@@ -36,7 +67,7 @@ interface ReactionSummaryDisplayItem {
 
 
 export default function PostCard({ post: initialPost, isEmbedded = false }: PostCardProps) {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser } = useAuth(); // Removed originalUser as activePrincipalId handles it
   const { toast } = useToast();
   const {
     reactToPost, 
@@ -49,6 +80,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const [currentPost, setCurrentPost] = useState<Post>(initialPost);
   const [isLoadingOriginalPost, setIsLoadingOriginalPost] = useState(false);
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,7 +98,13 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const getInitials = (name: string = "") => name.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U';
   const timeAgo = formatDistanceToNow(new Date(createdAt), { addSuffix: true });
 
-  // Reaction Summary Calculation
+  // Determine if the current authenticated principal is the author of the post
+  const activePrincipalId = currentUser?.id;
+  let isOwnPost = false;
+  if (activePrincipalId && currentPost.author) {
+      isOwnPost = activePrincipalId === currentPost.author.id;
+  }
+
   const reactionCounts = useMemo(() => {
     if (!currentPost.detailedReactions || currentPost.detailedReactions.length === 0) {
       return {} as Record<ReactionType, number>;
@@ -88,7 +126,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     return Object.entries(reactionCounts)
       .filter(([, count]) => count > 0)
       .sort(([, aCount], [, bCount]) => bCount - aCount)
-      .slice(0, 3) // Show top 3 reaction icons
+      .slice(0, 3) 
       .map(([type, count]) => {
         const def = getReactionDefinition(type as ReactionType);
         return {
@@ -105,7 +143,6 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const pluralize = (count: number, singular: string, plural: string) => {
     return `${count} ${count === 1 ? singular : plural}`;
   };
-
 
   const handleToggleCommentsModal = () => {
     if (!currentUser) {
@@ -154,6 +191,22 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     }
   };
 
+  const handleEditPost = () => {
+    toast({ title: "Edit Post", description: "Edit functionality coming soon!" });
+  };
+
+  const confirmDeletePost = () => {
+    // Placeholder for actual delete logic
+    toast({ title: "Post Deleted (Placeholder)", description: `Post "${currentPost.content.substring(0,20)}..." would be deleted.` });
+    setIsDeleteDialogOpen(false);
+    // In a real app, you'd call a delete function from your context here
+    // e.g., deletePostMutation.mutate(currentPost.id);
+  };
+
+  const handleReportPost = () => {
+    toast({ title: "Report Post", description: "Report functionality coming soon!" });
+  };
+
   const renderPostContent = (targetPost: Post, isMainPostRender: boolean) => {
     const postAuthorInfo = 'isIdentity' in targetPost.author && targetPost.author.displayName ? targetPost.author.displayName : targetPost.author.username;
     const postAuthorUsername = targetPost.author.username;
@@ -184,11 +237,37 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
             )}
             <p className="text-xs text-muted-foreground">{postTimeAgo}</p>
           </div>
-          {isMainPostRender && !isEmbedded && (
-            <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-muted-foreground hover:text-primary">
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">More options</span>
-            </Button>
+          {isMainPostRender && !isEmbedded && currentUser && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-muted-foreground hover:text-primary">
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">More options</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {isOwnPost ? (
+                  <>
+                    <DropdownMenuItem onClick={handleEditPost}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      <span>Edit Post</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        <span>Delete Post</span>
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                  </>
+                ) : (
+                  <DropdownMenuItem onClick={handleReportPost}>
+                    <AlertOctagon className="mr-2 h-4 w-4" />
+                    <span>Report Post</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </CardHeader>
         <CardContent className={`px-4 pb-3 pt-0 ${isEmbedded ? 'p-3 pt-0' : ''}`}>
@@ -216,125 +295,143 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
 
   return (
     <>
-      <Card ref={cardRef} id={`post-card-${currentPost.id}`} className={`mb-0.5 overflow-hidden shadow-none border-b border-border rounded-none bg-transparent hover:bg-card/30 transition-colors duration-200 ${isEmbedded ? 'shadow-none ml-0 border-none' : ''}`}>
-        {renderPostContent(currentPost, true)}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <Card ref={cardRef} id={`post-card-${currentPost.id}`} className={`mb-0.5 overflow-hidden shadow-none border-b border-border rounded-none bg-transparent hover:bg-card/30 transition-colors duration-200 ${isEmbedded ? 'shadow-none ml-0 border-none' : ''}`}>
+          {renderPostContent(currentPost, true)}
 
-        {blogShareDetails && !isEmbedded && (
-            <Card className="mt-0 mb-3 mx-4 p-0 border border-primary/30 bg-primary/5 rounded-xl overflow-hidden">
-                <CardHeader className="flex flex-row items-start gap-3 p-3">
-                    {blogShareDetails.coverImageUrl ? (
-                        <div className="w-20 h-auto aspect-[16/9] relative rounded-md overflow-hidden shrink-0">
-                            <Image src={blogShareDetails.coverImageUrl} alt={blogShareDetails.title} layout="fill" objectFit="cover" data-ai-hint="blog cover preview"/>
-                        </div>
-                    ) : (
-                        <Newspaper className="h-10 w-10 text-primary mt-1 shrink-0" />
-                    )}
-                    <div className="grid gap-0.5 flex-1">
-                        <p className="text-xs text-primary font-semibold uppercase tracking-wider">Blog Post</p>
-                        <CardTitle className="text-base font-semibold hover:underline font-headline text-foreground">
-                            <Link href={blogShareDetails.url} target="_blank" rel="noopener noreferrer">
-                                {blogShareDetails.title}
-                            </Link>
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground">
-                            By <Link href={`/profile/${blogShareDetails.authorUsername}`} className="hover:underline">{blogShareDetails.authorDisplayName}</Link>
-                        </p>
-                    </div>
-                </CardHeader>
-                {blogShareDetails.excerpt && (
-                    <CardContent className="p-3 pt-0">
-                        <p className="text-sm leading-relaxed line-clamp-3 text-foreground/80">{blogShareDetails.excerpt}</p>
-                    </CardContent>
-                )}
-                <CardFooter className="p-3 bg-primary/10">
-                    <Button asChild variant="default" size="sm" className="w-full font-headline bg-primary hover:bg-primary/90">
-                        <Link href={blogShareDetails.url} target="_blank" rel="noopener noreferrer">
-                            Read Blog <ArrowRight className="ml-2 h-4 w-4" />
-                        </Link>
-                    </Button>
-                </CardFooter>
-            </Card>
-        )}
-
-
-        {sharedOriginalPostId && !blogShareDetails && !isEmbedded && ( 
-          <div 
-            className="mt-0 mb-3 mx-4 p-0 border border-border/80 rounded-xl hover:border-primary/50 cursor-pointer transition-all overflow-hidden"
-            onClick={handleSharedPostClick}
-            role="button"
-            tabIndex={0}
-            aria-label="View original shared post"
-          >
-            {isLoadingOriginalPost ? (
-              <div className="p-3 space-y-2">
-                <Skeleton className="h-8 w-3/4" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
-              </div>
-            ) : postToDisplayAsShared ? (
-              <PostCard post={postToDisplayAsShared} isEmbedded={true} />
-            ) : (
-              <div className="p-3 text-center text-sm text-muted-foreground">
-                <Link2 className="inline h-4 w-4 mr-1" /> Original post could not be loaded. <span className="underline">Try again</span>.
-              </div>
-            )}
-          </div>
-        )}
-
-        {!isEmbedded && (
-           <CardFooter className="flex flex-col p-0">
-              <div className="flex justify-between items-center w-full px-4 py-2.5 text-xs text-muted-foreground">
-                <div className="flex items-center">
-                  {totalReactionsCount > 0 ? (
-                    <>
-                      <div className="flex items-center mr-1.5">
-                        {topReactionsSummary.slice(0, 3).map(r => (
-                          <r.Icon key={r.type} className={cn("h-3.5 w-3.5 -ml-1 first:ml-0", r.colorClass)} />
-                        ))}
+          {blogShareDetails && !isEmbedded && (
+              <Card className="mt-0 mb-3 mx-4 p-0 border border-primary/30 bg-primary/5 rounded-xl overflow-hidden">
+                  <CardHeader className="flex flex-row items-start gap-3 p-3">
+                      {blogShareDetails.coverImageUrl ? (
+                          <div className="w-20 h-auto aspect-[16/9] relative rounded-md overflow-hidden shrink-0">
+                              <Image src={blogShareDetails.coverImageUrl} alt={blogShareDetails.title} layout="fill" objectFit="cover" data-ai-hint="blog cover preview"/>
+                          </div>
+                      ) : (
+                          <Newspaper className="h-10 w-10 text-primary mt-1 shrink-0" />
+                      )}
+                      <div className="grid gap-0.5 flex-1">
+                          <p className="text-xs text-primary font-semibold uppercase tracking-wider">Blog Post</p>
+                          <CardTitle className="text-base font-semibold hover:underline font-headline text-foreground">
+                              <Link href={blogShareDetails.url} target="_blank" rel="noopener noreferrer">
+                                  {blogShareDetails.title}
+                              </Link>
+                          </CardTitle>
+                          <p className="text-xs text-muted-foreground">
+                              By <Link href={`/profile/${blogShareDetails.authorUsername}`} className="hover:underline">{blogShareDetails.authorDisplayName}</Link>
+                          </p>
                       </div>
-                      <span className="hover:underline cursor-pointer">{totalReactionsCount}</span>
-                    </>
-                  ) : (
-                     <span className="h-[14px]">0 Reacts</span> // Maintain height if no reactions but other counts exist
+                  </CardHeader>
+                  {blogShareDetails.excerpt && (
+                      <CardContent className="p-3 pt-0">
+                          <p className="text-sm leading-relaxed line-clamp-3 text-foreground/80">{blogShareDetails.excerpt}</p>
+                      </CardContent>
                   )}
-                </div>
-                <div className="flex items-center gap-3">
-                    <span className="hover:underline cursor-pointer" onClick={handleToggleCommentsModal}>{pluralize(repliesCount, 'comment', 'comments')}</span>
-                    <span className="hover:underline cursor-pointer">{pluralize(shares, 'share', 'shares')}</span>
-                </div>
-              </div>
+                  <CardFooter className="p-3 bg-primary/10">
+                      <Button asChild variant="default" size="sm" className="w-full font-headline bg-primary hover:bg-primary/90">
+                          <Link href={blogShareDetails.url} target="_blank" rel="noopener noreferrer">
+                              Read Blog <ArrowRight className="ml-2 h-4 w-4" />
+                          </Link>
+                      </Button>
+                  </CardFooter>
+              </Card>
+          )}
 
-            {(totalReactionsCount > 0 || repliesCount > 0 || shares > 0) && (
-              <Separator className="my-0 bg-border/50" />
-            )}
-            
-            <div className="flex justify-around items-center p-1.5 pt-1 w-full">
-              <div className="flex-1 justify-center flex">
-                  <ReactionButton
-                      reactions={detailedReactions}
-                      onReact={handleReactToPostMain}
-                      currentUserId={currentUser?.id}
-                      isSubmitting={isReactingToPost}
-                      buttonSize="sm" 
-                      popoverSide="top"
-                  />
-              </div>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center py-2 h-auto" onClick={handleToggleCommentsModal}>
-                <MessageCircle className="h-5 w-5 mr-1.5" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-muted-foreground hover:text-green-500 flex-1 justify-center py-2 h-auto" 
-                disabled={!currentUser || isPreparingShare || !!blogShareDetails} 
-                onClick={handleInitiateShare}
-              >
-                {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
-              </Button>
+
+          {sharedOriginalPostId && !blogShareDetails && !isEmbedded && ( 
+            <div 
+              className="mt-0 mb-3 mx-4 p-0 border border-border/80 rounded-xl hover:border-primary/50 cursor-pointer transition-all overflow-hidden"
+              onClick={handleSharedPostClick}
+              role="button"
+              tabIndex={0}
+              aria-label="View original shared post"
+            >
+              {isLoadingOriginalPost ? (
+                <div className="p-3 space-y-2">
+                  <Skeleton className="h-8 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                </div>
+              ) : postToDisplayAsShared ? (
+                <PostCard post={postToDisplayAsShared} isEmbedded={true} />
+              ) : (
+                <div className="p-3 text-center text-sm text-muted-foreground">
+                  <Link2 className="inline h-4 w-4 mr-1" /> Original post could not be loaded. <span className="underline">Try again</span>.
+                </div>
+              )}
             </div>
-          </CardFooter>
-        )}
-      </Card>
+          )}
+
+          {!isEmbedded && (
+             <CardFooter className="flex flex-col p-0">
+                <div className="flex justify-between items-center w-full px-4 py-2.5 text-xs text-muted-foreground">
+                  <div className="flex items-center">
+                    {totalReactionsCount > 0 ? (
+                      <>
+                        <div className="flex items-center mr-1.5">
+                          {topReactionsSummary.slice(0, 3).map(r => (
+                            <r.Icon key={r.type} className={cn("h-3.5 w-3.5 -ml-1 first:ml-0", r.colorClass)} />
+                          ))}
+                        </div>
+                        <span className="hover:underline cursor-pointer">{totalReactionsCount}</span>
+                      </>
+                    ) : (
+                       <span className="h-[14px]">0 Reacts</span> 
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                      <span className="hover:underline cursor-pointer" onClick={handleToggleCommentsModal}>{pluralize(repliesCount, 'comment', 'comments')}</span>
+                      <span className="hover:underline cursor-pointer">{pluralize(shares, 'share', 'shares')}</span>
+                  </div>
+                </div>
+
+              {(totalReactionsCount > 0 || repliesCount > 0 || shares > 0) && (
+                <Separator className="my-0 bg-border/50" />
+              )}
+              
+              <div className="flex justify-around items-center p-1.5 pt-1 w-full">
+                <div className="flex-1 justify-center flex">
+                    <ReactionButton
+                        reactions={detailedReactions}
+                        onReact={handleReactToPostMain}
+                        currentUserId={currentUser?.id}
+                        isSubmitting={isReactingToPost}
+                        buttonSize="sm" 
+                        popoverSide="top"
+                    />
+                </div>
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary flex-1 justify-center py-2 h-auto" onClick={handleToggleCommentsModal}>
+                  <MessageCircle className="h-5 w-5 mr-1.5" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-muted-foreground hover:text-green-500 flex-1 justify-center py-2 h-auto" 
+                  disabled={!currentUser || isPreparingShare || !!blogShareDetails} 
+                  onClick={handleInitiateShare}
+                >
+                  {isPreparingShare && currentPost.id === postToDisplayAsShared?.id ? <Loader2 className="h-5 w-5 mr-1.5 animate-spin" /> : <Repeat className="h-5 w-5 mr-1.5" />}
+                </Button>
+              </div>
+            </CardFooter>
+          )}
+        </Card>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this post?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the post
+              and all its comments and reactions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeletePost} className="bg-destructive hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       {!isEmbedded && isCommentsModalOpen && currentPost && currentUser && (
         <CommentsModal
