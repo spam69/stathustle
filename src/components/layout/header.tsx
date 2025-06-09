@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Bell, Search, UserCircle, PlusCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2 } from 'lucide-react'; // MessageSquare potentially removed if only for support chat
+import { Bell, Search, UserCircle, PlusCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2, Users, Repeat } from 'lucide-react'; // Added Users, Repeat
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -15,6 +15,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   DropdownMenuGroup,
+  DropdownMenuSub, // Added
+  DropdownMenuSubContent, // Added
+  DropdownMenuSubTrigger, // Added
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ThemeSwitcher } from '@/components/theme-switcher';
@@ -27,12 +30,8 @@ import { useNotifications } from '@/contexts/notification-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import type { Notification } from '@/types';
-
-// HeaderProps interface removed or toggleChat removed from it
-// interface HeaderProps {
-//   toggleChat: () => void;
-// }
+import type { Notification, Identity as IdentityType } from '@/types'; // Added IdentityType
+import { mockIdentities } from '@/lib/mock-data'; // Added for checking owned identities
 
 const NotificationItem = ({
   notification,
@@ -88,8 +87,15 @@ const NotificationItem = ({
 };
 
 
-export default function Header() { // toggleChat prop removed
-  const { user: currentUser, logout, loading: authContextLoading } = useAuth(); 
+export default function Header() {
+  const { 
+    user: activePrincipal, // This is now the active principal (User or Identity)
+    originalUser, // This is the base User if an Identity is active
+    logout, 
+    loading: authContextLoading,
+    switchToIdentity,
+    switchToUser 
+  } = useAuth(); 
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
@@ -114,10 +120,10 @@ export default function Header() { // toggleChat prop removed
   } = useNotifications();
 
   useEffect(() => {
-    if (currentUser && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) {
+    if (activePrincipal && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) {
       fetchInitialNotifications();
     }
-  }, [currentUser, fetchInitialNotifications, isLoadingInitial, displayedNotifications.length, totalServerNotificationsCount]);
+  }, [activePrincipal, fetchInitialNotifications, isLoadingInitial, displayedNotifications.length, totalServerNotificationsCount]);
 
 
   const getInitials = (name: string = "") => {
@@ -165,6 +171,13 @@ export default function Header() { // toggleChat prop removed
      await deleteNotification(notificationId);
   };
 
+  const isIdentityActive = !!originalUser;
+  const userForIdentityCheck = originalUser || activePrincipal; // Use originalUser if identity active, else current active user
+
+  const ownedIdentities = userForIdentityCheck && !userForIdentityCheck.isIdentity 
+    ? mockIdentities.filter(identity => identity.owner.id === userForIdentityCheck.id) 
+    : [];
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
       {isMobile && (
@@ -197,7 +210,7 @@ export default function Header() { // toggleChat prop removed
           </Button>
         </div>
 
-        {currentUser && (
+        {activePrincipal && (
           <Button variant="ghost" size="icon" onClick={openCreatePostModal} aria-label="Create Post">
             <PlusSquare className="h-5 w-5" />
           </Button>
@@ -205,8 +218,8 @@ export default function Header() { // toggleChat prop removed
 
         <ThemeSwitcher />
 
-        {currentUser && ( 
-          <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0 && currentUser) fetchInitialNotifications() }}>
+        {activePrincipal && ( 
+          <DropdownMenu onOpenChange={(isOpen) => { if (isOpen && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0 && activePrincipal) fetchInitialNotifications() }}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
                 <Bell className="h-5 w-5" />
@@ -279,36 +292,60 @@ export default function Header() { // toggleChat prop removed
           </DropdownMenu>
         )}
 
-        {/* Live Support Chat Button removed */}
-        {/* <Button variant="ghost" size="icon" onClick={toggleChat} aria-label="Open Live Support Chat">
-          <MessageSquare className="h-5 w-5" />
-          <span className="sr-only">Live Support</span>
-        </Button> */}
-
         {authContextLoading ? (
           <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-        ) : currentUser ? (
+        ) : activePrincipal ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={currentUser.profilePictureUrl} alt={currentUser.username} />
-                  <AvatarFallback>{getInitials(currentUser.username)}</AvatarFallback>
+                  <AvatarImage src={activePrincipal.profilePictureUrl} alt={activePrincipal.username} />
+                  <AvatarFallback>{getInitials(activePrincipal.username)}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{currentUser.username}</p>
-                  {currentUser.email && (
+                  <p className="text-sm font-medium leading-none">{activePrincipal.displayName || activePrincipal.username}</p>
+                  {activePrincipal.email && (
                     <p className="text-xs leading-none text-muted-foreground">
-                      {currentUser.email}
+                      {activePrincipal.email}
+                    </p>
+                  )}
+                  {isIdentityActive && originalUser && (
+                    <p className="text-xs leading-none text-muted-foreground italic">
+                      Acting as Identity (User: @{originalUser.username})
                     </p>
                   )}
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              
+              {isIdentityActive && originalUser ? (
+                <DropdownMenuItem onClick={switchToUser}>
+                  <Repeat className="mr-2 h-4 w-4" />
+                  Switch to @{originalUser.username}
+                </DropdownMenuItem>
+              ) : (
+                ownedIdentities.length > 0 && (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Users className="mr-2 h-4 w-4" />
+                      <span>Switch to Identity</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {ownedIdentities.map((identity) => (
+                        <DropdownMenuItem key={identity.id} onClick={() => switchToIdentity(identity)}>
+                          {/* Optional: Icon/Avatar for identity here */}
+                          {identity.displayName || identity.username}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                )
+              )}
+
               {isMobile && (
                 <DropdownMenuItem onClick={openCreatePostModal}>
                   <PlusSquare className="mr-2 h-4 w-4" />
@@ -316,16 +353,18 @@ export default function Header() { // toggleChat prop removed
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem asChild>
-                <Link href={`/profile/${currentUser.username}`}>
+                <Link href={`/profile/${activePrincipal.username}`}>
                   <UserCircle className="mr-2 h-4 w-4" />
                   Profile
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-              <Link href="/settings/identity/create">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Create New Identity
-                </Link>
-              </DropdownMenuItem>
+              {!isIdentityActive && ( // Only show "Create New Identity" if base user is active
+                <DropdownMenuItem asChild>
+                <Link href="/settings/identity/create">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Create New Identity
+                  </Link>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem asChild>
                 <Link href="/settings">
                   <Settings className="mr-2 h-4 w-4" />
@@ -380,3 +419,4 @@ export default function Header() { // toggleChat prop removed
     </header>
   );
 }
+
