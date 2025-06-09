@@ -13,7 +13,7 @@ import '@/models/PlayerChatMessage.model';
 import '@/models/Notification.model';
 // ChatConversation and ChatMessage models are not used by API routes directly yet,
 // but good to keep them here if dbConnect is the central point of model registration.
-import '@/models/ChatConversation.model'; 
+// import '@/models/ChatConversation.model'; // Commented out due to "Module not found" error
 import '@/models/ChatMessage.model';
 
 
@@ -73,3 +73,4 @@ async function dbConnect(): Promise<typeof mongoose> {
 }
 
 export default dbConnect;
+
