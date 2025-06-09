@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Bell, Search, UserCircle, PlusCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2, Users, Repeat } from 'lucide-react'; // Added Users, Repeat
+import { Bell, Search, UserCircle, PlusCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2, Users, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -15,9 +15,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   DropdownMenuGroup,
-  DropdownMenuSub, // Added
-  DropdownMenuSubContent, // Added
-  DropdownMenuSubTrigger, // Added
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ThemeSwitcher } from '@/components/theme-switcher';
@@ -30,8 +30,9 @@ import { useNotifications } from '@/contexts/notification-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import type { Notification, Identity as IdentityType } from '@/types'; // Added IdentityType
-import { mockIdentities } from '@/lib/mock-data'; // Added for checking owned identities
+import type { Notification, Identity as IdentityType } from '@/types';
+// import { mockIdentities } from '@/lib/mock-data'; // Removed mockIdentities
+import { useQuery } from '@tanstack/react-query';
 
 const NotificationItem = ({
   notification,
@@ -86,11 +87,19 @@ const NotificationItem = ({
   );
 };
 
+const fetchOwnedIdentities = async (userId: string): Promise<IdentityType[]> => {
+  const response = await fetch(`/api/identities/owned-by/${userId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch owned identities');
+  }
+  return response.json();
+};
+
 
 export default function Header() {
   const { 
-    user: activePrincipal, // This is now the active principal (User or Identity)
-    originalUser, // This is the base User if an Identity is active
+    user: activePrincipal,
+    originalUser,
     logout, 
     loading: authContextLoading,
     switchToIdentity,
@@ -172,11 +181,13 @@ export default function Header() {
   };
 
   const isIdentityActive = !!originalUser;
-  const userForIdentityCheck = originalUser || activePrincipal; // Use originalUser if identity active, else current active user
+  const userForIdentityCheck = originalUser || (activePrincipal && !activePrincipal.isIdentity ? activePrincipal : null);
 
-  const ownedIdentities = userForIdentityCheck && !userForIdentityCheck.isIdentity 
-    ? mockIdentities.filter(identity => identity.owner.id === userForIdentityCheck.id) 
-    : [];
+  const { data: ownedIdentities, isLoading: isLoadingOwnedIdentities } = useQuery<IdentityType[], Error>({
+    queryKey: ['ownedIdentities', userForIdentityCheck?.id],
+    queryFn: () => userForIdentityCheck ? fetchOwnedIdentities(userForIdentityCheck.id) : Promise.resolve([]),
+    enabled: !!userForIdentityCheck, // Only fetch if there's a base user to check ownership for
+  });
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
@@ -300,7 +311,7 @@ export default function Header() {
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={activePrincipal.profilePictureUrl} alt={activePrincipal.username} />
-                  <AvatarFallback>{getInitials(activePrincipal.username)}</AvatarFallback>
+                  <AvatarFallback>{getInitials(activePrincipal.displayName || activePrincipal.username)}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
@@ -328,19 +339,25 @@ export default function Header() {
                   Switch to @{originalUser.username}
                 </DropdownMenuItem>
               ) : (
-                ownedIdentities.length > 0 && (
+                !isLoadingOwnedIdentities && ownedIdentities && ownedIdentities.length > 0 && (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
                       <Users className="mr-2 h-4 w-4" />
                       <span>Switch to Identity</span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
-                      {ownedIdentities.map((identity) => (
-                        <DropdownMenuItem key={identity.id} onClick={() => switchToIdentity(identity)}>
-                          {/* Optional: Icon/Avatar for identity here */}
-                          {identity.displayName || identity.username}
-                        </DropdownMenuItem>
-                      ))}
+                      {isLoadingOwnedIdentities ? (
+                        <DropdownMenuItem disabled>Loading identities...</DropdownMenuItem>
+                      ) : (
+                        ownedIdentities.map((identity) => (
+                          <DropdownMenuItem key={identity.id} onClick={() => switchToIdentity(identity)}>
+                            {identity.displayName || identity.username}
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                       {ownedIdentities && ownedIdentities.length === 0 && !isLoadingOwnedIdentities && (
+                         <DropdownMenuItem disabled>No identities found</DropdownMenuItem>
+                       )}
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
                 )
@@ -358,7 +375,7 @@ export default function Header() {
                   Profile
                 </Link>
               </DropdownMenuItem>
-              {!isIdentityActive && ( // Only show "Create New Identity" if base user is active
+              {!isIdentityActive && (
                 <DropdownMenuItem asChild>
                 <Link href="/settings/identity/create">
                     <PlusCircle className="mr-2 h-4 w-4" /> Create New Identity
@@ -419,4 +436,3 @@ export default function Header() {
     </header>
   );
 }
-

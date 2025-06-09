@@ -1,3 +1,4 @@
+
 // src/lib/dbConnect.ts
 import mongoose from 'mongoose';
 
@@ -5,11 +6,16 @@ import mongoose from 'mongoose';
 import '@/models/User.model';
 import '@/models/Identity.model';
 import '@/models/Post.model';
-import '@/models/Comment.model'; // <<< This is important
+import '@/models/Comment.model';
 import '@/models/Blog.model';
 import '@/models/Player.model';
 import '@/models/PlayerChatMessage.model';
 import '@/models/Notification.model';
+// ChatConversation and ChatMessage models are not used by API routes directly yet,
+// but good to keep them here if dbConnect is the central point of model registration.
+import '@/models/ChatConversation.model'; 
+import '@/models/ChatMessage.model';
+
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
