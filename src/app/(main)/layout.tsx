@@ -11,7 +11,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useFeed } from '@/contexts/feed-context';
 import NotificationDisplayModal from '@/components/notification-display-modal';
 import CommentRepliesModal from '@/components/comment-replies-modal';
-
+import { Suspense } from 'react';
 
 function CreatePostModal() {
   const { 
@@ -75,7 +75,9 @@ export default function MainLayout({
             
             {/* SidebarInset renders a <main> tag. Apply layout classes directly to it. */}
             <SidebarInset className="flex-1 p-0 overflow-y-auto h-[calc(100vh_-_4rem)]"> 
-              {children} {/* children are rendered directly inside SidebarInset's <main> */}
+              <Suspense fallback={<div>Loading...</div>}> {/* Wrap children with Suspense */}
+                {children}
+              </Suspense>
             </SidebarInset>
 
           </div>
