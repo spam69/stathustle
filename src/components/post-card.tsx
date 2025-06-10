@@ -1,6 +1,7 @@
 
 "use client";
 
+import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -51,6 +52,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 
 interface PostCardProps {
@@ -81,6 +83,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const [isLoadingOriginalPost, setIsLoadingOriginalPost] = useState(false);
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const queryClient = useQueryClient();
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -195,12 +198,28 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
     toast({ title: "Edit Post", description: "Edit functionality coming soon!" });
   };
 
-  const confirmDeletePost = () => {
-    // Placeholder for actual delete logic
-    toast({ title: "Post Deleted (Placeholder)", description: `Post "${currentPost.content.substring(0,20)}..." would be deleted.` });
+  const deletePostMutation = useMutation({
+    mutationFn: async (postId: string) => {
+      const response = await axios.delete(`/api/posts/${postId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Post deleted successfully!" });
+      // Invalidate queries that fetch posts or feeds to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      // Ideally, you'd remove the post element from the DOM directly if possible
+      // or use a state management solution to update the list without refetching everything.
+    },
+    onError: (error) => {
+      console.error("Failed to delete post:", error);
+      toast({ title: "Error", description: "Failed to delete post.", variant: "destructive" });
+    },
+  });
+
+  const confirmDeletePost = async () => {
+    deletePostMutation.mutate(currentPost.id);
     setIsDeleteDialogOpen(false);
-    // In a real app, you'd call a delete function from your context here
-    // e.g., deletePostMutation.mutate(currentPost.id);
   };
 
   const handleReportPost = () => {
