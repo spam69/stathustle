@@ -267,9 +267,9 @@ export default function Header() {
                     No notifications yet.
                   </div>
                 ) : (
-                  displayedNotifications.map(notif => (
+                  displayedNotifications.map((notif, idx) => (
                     <NotificationItem
-                      key={notif.id}
+                      key={notif.id || `notif-fallback-${idx}`}
                       notification={notif}
                       onNotificationClick={handleNotificationClick}
                       onDeleteNotification={handleDeleteNotification}

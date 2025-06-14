@@ -1,10 +1,9 @@
-
 "use client";
 
 import type { Notification } from '@/types';
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from './auth-context';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
 const NOTIFICATIONS_PAGE_SIZE = 5; 
@@ -43,8 +42,8 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const fetchNotificationsAPI = async (page: number = 1, limit: number = NOTIFICATIONS_PAGE_SIZE): Promise<PaginatedNotificationsResponse> => {
-  const response = await fetch(`/api/notifications?page=${page}&limit=${limit}`);
+const fetchNotificationsAPI = async (userId: string, page: number = 1, limit: number = NOTIFICATIONS_PAGE_SIZE): Promise<PaginatedNotificationsResponse> => {
+  const response = await fetch(`/api/notifications?userId=${userId}&page=${page}&limit=${limit}`);
   if (!response.ok) {
     throw new Error('Failed to fetch notifications');
   }
@@ -102,22 +101,25 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   
   const queryKey = ['notifications', user?.id]; 
 
-  const { isLoading: isLoadingInitial, error, refetch: fetchInitialNotificationsQuery } = useQuery<PaginatedNotificationsResponse, Error>({
+  const { data, isLoading: isLoadingInitial, error, refetch: fetchInitialNotificationsQuery } = useQuery<PaginatedNotificationsResponse, Error, PaginatedNotificationsResponse, typeof queryKey>({
     queryKey: queryKey,
-    queryFn: () => fetchNotificationsAPI(1, NOTIFICATIONS_PAGE_SIZE),
+    queryFn: () => user?.id ? fetchNotificationsAPI(user.id, 1, NOTIFICATIONS_PAGE_SIZE) : Promise.resolve({ items: [], hasMore: false, currentPage: 1, totalItems: 0, totalPages: 1 }),
     enabled: !!user,
     refetchInterval: 60000, 
     staleTime: 30000,
-    onSuccess: (data) => {
-      // console.log('[NotificationContext] Initial fetch onSuccess data:', JSON.stringify(data, null, 2));
+  });
+
+  useEffect(() => {
+    if (data) {
+      console.log('[NotificationContext] Fetched notifications:', data.items);
       setDisplayedNotifications(data.items);
       setCurrentPage(data.currentPage);
       setTotalServerNotificationsCount(data.totalItems);
-    },
-    onError: (err) => {
-       console.error('[NotificationContext] Initial fetch error:', err);
     }
-  });
+    if (error) {
+      console.error('[NotificationContext] Initial fetch error:', error);
+    }
+  }, [data, error]);
 
   const unreadCount = displayedNotifications.filter(n => !n.isRead).length;
   const hasMoreNotifications = displayedNotifications.length < totalServerNotificationsCount;
@@ -129,10 +131,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
              return Promise.reject(new Error("No more notifications to load or initial load pending."));
         }
         // console.log(`[NotificationContext] Loading more notifications, current page: ${currentPage}, requesting page: ${currentPage + 1}`);
-        return fetchNotificationsAPI(currentPage + 1, NOTIFICATIONS_PAGE_SIZE);
+        return user?.id ? fetchNotificationsAPI(user.id, currentPage + 1, NOTIFICATIONS_PAGE_SIZE) : Promise.resolve({ items: [], hasMore: false, currentPage: 1, totalItems: 0, totalPages: 1 });
     },
     onSuccess: (data) => {
-      // console.log('[NotificationContext] Load more onSuccess data:', JSON.stringify(data, null, 2));
+      console.log('[NotificationContext] Loaded more notifications:', data.items);
       setDisplayedNotifications(prev => {
         const newItems = data.items.filter(item => !prev.find(pItem => pItem.id === item.id));
         return [...prev, ...newItems];
