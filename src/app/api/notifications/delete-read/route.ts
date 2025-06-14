@@ -1,27 +1,19 @@
-
 import { NextResponse } from 'next/server';
-import { mockNotifications, mockAdminUser } from '@/lib/mock-data';
+import dbConnect from '@/lib/dbConnect';
+import NotificationModel from '@/models/Notification.model';
+import UserModel from '@/models/User.model';
 
 export async function POST(request: Request) {
   try {
-    // In a real app, get userId from session
-    const userId = mockAdminUser.id; 
-
-    const initialLength = mockNotifications.length;
-    // Filter out read notifications for the current user
-    const notificationsToKeep = mockNotifications.filter(
-      n => !(n.recipientUserId === userId && n.isRead)
-    );
-    
-    const deletedCount = mockNotifications.length - notificationsToKeep.length;
-    
-    // Replace the original array with the filtered one
-    mockNotifications.length = 0; // Clear original array
-    mockNotifications.push(...notificationsToKeep); // Add back only unread or others' notifications
-
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 100));
-
+    await dbConnect();
+    // For demo, use the first user in the database
+    const user = await UserModel.findOne();
+    if (!user) {
+      return NextResponse.json({ message: 'No user found in database.' }, { status: 404 });
+    }
+    const userId = user._id;
+    const result = await NotificationModel.deleteMany({ recipientUserId: userId, isRead: true });
+    const deletedCount = result.deletedCount || 0;
     return NextResponse.json({ message: `${deletedCount} read notification(s) deleted.` });
   } catch (error) {
     console.error('Delete Read Notifications API error:', error);

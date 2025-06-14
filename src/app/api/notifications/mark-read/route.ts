@@ -1,30 +1,27 @@
-
 import { NextResponse } from 'next/server';
-import { mockNotifications, mockAdminUser } from '@/lib/mock-data';
+import dbConnect from '@/lib/dbConnect';
+import NotificationModel from '@/models/Notification.model';
+import UserModel from '@/models/User.model';
 
 export async function POST(request: Request) {
   try {
-    // In a real app, get userId from session
-    const userId = mockAdminUser.id;
+    await dbConnect();
     const { notificationId } = (await request.json().catch(() => ({}))) as { notificationId?: string };
-
+    // For demo, use the first user in the database
+    const user = await UserModel.findOne();
+    if (!user) {
+      return NextResponse.json({ message: 'No user found in database.' }, { status: 404 });
+    }
+    const userId = user._id;
 
     let updatedCount = 0;
-    mockNotifications.forEach(n => {
-      if (n.recipientUserId === userId && !n.isRead) {
-        if (notificationId && n.id === notificationId) {
-          n.isRead = true;
-          updatedCount++;
-        } else if (!notificationId) { // Mark all as read if no specific ID
-          n.isRead = true;
-          updatedCount++;
-        }
-      }
-    });
-    
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 100));
-
+    if (notificationId) {
+      const result = await NotificationModel.updateOne({ _id: notificationId, recipientUserId: userId }, { $set: { isRead: true } });
+      updatedCount = result.modifiedCount;
+    } else {
+      const result = await NotificationModel.updateMany({ recipientUserId: userId, isRead: false }, { $set: { isRead: true } });
+      updatedCount = result.modifiedCount;
+    }
     return NextResponse.json({ message: `${updatedCount} notification(s) marked as read.` });
   } catch (error) {
     console.error('Mark Notifications Read API error:', error);

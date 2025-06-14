@@ -1,11 +1,10 @@
-
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
 import CommentModel from '@/models/Comment.model';
 import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
-import { createNotification } from '@/lib/mock-data';
+import { createNotification } from '@/lib/notifications';
 import type { ReactionEntry, User as UserType, Identity as IdentityType, Post as PostType, Comment as CommentTypeClient } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
 import mongoose from 'mongoose';

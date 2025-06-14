@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { mockUsers, mockAdminUser, createNotification } from '@/lib/mock-data';
+import { mockUsers, mockAdminUser } from '@/lib/mock-data';
+import { createNotification } from '@/lib/notifications';
 import type { User } from '@/types';
 
 export async function POST(

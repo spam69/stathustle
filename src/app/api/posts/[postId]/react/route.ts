@@ -1,10 +1,9 @@
-
 import { NextResponse, type NextRequest } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
 import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
-import { createNotification } from '@/lib/mock-data';
+import { createNotification } from '@/lib/notifications';
 import type { ReactionEntry, User as UserType, Identity as IdentityType, Post as PostType } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
 import mongoose from 'mongoose';
@@ -95,7 +94,7 @@ export async function POST(
 ) {
   await dbConnect();
   try {
-    const { postId } = params;
+    const { postId } = await params;
     const { reactionType, userId: reactingUserId } = (await request.json()) as { reactionType: ReactionType | null, userId: string };
     
     if (!reactingUserId) {
@@ -165,12 +164,26 @@ export async function POST(
         // Ensure post.author is an object with _id, not just an ObjectId string after lean().
         // If populated correctly, post.author is an object.
         const postAuthorObject = post.author.toObject ? post.author.toObject() : post.author;
-        if (postAuthorObject && postAuthorObject._id) {
+        // Ensure all required fields for notification
+        const notificationAuthor = {
+          id: postAuthorObject._id?.toString() || postAuthorObject.id,
+          username: postAuthorObject.username || 'Unknown',
+          displayName: postAuthorObject.displayName || postAuthorObject.username || 'Unknown',
+          profilePictureUrl: postAuthorObject.profilePictureUrl || '',
+          isIdentity: postAuthorObject.isIdentity || false,
+          email: postAuthorObject.email,
+          owner: postAuthorObject.owner,
+          teamMembers: postAuthorObject.teamMembers || [],
+          socialLinks: postAuthorObject.socialLinks || [],
+          themePreference: postAuthorObject.themePreference,
+          bio: postAuthorObject.bio,
+        };
+        if (notificationAuthor && notificationAuthor.id) {
             createNotification(
                 'new_reaction_post', 
                 reactingUser, 
-                postAuthorObject._id.toString(), 
-                { ...post.toObject(), id: post._id.toString(), author: postAuthorObject } as PostType
+                notificationAuthor.id, 
+                { ...post.toObject(), id: post._id.toString(), author: notificationAuthor } as PostType
             );
         } else {
             console.warn(`[API/POSTS/${postId}/REACT] Post author data incomplete for notification. Author:`, post.author);

@@ -1,47 +1,42 @@
-
 import { NextResponse } from 'next/server';
-import { mockNotifications, mockAdminUser } from '@/lib/mock-data';
-import type { Notification } from '@/types';
+import dbConnect from '@/lib/dbConnect';
+import NotificationModel from '@/models/Notification.model';
+import UserModel from '@/models/User.model';
 
 const DEFAULT_NOTIFICATIONS_LIMIT = 5; // Default items per page for this API
 
 export async function GET(request: Request) {
   try {
+    await dbConnect();
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || String(DEFAULT_NOTIFICATIONS_LIMIT), 10);
 
-    const userId = mockAdminUser.id; 
-    // console.log(`[API/NOTIFICATIONS] Request for page ${page}, limit ${limit} for userId: ${userId}`);
-    // console.log(`[API/NOTIFICATIONS] Total mockNotifications available in mock-data: ${mockNotifications.length}`);
+    // Fetch a real user from the database (for demo, get the first user)
+    const user = await UserModel.findOne();
+    if (!user) {
+      return NextResponse.json({ message: 'No user found in database.' }, { status: 404 });
+    }
+    const userId = user._id;
 
+    // Query notifications for the user, sorted by createdAt descending
+    const filter = { recipientUserId: userId };
+    const totalItems = await NotificationModel.countDocuments(filter);
+    const notifications = await NotificationModel.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
 
-    const allUserNotifications = mockNotifications
-      .filter(n => n.recipientUserId === userId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    // console.log(`[API/NOTIFICATIONS] Filtered ${allUserNotifications.length} notifications for user ${userId}`);
-
-    const totalItems = allUserNotifications.length;
-    
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const paginatedNotifications = allUserNotifications.slice(startIndex, endIndex);
-    
-    const hasMore = endIndex < totalItems;
-
-    // console.log(`[API/NOTIFICATIONS] Returning ${paginatedNotifications.length} items. Total: ${totalItems}, HasMore: ${hasMore}`);
-
-    await new Promise(resolve => setTimeout(resolve, 200)); // Simulate network delay
+    const hasMore = page * limit < totalItems;
 
     return NextResponse.json({
-      items: paginatedNotifications,
+      items: notifications,
       hasMore,
       currentPage: page,
-      totalItems, 
+      totalItems,
       totalPages: Math.ceil(totalItems / limit),
     });
-
   } catch (error) {
     console.error('Get Notifications API error:', error);
     return NextResponse.json({ message: 'An unexpected error occurred' }, { status: 500 });

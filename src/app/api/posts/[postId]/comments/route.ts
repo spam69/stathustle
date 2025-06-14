@@ -1,11 +1,10 @@
-
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
 import CommentModel from '@/models/Comment.model';
 import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
-import { createNotification } from '@/lib/mock-data'; // Assuming still used for notifications
+import { createNotification } from '@/lib/notifications';
 import type { Comment as CommentType, User as UserType, Identity as IdentityType } from '@/types';
 import { mockAdminUser } from '@/lib/mock-data'; // Placeholder for authenticated user
 
