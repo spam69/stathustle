@@ -1,4 +1,3 @@
-
 "use client";
 import type { ReactNode } from 'react';
 import Header from '@/components/layout/header';
@@ -60,26 +59,24 @@ export default function MainLayout({
 }: {
   children: ReactNode;
 }) {
-
   return (
     <FeedProvider>
       <SidebarProvider>
         <div className="flex min-h-screen flex-col bg-background">
           <Header /> 
-          <div className="flex flex-1 pt-16"> 
-            <Sidebar collapsible="icon"> {/* Removed md:flex lg:flex - component handles its own desktop visibility */}
+          <div className="flex flex-1 pt-[var(--header-height)]">
+            <Sidebar collapsible="icon" className="w-64 min-w-[16rem] max-w-[18rem]">
               <SidebarContent>
                 <SidebarNav />
               </SidebarContent>
             </Sidebar>
-            
-            {/* SidebarInset renders a <main> tag. Apply layout classes directly to it. */}
-            <SidebarInset className="flex-1 p-0 overflow-y-auto h-[calc(100vh_-_4rem)]"> 
-              <Suspense fallback={<div>Loading...</div>}> {/* Wrap children with Suspense */}
-                {children}
-              </Suspense>
-            </SidebarInset>
-
+            <div className="flex-1 flex">
+              <SidebarInset className="w-full flex-1 overflow-y-auto h-[calc(100vh_-_var(--header-height))]">
+                <Suspense fallback={<div className="p-4">Loading...</div>}>
+                  {children}
+                </Suspense>
+              </SidebarInset>
+            </div>
           </div>
           <CreatePostModal />
           <NotificationDisplayModal />

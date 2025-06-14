@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import IdentityModel, { IIdentitySchema } from '@/models/Identity.model';
@@ -45,7 +44,7 @@ export async function GET(
 ) {
   await dbConnect();
   try {
-    const { userId } = params;
+    const { userId } = await params;
 
     if (!userId) {
       return NextResponse.json({ message: 'User ID is required' }, { status: 400 });

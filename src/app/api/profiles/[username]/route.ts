@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import UserModel from '@/models/User.model';
@@ -10,7 +9,7 @@ export async function GET(
 ) {
   await dbConnect();
   try {
-    const username = context.params.username;
+    const { username } = await context.params;
     
     // Case-insensitive search for username
     const usernameRegex = new RegExp(`^${username}$`, 'i');
