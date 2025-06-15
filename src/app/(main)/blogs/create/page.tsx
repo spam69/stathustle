@@ -18,6 +18,7 @@ import Image from 'next/image';
 import { handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState } from '@/lib/image-upload-utils';
 import { v4 as uuidv4 } from 'uuid'; // Import UUID
 import EmojiPicker from '@/components/emoji-picker'; // Import EmojiPicker
+import MentionTextarea from '@/components/mention-textarea';
 
 const blogPostSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters.").max(150, "Title must be 150 characters or less."),
@@ -239,11 +240,13 @@ export default function CreateBlogPage() {
                       />
                     </div>
                     <FormControl>
-                      <Textarea 
+                      <MentionTextarea
                         ref={contentTextareaRef}
-                        placeholder="Write your blog post content here..." 
-                        {...field} 
-                        rows={15} 
+                        placeholder="Write your blog post content here..."
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        rows={15}
                       />
                     </FormControl>
                     <FormDescription>Markdown is not yet supported. Use plain text for now.</FormDescription>

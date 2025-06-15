@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
@@ -20,6 +19,7 @@ import GiphyPickerModal from './giphy-picker-modal';
 import type { IGif } from '@giphy/js-types';
 import { useFeed } from '@/contexts/feed-context';
 import EmojiPicker from './emoji-picker';
+import MentionTextarea from './mention-textarea';
 
 const postSchema = z.object({
   content: z.string().max(1000, "Post too long.").optional(),
@@ -316,11 +316,11 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
                 name="content"
                 control={form.control}
                 render={({ field }) => (
-                  <Textarea
+                  <MentionTextarea
                     {...field}
                     ref={(e) => {
-                      field.ref(e); // RHF's internal ref
-                      contentTextareaRef.current = e; // Your custom ref
+                      field.ref(e);
+                      contentTextareaRef.current = e;
                     }}
                     placeholder={isRegularSharingMode ? "Add your thoughts to the shared post..." : isBlogSharingMode ? "Add your thoughts about the blog..." : `What's happening, ${user?.username}?`}
                     className="min-h-[70px] flex-1 resize-none shadow-none focus-visible:ring-0 border-0 bg-transparent p-1 text-base"

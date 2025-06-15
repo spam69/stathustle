@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
@@ -20,6 +19,7 @@ import { useAuth } from '@/contexts/auth-context';
 import React from 'react'; // Import React for Fragment
 import { parseMentions } from '@/lib/text-processing'; // Import for parsing mentions
 import EmojiPicker from './emoji-picker'; // Import EmojiPicker
+import MentionTextarea from './mention-textarea';
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
   const username = author.username;
@@ -193,14 +193,13 @@ export default function CommentRepliesModal() {
                 <AvatarImage src={currentUserInfo.profilePictureUrl} alt={currentUserInfo.displayName} />
                 <AvatarFallback>{getInitials(currentUserInfo.displayName)}</AvatarFallback>
               </Avatar>
-              <Textarea
+              <MentionTextarea
                 ref={replyInputRef}
                 placeholder={`Reply to @${topLevelCommentAuthorInfo.displayName}...`}
                 value={newReplyText}
-                onChange={(e) => setNewReplyText(e.target.value)}
+                onChange={setNewReplyText}
                 className="min-h-[60px] flex-1"
                 maxLength={500}
-                rows={2}
                 disabled={isCommenting}
               />
               <div className="flex flex-col gap-1">

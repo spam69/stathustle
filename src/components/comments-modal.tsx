@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, Fragment, useRef } from 'react';
@@ -19,6 +18,7 @@ import type { ReactionType } from '@/lib/reactions';
 import React from 'react'; // Import React for Fragment
 import { parseMentions } from '@/lib/text-processing'; // Import for parsing mentions
 import EmojiPicker from './emoji-picker'; // Import EmojiPicker
+import MentionTextarea from './mention-textarea';
 
 interface CommentsModalProps {
   post: Post | null;
@@ -193,14 +193,13 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser }: Co
                   <AvatarImage src={currentUserInfo.profilePictureUrl} alt={currentUserInfo.displayName} />
                   <AvatarFallback>{getInitials(currentUserInfo.displayName)}</AvatarFallback>
                 </Avatar>
-                <Textarea
+                <MentionTextarea
                   ref={commentInputRef}
                   placeholder={replyingTo ? `Reply to @${getAuthorDisplayInfo(replyingTo.author).displayName}...` : "Write a comment..."}
                   value={newCommentText}
-                  onChange={(e) => setNewCommentText(e.target.value)}
+                  onChange={setNewCommentText}
                   className="min-h-[60px] flex-1"
                   maxLength={500}
-                  rows={2}
                   disabled={isCommenting}
                 />
                 <div className="flex flex-col gap-1">

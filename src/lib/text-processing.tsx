@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -9,7 +8,7 @@ import React from 'react';
 // Ensures it's preceded by a space, start of line, or non-word character to avoid matching in emails.
 const MENTION_REGEX = /(^|\s|(?<!\w))(@([\w.-]+))/g;
 
-export function parseMentions(text: string | undefined | null): (string | JSX.Element)[] {
+export function parseMentions(text: string | undefined | null, validUsernames?: Set<string>): (string | JSX.Element)[] {
   if (!text) return [];
 
   const parts: (string | JSX.Element)[] = [];
@@ -17,39 +16,39 @@ export function parseMentions(text: string | undefined | null): (string | JSX.El
   let match;
 
   while ((match = MENTION_REGEX.exec(text)) !== null) {
-    const prefix = match[1] || ''; // Space, start of string, or non-word character
-    const fullMention = match[2]; // e.g., @username
-    const username = match[3]; // e.g., username
-    // Adjust startIndex to account for the prefix that MENTION_REGEX might capture (like a space)
+    const prefix = match[1] || '';
+    const fullMention = match[2];
+    const username = match[3];
     const mentionStartIndexInMatch = match[0].indexOf(fullMention);
     const startIndex = match.index + mentionStartIndexInMatch;
 
-    // Add text before the mention
     if (startIndex > lastIndex) {
       parts.push(text.substring(lastIndex, startIndex));
     }
 
-    // Add the mention as a Link
-    parts.push(
-      <Link
-        key={`${username}-${startIndex}`}
-        href={`/profile/${username}`}
-        className="text-primary hover:underline font-medium"
-        onClick={(e) => e.stopPropagation()} // Prevent card click-through if mention is in a card
-      >
-        {fullMention}
-      </Link>
-    );
+    // Only linkify if username is valid
+    if (validUsernames && !validUsernames.has(username)) {
+      parts.push(fullMention);
+    } else {
+      parts.push(
+        <Link
+          key={`${username}-${startIndex}`}
+          href={`/profile/${username}`}
+          className="text-primary hover:underline font-medium"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {fullMention}
+        </Link>
+      );
+    }
 
     lastIndex = startIndex + fullMention.length;
   }
 
-  // Add any remaining text after the last mention
   if (lastIndex < text.length) {
     parts.push(text.substring(lastIndex));
   }
 
-  // If no mentions were found, return the original text in an array
   if (parts.length === 0 && text.length > 0) {
     return [text];
   }
