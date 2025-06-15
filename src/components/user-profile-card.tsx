@@ -40,6 +40,9 @@ export default function UserProfileCard({ profileUser, setProfileUser }: UserPro
     }
   }
 
+  // Add this check for acting as identity
+  const isActingAsIdentity = currentUser?.isIdentity && currentUser.id === profileUser.id;
+
   // Check if current user is following this profile
   useEffect(() => {
     if (currentUser && profileUser) {
@@ -262,24 +265,33 @@ export default function UserProfileCard({ profileUser, setProfileUser }: UserPro
                    </Button>
                </div>
           )}
-          {!isCurrentUserProfile && (
-              <div className="mt-4 space-x-2">
-                  <Button 
-                    onClick={() => handleFollowAction(isFollowing ? 'unfollow' : 'follow')}
-                    disabled={isLoading}
-                    variant={isFollowing ? "outline" : "default"}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : isFollowing ? (
-                      <UserMinus className="mr-2 h-4 w-4" />
-                    ) : (
-                      <UserPlus className="mr-2 h-4 w-4" />
-                    )}
-                    {isFollowing ? 'Unfollow' : 'Follow'} {isIdentityProfile ? 'Identity' : 'User'}
-                  </Button>
-                  <Button variant="outline">Message</Button>
-              </div>
+          {/* BUTTON LOGIC: Show Manage Team Members if acting as identity, else show Follow/Unfollow */}
+          {isActingAsIdentity ? (
+            <div className="mt-4">
+              <Button asChild variant="outline">
+                <Link href={`/settings/identity/${profileUser.id}/team`}>
+                  <Users className="mr-2 h-4 w-4" /> Manage Team Members
+                </Link>
+              </Button>
+            </div>
+          ) : !isCurrentUserProfile && (
+            <div className="mt-4 space-x-2">
+              <Button 
+                onClick={() => handleFollowAction(isFollowing ? 'unfollow' : 'follow')}
+                disabled={isLoading}
+                variant={isFollowing ? "outline" : "default"}
+              >
+                {isLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : isFollowing ? (
+                  <UserMinus className="mr-2 h-4 w-4" />
+                ) : (
+                  <UserPlus className="mr-2 h-4 w-4" />
+                )}
+                {isFollowing ? 'Unfollow' : 'Follow'} {isIdentityProfile ? 'Identity' : 'User'}
+              </Button>
+              <Button variant="outline">Message</Button>
+            </div>
           )}
 
           {!isIdentityProfile && (profileUser as User).sportInterests && (profileUser as User).sportInterests!.length > 0 && (
