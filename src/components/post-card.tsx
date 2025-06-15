@@ -54,6 +54,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import SearchResultModal from './search-result-modal';
 import ReactionsModal from "./reactions-modal";
+import EditPostModal from './edit-post-modal';
 
 
 interface PostCardProps {
@@ -86,6 +87,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSharedPostModalOpen, setIsSharedPostModalOpen] = useState(false);
   const [isReactionsModalOpen, setIsReactionsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const queryClient = useQueryClient();
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -181,7 +183,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   };
 
   const handleEditPost = () => {
-    toast({ title: "Edit Post", description: "Edit functionality coming soon!" });
+    setIsEditModalOpen(true);
   };
 
   const deletePostMutation = useMutation({
@@ -300,6 +302,14 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
 
   return (
     <>
+      {/* Edit Post Modal */}
+      {isEditModalOpen && (
+        <EditPostModal
+          post={currentPost}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+        />
+      )}
       {/* Shared Post Modal */}
       {sharedOriginalPostId && isSharedPostModalOpen && (
         <SearchResultModal
