@@ -47,7 +47,28 @@ export async function POST(
       return NextResponse.json({ message: 'Author not found' }, { status: 404 });
     }
     
-    const authorForNotification = authorDoc; // Already fetched
+    // Transform author for notification
+    const authorForNotification = {
+      ...authorDoc,
+      id: authorDoc._id.toString(),
+      isIdentity: authorModelType === 'Identity',
+      username: authorDoc.username || 'Unknown',
+      displayName: authorDoc.displayName || authorDoc.username || 'Unknown',
+      profilePictureUrl: authorDoc.profilePictureUrl || '',
+      email: authorDoc.email,
+      ...(authorModelType === 'Identity' ? {
+        owner: authorDoc.owner,
+        teamMembers: authorDoc.teamMembers || [],
+      } : {
+        password: authorDoc.password,
+        bannerImageUrl: authorDoc.bannerImageUrl,
+        socialLinks: authorDoc.socialLinks || [],
+        themePreference: authorDoc.themePreference,
+        bio: authorDoc.bio,
+        followers: authorDoc.followers || [],
+        following: authorDoc.following || [],
+      })
+    };
 
     const newComment = new CommentModel({
       author: authorDoc._id,
@@ -90,7 +111,7 @@ export async function POST(
     if (postRecipientId && postRecipientModel && postRecipientId !== authorDoc._id.toString()) {
         createNotification(
             'new_comment', 
-            authorForNotification as UserType | IdentityType, // Cast: fetched earlier
+            authorForNotification as UserType | IdentityType,
             postRecipientId,
             postRecipientModel,
             post.toObject({ virtuals: true }) as any, 

@@ -16,16 +16,45 @@ export async function createNotification(
   comment?: Comment,
   originalComment?: Comment
 ): Promise<void> {
-  if (!actor || !actor.id) {
+  // Transform actor to ensure it has the correct structure
+  const transformedActor = actor.isIdentity ? {
+    ...actor,
+    id: (actor as any)._id?.toString() || actor.id,
+    username: actor.username || 'Unknown',
+    displayName: actor.displayName || actor.username || 'Unknown',
+    profilePictureUrl: actor.profilePictureUrl || '',
+    isIdentity: true as const,
+    email: actor.email,
+    owner: (actor as Identity).owner,
+    teamMembers: (actor as Identity).teamMembers || [],
+  } : {
+    ...actor,
+    id: (actor as any)._id?.toString() || actor.id,
+    username: actor.username || 'Unknown',
+    displayName: actor.displayName || actor.username || 'Unknown',
+    profilePictureUrl: actor.profilePictureUrl || '',
+    isIdentity: false as const,
+    email: actor.email,
+    password: (actor as User).password,
+    bannerImageUrl: (actor as User).bannerImageUrl,
+    socialLinks: (actor as User).socialLinks || [],
+    themePreference: (actor as User).themePreference,
+    bio: (actor as User).bio,
+    followers: (actor as User).followers || [],
+    following: (actor as User).following || [],
+  };
+
+  if (!transformedActor.id) {
     console.warn('[Notifications] createNotification called with invalid actor:', actor);
     return;
   }
-  if (actor.id === recipientId && type.startsWith('new_reaction')) return;
-  if (actor.id === recipientId && type === 'new_follower') return;
+
+  if (transformedActor.id === recipientId && type.startsWith('new_reaction')) return;
+  if (transformedActor.id === recipientId && type === 'new_follower') return;
 
   let message = '';
   let link = `/profile/${recipientId}`;
-  const actorName = `<strong>${getActorDisplayName(actor)}</strong>`;
+  const actorName = `<strong>${getActorDisplayName(transformedActor)}</strong>`;
   const postContentPreview = post?.content ? `"${post.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : (post ? 'your post' : 'content');
   let relevantCommentContentPreview = '';
   if (comment) {
@@ -52,14 +81,14 @@ export async function createNotification(
       break;
     case 'new_follower':
       message = `${actorName} started following you.`;
-      link = `/profile/${actor.username}`;
+      link = `/profile/${transformedActor.username}`;
       break;
   }
 
   await NotificationModel.create({
     type,
-    actor: new mongoose.Types.ObjectId(actor.id),
-    actorModel: 'isIdentity' in actor && actor.isIdentity ? 'Identity' : 'User',
+    actor: new mongoose.Types.ObjectId(transformedActor.id),
+    actorModel: transformedActor.isIdentity ? 'Identity' : 'User',
     recipientId: new mongoose.Types.ObjectId(recipientId),
     recipientModel,
     postId: post?.id ? new mongoose.Types.ObjectId(post.id) : undefined,
