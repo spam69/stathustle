@@ -43,7 +43,7 @@ export default function PlayersLandingPage() {
                 </p>
                 <Button asChild className="w-full font-headline">
                   <Link href={`/players/${sport.name}/${sport.examplePlayerSlug}`}>
-                    View {sport.examplePlayer} (Example)
+                    View {sport.examplePlayer}
                   </Link>
                 </Button>
               </CardContent>

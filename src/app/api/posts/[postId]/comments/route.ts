@@ -6,7 +6,6 @@ import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
 import { createNotification } from '@/lib/notifications';
 import type { Comment as CommentType, User as UserType, Identity as IdentityType } from '@/types';
-import { mockAdminUser } from '@/lib/mock-data'; // Placeholder for authenticated user
 
 export async function POST(
   request: Request,
@@ -17,7 +16,7 @@ export async function POST(
     const { postId } = await params;
     const { content, authorId: providedAuthorId, parentId } = await request.json();
 
-    const authorIdToUse = providedAuthorId || mockAdminUser.id; // Placeholder
+    const authorIdToUse = providedAuthorId;
 
     if (!content || !authorIdToUse) {
       return NextResponse.json({ message: 'Content and authorId are required' }, { status: 400 });

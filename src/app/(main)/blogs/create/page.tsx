@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
@@ -14,7 +13,6 @@ import Link from "next/link";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Blog } from '@/types';
-import { mockIdentities } from '@/lib/mock-data';
 import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon, Smile } from 'lucide-react'; // Added Smile
 import Image from 'next/image'; 
 import { handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState } from '@/lib/image-upload-utils';
@@ -47,9 +45,10 @@ export default function CreateBlogPage() {
 
   useEffect(() => {
     if (identityId) {
-      const identity = mockIdentities.find(id => id.id === identityId);
-      if (identity && currentUser && identity.owner.id === currentUser.id) {
-        setAuthorInfo({ name: identity.displayName || identity.username, type: 'identity', id: identity.id });
+      // TODO: Replace mockIdentities usage with real API/database call
+      // const identity = mockIdentities.find(id => id.id === identityId);
+      if (currentUser && identityId) {
+        setAuthorInfo({ name: identityId, type: 'identity', id: identityId });
       } else {
          toast({ title: "Error", description: "Invalid or unauthorized identity for posting.", variant: "destructive" });
          router.push('/blogs');

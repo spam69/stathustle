@@ -30,7 +30,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import type { Notification, Identity as IdentityType, Post } from '@/types';
-// import { mockIdentities } from '@/lib/mock-data'; // Removed mockIdentities
 import { useQuery } from '@tanstack/react-query';
 import SearchResultModal from '@/components/search-result-modal';
 import React from 'react';

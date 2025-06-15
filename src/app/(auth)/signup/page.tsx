@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -13,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
 import type { SportInterest } from '@/types';
-import { availableSports, sportInterestLevels } from '@/lib/mock-data';
+import { availableSports, sportInterestLevels } from '@/lib/constants';
 import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';

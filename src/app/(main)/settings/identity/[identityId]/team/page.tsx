@@ -1,8 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { mockIdentities } from "@/lib/mock-data"; // For fetching identity name based on ID
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";// For fetching identity name based on ID
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";

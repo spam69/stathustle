@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
 import type { SportInterest, User } from '@/types';
-import { availableSports, sportInterestLevels, mockIdentities } from '@/lib/mock-data';
+import { availableSports, sportInterestLevels } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Newspaper, Users, PlusCircle, Loader2 } from 'lucide-react';
