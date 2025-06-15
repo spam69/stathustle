@@ -1,4 +1,3 @@
-
 import mongoose from 'mongoose';
 import dbConnect from '@/lib/dbConnect';
 import PostModel from '@/models/Post.model';
@@ -60,6 +59,8 @@ const transformComment = (commentData: any): CommentClientType | undefined => {
       createdAt: commentData.createdAt?.toISOString(),
       parentId: commentData.parentId?.toString(),
       detailedReactions: commentData.detailedReactions?.map(transformReaction) || [],
+      mediaUrl: commentData.mediaUrl,
+      mediaType: commentData.mediaType,
     };
   }
   console.warn(`[transformComment] Received unpopulated or malformed comment data: ${JSON.stringify(commentData)}`);

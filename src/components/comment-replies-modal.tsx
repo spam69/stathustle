@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Award, X, Smile } from 'lucide-react'; // Added Smile
+import { Send, Award, X, Smile, ImageIcon, Film } from 'lucide-react'; // Added ImageIcon and Film
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +20,9 @@ import React from 'react'; // Import React for Fragment
 import { parseMentions } from '@/lib/text-processing'; // Import for parsing mentions
 import EmojiPicker from './emoji-picker'; // Import EmojiPicker
 import MentionTextarea from './mention-textarea';
+import Image from 'next/image';
+import GiphyPickerModal from './giphy-picker-modal';
+import { Loader2 } from 'lucide-react';
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
   const username = author.username;
@@ -47,10 +50,17 @@ export default function CommentRepliesModal() {
   const { toast } = useToast();
   const [newReplyText, setNewReplyText] = useState('');
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
+  const [imageToUpload, setImageToUpload] = useState<{ file: File, localPreviewUrl: string } | null>(null);
+  const [gifUrl, setGifUrl] = useState<string | undefined>(undefined);
+  const [isGiphyModalOpen, setIsGiphyModalOpen] = useState(false);
+  const [isUploadingToR2, setIsUploadingToR2] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isCommentRepliesModalOpen) {
       setNewReplyText('');
+      setImageToUpload(null);
+      setGifUrl(undefined);
     }
   }, [isCommentRepliesModalOpen]);
 
@@ -60,18 +70,116 @@ export default function CommentRepliesModal() {
 
   const { post, topLevelComment } = activeCommentForReplies;
 
+  const uploadImageToR2Internal = async (file: File): Promise<string | null> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64DataUri = reader.result as string;
+        try {
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileData: base64DataUri,
+              fileName: file.name,
+              fileType: file.type,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Upload to R2 failed');
+          }
+          resolve(result.url);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = (error) => {
+        reject(new Error('Failed to read file for upload.'));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUploadClick = () => {
+    imageInputRef.current?.click();
+  };
+
+  const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast({ title: 'Invalid File', description: 'Please select an image file.', variant: 'destructive' });
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: 'File Too Large', description: 'Image size cannot exceed 5MB.', variant: 'destructive' });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageToUpload({ file, localPreviewUrl: reader.result as string });
+        setGifUrl(undefined);
+        toast({ title: 'Image Selected', description: 'Image ready for posting.' });
+      };
+      reader.onerror = () => {
+        toast({ title: 'Error Reading File', description: 'Could not read the selected image.', variant: 'destructive' });
+      };
+      reader.readAsDataURL(file);
+    }
+    if (event.target) event.target.value = '';
+  };
+
+  const handleGifSelect = (gif: IGif) => {
+    const selectedGifUrl = gif.images.downsized_medium?.url || gif.images.original.url;
+    setGifUrl(selectedGifUrl);
+    setImageToUpload(null);
+    setIsGiphyModalOpen(false);
+    toast({ title: 'GIF Added', description: 'GIF attached from GIPHY.' });
+  };
+
+  const removeMedia = () => {
+    setImageToUpload(null);
+    setGifUrl(undefined);
+  };
+
   const handleReplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newReplyText.trim()) {
-      toast({ title: "Error", description: "Reply cannot be empty.", variant: "destructive" });
+    if ((!newReplyText.trim() && !imageToUpload && !gifUrl) || !currentUser) {
+      toast({ title: 'Error', description: 'Reply cannot be empty and you must be logged in.', variant: 'destructive' });
       return;
+    }
+    let finalMediaUrl: string | undefined = gifUrl;
+    let finalMediaType: 'image' | 'gif' | undefined = gifUrl ? 'gif' : undefined;
+    if (imageToUpload) {
+      setIsUploadingToR2(true);
+      try {
+        const r2Url = await uploadImageToR2Internal(imageToUpload.file);
+        if (r2Url) {
+          finalMediaUrl = r2Url;
+          finalMediaType = 'image';
+        } else {
+          toast({ title: 'Upload Failed', description: 'Could not upload image to storage. Please try again.', variant: 'destructive' });
+          setIsUploadingToR2(false);
+          return;
+        }
+      } catch (error: any) {
+        toast({ title: 'Upload Error', description: error.message || 'An unexpected error occurred during image upload.', variant: 'destructive' });
+        setIsUploadingToR2(false);
+        return;
+      }
+      setIsUploadingToR2(false);
     }
     addCommentToFeedPost({
       postId: post.id,
       content: newReplyText.trim(),
       parentId: topLevelComment.id,
+      mediaUrl: finalMediaUrl,
+      mediaType: finalMediaType
     });
     setNewReplyText('');
+    setImageToUpload(null);
+    setGifUrl(undefined);
   };
 
   const handleReactToSpecificComment = (commentId: string, reactionType: ReactionType | null) => {
@@ -128,6 +236,16 @@ export default function CommentRepliesModal() {
                 <p className="text-sm mb-1">
                   {processedTopLevelCommentContent.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
                 </p>
+                {topLevelComment.mediaUrl && (
+                  <div className="mt-2 max-w-xs">
+                    {topLevelComment.mediaType === 'image' ? (
+                      <Image src={topLevelComment.mediaUrl} alt="Comment media" width={200} height={200} className="rounded border object-cover" />
+                    ) : topLevelComment.mediaType === 'gif' ? (
+                      <Image src={topLevelComment.mediaUrl} alt="Comment GIF" width={200} height={200} className="rounded border object-contain" unoptimized />
+                    ) : null}
+                    {topLevelComment.mediaType === 'gif' && <p className="text-[10px] text-muted-foreground mt-0.5">via GIPHY</p>}
+                  </div>
+                )}
                  <ReactionButton
                     reactions={topLevelComment.detailedReactions}
                     onReact={(reactionType) => handleReactToSpecificComment(topLevelComment.id, reactionType)}
@@ -168,6 +286,15 @@ export default function CommentRepliesModal() {
                       <p className="text-sm mb-1">
                         {processedReplyContent.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
                       </p>
+                      {reply.mediaUrl && (
+                        <div className="mt-2 max-w-xs">
+                          {reply.mediaType === 'image' ? (
+                            <Image src={reply.mediaUrl} alt="Comment media" width={200} height={200} className="rounded border object-cover" />
+                          ) : reply.mediaType === 'gif' ? (
+                            <Image src={reply.mediaUrl} alt="Comment GIF" width={200} height={200} className="rounded border object-contain" unoptimized />
+                          ) : null}
+                        </div>
+                      )}
                       <ReactionButton
                         reactions={reply.detailedReactions}
                         onReact={(reactionType) => handleReactToSpecificComment(reply.id, reactionType)}
@@ -193,30 +320,114 @@ export default function CommentRepliesModal() {
                 <AvatarImage src={currentUserInfo.profilePictureUrl} alt={currentUserInfo.displayName} />
                 <AvatarFallback>{getInitials(currentUserInfo.displayName)}</AvatarFallback>
               </Avatar>
-              <MentionTextarea
-                ref={replyInputRef}
-                placeholder={`Reply to @${topLevelCommentAuthorInfo.displayName}...`}
-                value={newReplyText}
-                onChange={setNewReplyText}
-                className="min-h-[60px] flex-1"
-                maxLength={500}
-                disabled={isCommenting}
-              />
-              <div className="flex flex-col gap-1">
-                 <EmojiPicker 
-                    onEmojiSelect={handleEmojiSelectForReply} 
-                    triggerButtonSize="icon"
-                    triggerButtonVariant="ghost"
-                    popoverSide="top"
-                  />
-                <Button type="submit" size="icon" className="h-10 w-10 shrink-0" disabled={isCommenting || !newReplyText.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
+              <div className="flex-1">
+                <MentionTextarea
+                  ref={replyInputRef}
+                  placeholder={`Reply to @${topLevelCommentAuthorInfo.displayName}...`}
+                  value={newReplyText}
+                  onChange={setNewReplyText}
+                  className="min-h-[60px] flex-1"
+                  maxLength={500}
+                  disabled={isCommenting || isUploadingToR2}
+                />
+                {(imageToUpload?.localPreviewUrl || gifUrl) && (
+                  <div className="mt-2 border border-border rounded-md p-2 max-w-xs bg-card/50 relative">
+                    <p className="text-xs text-muted-foreground mb-1">Attached {imageToUpload ? 'image' : 'GIF'}:</p>
+                    <Image 
+                      src={imageToUpload ? imageToUpload.localPreviewUrl : gifUrl!} 
+                      alt="Selected media" 
+                      width={200} 
+                      height={gifUrl ? 120 : 150}
+                      objectFit={gifUrl ? 'contain' : 'cover'}
+                      className="rounded max-h-40 w-auto" 
+                      data-ai-hint="uploaded media" 
+                      unoptimized={!!imageToUpload}
+                    />
+                    {gifUrl && <p className="text-[10px] text-muted-foreground mt-0.5">via GIPHY</p>}
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="absolute top-1 right-1 h-6 w-6 text-destructive/70 hover:text-destructive" 
+                      onClick={removeMedia} 
+                      title="Remove media" 
+                      disabled={isCommenting || isUploadingToR2}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
+              <div className="flex flex-col gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-primary hover:bg-primary/10"
+                  title="Add Image"
+                  onClick={handleImageUploadClick}
+                  disabled={isCommenting || isUploadingToR2}
+                >
+                  <ImageIcon className="h-5 w-5" />
+                </Button>
+                <input
+                  type="file"
+                  ref={imageInputRef}
+                  onChange={handleImageFileChange}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-primary hover:bg-primary/10"
+                  title="Add GIF"
+                  onClick={() => setIsGiphyModalOpen(true)}
+                  disabled={isCommenting || isUploadingToR2}
+                >
+                  <Film className="h-5 w-5" />
+                </Button>
+                <EmojiPicker
+                  onEmojiSelect={handleEmojiSelectForReply}
+                  triggerButtonSize="icon"
+                  triggerButtonVariant="ghost"
+                  popoverSide="top"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isCommenting || isUploadingToR2 || (!newReplyText.trim() && !imageToUpload && !gifUrl)}
+                className="font-headline rounded-full px-6"
+              >
+                {isUploadingToR2 ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : isCommenting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Posting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Reply
+                  </>
+                )}
+              </Button>
             </div>
           </form>
         </DialogFooter>
       </DialogContent>
+      <GiphyPickerModal
+        isOpen={isGiphyModalOpen}
+        onClose={() => setIsGiphyModalOpen(false)}
+        onGifSelect={handleGifSelect}
+      />
     </Dialog>
   );
 }

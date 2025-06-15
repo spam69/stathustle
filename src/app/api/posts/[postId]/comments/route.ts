@@ -14,7 +14,10 @@ export async function POST(
   await dbConnect();
   try {
     const { postId } = await params;
-    const { content, authorId: providedAuthorId, parentId } = await request.json();
+    const body = await request.json();
+    console.log('Parsed request body:', body);
+    const { content, authorId: providedAuthorId, parentId, mediaUrl, mediaType } = body;
+    console.log('mediaUrl:', mediaUrl, 'mediaType:', mediaType);
 
     const authorIdToUse = providedAuthorId;
 
@@ -34,7 +37,7 @@ export async function POST(
       return NextResponse.json({ message: 'Post not found' }, { status: 404 });
     }
 
-    let authorDoc = await UserModel.findById(authorIdToUse).lean();
+    let authorDoc: any = await UserModel.findById(authorIdToUse).lean();
     let authorModelType: 'User' | 'Identity' = 'User';
     if (!authorDoc) {
       authorDoc = await IdentityModel.findById(authorIdToUse).lean();
@@ -52,17 +55,28 @@ export async function POST(
       content,
       parentId: parentId || undefined,
       detailedReactions: [],
+      mediaUrl: mediaUrl || undefined,
+      mediaType: mediaType || undefined,
     });
+    console.log('New comment to be saved:', newComment);
     await newComment.save();
 
-    post.comments.push(newComment._id);
+    // Fetch the fresh comment from the database to ensure all fields are present and types are correct
+    let freshComment = await CommentModel.findById(newComment._id);
+    let freshCommentObj = freshComment ? freshComment.toObject({ virtuals: true }) : null;
+
+    if (post.comments) {
+      post.comments.push(newComment._id as any);
+    } else {
+      post.comments = [newComment._id as any];
+    }
     post.repliesCount = (post.repliesCount || 0) + 1;
     await post.save();
 
     // Fetch post author for notification if needed
     let postRecipientId: string | undefined;
     let postRecipientModel: 'User' | 'Identity' | undefined;
-    const postAuthorDoc = await (post.authorModel === 'User' ? UserModel.findById(post.author) : IdentityModel.findById(post.author)).lean();
+    const postAuthorDoc: any = await (post.authorModel === 'User' ? UserModel.findById(post.author) : IdentityModel.findById(post.author)).lean();
     if (postAuthorDoc) {
       if (post.authorModel === 'Identity' && postAuthorDoc.owner && postAuthorDoc.owner._id) {
         postRecipientId = postAuthorDoc.owner._id.toString();
@@ -79,13 +93,13 @@ export async function POST(
             authorForNotification as UserType | IdentityType, // Cast: fetched earlier
             postRecipientId,
             postRecipientModel,
-            post.toObject({ virtuals: true }) as PostType, 
-            newComment.toObject({ virtuals: true }) as CommentType
+            post.toObject({ virtuals: true }) as any, 
+            freshCommentObj as CommentType
         );
     }
 
     if (parentId) {
-      const originalComment = await CommentModel.findById(parentId)
+      const originalComment: any = await CommentModel.findById(parentId)
         .populate('author') // Populate to get author's ID for notification
         .lean();
       let replyRecipientId: string | undefined;
@@ -105,15 +119,14 @@ export async function POST(
             authorForNotification as UserType | IdentityType,
             replyRecipientId,
             replyRecipientModel,
-            post.toObject({ virtuals: true }) as PostType, 
-            newComment.toObject({ virtuals: true }) as CommentType,
+            post.toObject({ virtuals: true }) as any, 
+            freshCommentObj as CommentType,
             originalComment as CommentType
         );
       }
     }
     
-    const commentToReturn = newComment.toObject({ virtuals: true }) as CommentType;
-    return NextResponse.json(commentToReturn, { status: 201 });
+    return NextResponse.json(freshCommentObj, { status: 201 });
   } catch (error: any) {
     console.error(`Comment API error for post ${params.postId}:`, error);
     return NextResponse.json({ message: error.message || 'An unexpected error occurred' }, { status: 500 });

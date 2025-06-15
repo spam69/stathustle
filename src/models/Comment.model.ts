@@ -1,4 +1,3 @@
-
 import mongoose, { Schema, Document, models, Model } from 'mongoose';
 import type { Comment as CommentType, User as UserType, Identity as IdentityType, ReactionEntry } from '@/types';
 import ReactionEntrySchema, { IReactionEntrySchema } from './common/Reaction.schema';
@@ -11,6 +10,8 @@ export interface ICommentSchema extends Omit<CommentType, 'id' | 'author' | 'det
   detailedReactions?: IReactionEntrySchema[];
   createdAt: Date;
   updatedAt: Date;
+  mediaUrl: string;
+  mediaType: 'image' | 'gif' | undefined;
 }
 
 const CommentSchema = new Schema<ICommentSchema>({
@@ -19,6 +20,8 @@ const CommentSchema = new Schema<ICommentSchema>({
   content: { type: String, required: true, maxlength: 1000 },
   parentId: { type: Schema.Types.ObjectId, ref: 'Comment', sparse: true },
   detailedReactions: [ReactionEntrySchema],
+  mediaUrl: { type: String, default: undefined },
+  mediaType: { type: String, enum: ['image', 'gif'], default: undefined },
   // postId is implicitly managed by embedding/referencing within Post model or specific queries
 }, {
   timestamps: true,
@@ -28,6 +31,8 @@ const CommentSchema = new Schema<ICommentSchema>({
       ret.id = ret._id;
       delete ret._id;
       delete ret.__v;
+      ret.mediaUrl = ret.mediaUrl;
+      ret.mediaType = ret.mediaType;
     }
   },
   toObject: {
@@ -36,6 +41,8 @@ const CommentSchema = new Schema<ICommentSchema>({
       ret.id = ret._id;
       delete ret._id;
       delete ret.__v;
+      ret.mediaUrl = ret.mediaUrl;
+      ret.mediaType = ret.mediaType;
     }
   }
 });

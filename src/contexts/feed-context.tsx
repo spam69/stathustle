@@ -72,7 +72,7 @@ const createPostAPI = async (newPostData: { content: string; authorId: string; m
   return response.json();
 };
 
-const addCommentAPI = async (commentData: { postId: string; content: string; authorId: string; parentId?: string }): Promise<CommentType> => {
+const addCommentAPI = async (commentData: { postId: string; content: string; authorId: string; parentId?: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }): Promise<CommentType> => {
   const { postId, ...payload } = commentData;
   const response = await fetch(`/api/posts/${postId}/comments`, {
     method: 'POST',
@@ -245,7 +245,7 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     }
   });
 
-  const addCommentMutation = useMutation<CommentType, Error, { postId: string; content: string; parentId?: string }>({
+  const addCommentMutation = useMutation<CommentType, Error, { postId: string; content: string; parentId?: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }>({
     mutationFn: (commentData) => {
       if (!user) throw new Error("User not logged in");
       return addCommentAPI({ ...commentData, authorId: user.id });

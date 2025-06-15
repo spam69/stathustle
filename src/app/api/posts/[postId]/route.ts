@@ -36,6 +36,8 @@ const transformComment = (commentDoc: any): CommentClientType | undefined => {
     author: transformAuthor(commentDoc.author), 
     detailedReactions: commentDoc.detailedReactions?.map(transformReaction) || [],
     createdAt: commentDoc.createdAt?.toISOString(),
+    mediaUrl: commentDoc.mediaUrl,
+    mediaType: commentDoc.mediaType,
   };
 };
 
