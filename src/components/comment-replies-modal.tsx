@@ -71,6 +71,12 @@ export default function CommentRepliesModal() {
     }
   }, [isCommentRepliesModalOpen]);
 
+  useEffect(() => {
+    if (isCommentRepliesModalOpen) {
+      setVisibleRepliesCount(5);
+    }
+  }, [isCommentRepliesModalOpen]);
+
   // Function to handle scrolling
   const scrollToHighlightedReply = useCallback(() => {
     if (!highlightedReplyRef.current || !scrollAreaRef.current) return;
@@ -329,18 +335,16 @@ export default function CommentRepliesModal() {
                   <div 
                     key={reply.id} 
                     ref={isHighlighted ? highlightedReplyRef : null}
-                    className={`py-3 border-b border-border/30 ${isHighlighted ? 'bg-primary/5' : ''} relative`}
+                    className={`py-3 ${isHighlighted ? 'bg-primary/5' : ''} relative`}
                   >
                     {/* Vertical line connecting to parent */}
-                    <div className="absolute left-4 top-0 bottom-0 w-px bg-border/30" />
+                    <div className="absolute left-4 top-0 bottom-0 w-px bg-border/70" />
                     
                     <div className="flex items-start gap-2 sm:gap-3 pl-8">
                       <Link href={`/profile/${replyAuthorInfo.username}`} passHref>
-                        <Avatar className="h-8 w-8 border relative">
+                        <Avatar className="h-8 w-8 border">
                           <AvatarImage src={replyAuthorInfo.profilePictureUrl} alt={replyAuthorInfo.displayName} />
                           <AvatarFallback>{getInitials(replyAuthorInfo.displayName)}</AvatarFallback>
-                          {/* Horizontal line connecting to vertical line */}
-                          <div className="absolute -left-4 top-1/2 w-4 h-px bg-border/30" />
                         </Avatar>
                       </Link>
                       <div className="flex-1">
