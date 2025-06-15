@@ -28,6 +28,7 @@ interface CommentsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: User | Identity | null;
+  highlightedCommentId?: string;
 }
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
@@ -42,7 +43,7 @@ const getInitials = (name: string = "") => {
   return name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U';
 };
 
-export default function CommentsModal({ post, isOpen, onClose, currentUser }: CommentsModalProps) {
+export default function CommentsModal({ post, isOpen, onClose, currentUser, highlightedCommentId }: CommentsModalProps) {
   const [newCommentText, setNewCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<CommentType | null>(null);
   const { toast } = useToast();
@@ -197,7 +198,7 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser }: Co
   };
 
   const handleOpenRepliesModal = (topLevelComment: CommentType) => {
-    openCommentRepliesModal(post, topLevelComment);
+    openCommentRepliesModal(post, topLevelComment, highlightedCommentId);
   };
 
   const handleEmojiSelectForComment = (emoji: string) => {

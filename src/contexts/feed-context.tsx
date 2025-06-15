@@ -26,8 +26,9 @@ interface FeedContextType {
 
   isCommentRepliesModalOpen: boolean;
   activeCommentForReplies: ActiveCommentForReplies | null;
-  openCommentRepliesModal: (post: Post, comment: CommentType) => void;
+  openCommentRepliesModal: (post: Post, comment: CommentType, highlightedCommentId?: string) => void;
   closeCommentRepliesModal: () => void;
+  highlightedCommentId: string | undefined;
 
   publishPost: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif'; sharedOriginalPostId?: string; blogShareDetails?: BlogShareDetails }) => void;
   addCommentToFeedPost: (data: { postId: string; content: string; parentId?: string }) => void;
@@ -138,6 +139,7 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
 
   const [isCommentRepliesModalOpen, setIsCommentRepliesModalOpen] = useState(false);
   const [activeCommentForReplies, setActiveCommentForReplies] = useState<ActiveCommentForReplies | null>(null);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | undefined>();
 
   const { data: posts = [], isLoading: isPostsLoading, error: postsError } = useQuery<Post[], Error>({
     queryKey: ['posts'],
@@ -220,14 +222,16 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     setIsPreparingShare(false); 
   }, []);
 
-  const openCommentRepliesModal = useCallback((post: Post, comment: CommentType) => {
+  const openCommentRepliesModal = useCallback((post: Post, comment: CommentType, highlightedCommentId?: string) => {
     setActiveCommentForReplies({ post, topLevelComment: comment });
+    setHighlightedCommentId(highlightedCommentId);
     setIsCommentRepliesModalOpen(true);
   }, []);
 
   const closeCommentRepliesModal = useCallback(() => {
     setIsCommentRepliesModalOpen(false);
     setActiveCommentForReplies(null);
+    setHighlightedCommentId(undefined);
   }, []);
 
   const publishPostMutation = useMutation<Post, Error, { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif'; sharedOriginalPostId?: string; blogShareDetails?: BlogShareDetails }>({
@@ -333,6 +337,7 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       activeCommentForReplies,
       openCommentRepliesModal,
       closeCommentRepliesModal,
+      highlightedCommentId,
 
       publishPost: publishPostMutation.mutate,
       addCommentToFeedPost: addCommentMutation.mutate,

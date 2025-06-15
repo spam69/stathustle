@@ -57,12 +57,12 @@ export default function NotificationDisplayModal() {
                     const parentComment = post.comments?.find(c => c.id === comment.parentId);
                     if (parentComment) {
                       // Open replies modal for the parent comment
-                      openCommentRepliesModal(post, parentComment);
+                      openCommentRepliesModal(post, parentComment, commentId);
                       closeNotificationModal();
                     }
                   } else {
                     // If it's a top-level comment, open replies modal for it
-                    openCommentRepliesModal(post, comment);
+                    openCommentRepliesModal(post, comment, commentId);
                     closeNotificationModal();
                   }
                 }

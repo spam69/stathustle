@@ -59,7 +59,8 @@ import EditPostModal from './edit-post-modal';
 
 interface PostCardProps {
   post: Post;
-  isEmbedded?: boolean; 
+  isEmbedded?: boolean;
+  highlightedCommentId?: string;
 }
 
 interface ReactionSummaryDisplayItem {
@@ -70,7 +71,7 @@ interface ReactionSummaryDisplayItem {
 }
 
 
-export default function PostCard({ post: initialPost, isEmbedded = false }: PostCardProps) {
+export default function PostCard({ post: initialPost, isEmbedded = false, highlightedCommentId }: PostCardProps) {
   const { user: currentUser } = useAuth(); // Removed originalUser as activePrincipalId handles it
   const { toast } = useToast();
   const {
@@ -468,6 +469,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
           isOpen={isCommentsModalOpen}
           onClose={handleToggleCommentsModal}
           currentUser={currentUser}
+          highlightedCommentId={highlightedCommentId}
         />
       )}
     </>

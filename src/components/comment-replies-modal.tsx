@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Post, Comment as CommentType, User, Identity } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -47,7 +47,8 @@ export default function CommentRepliesModal() {
     addCommentToFeedPost,
     isCommenting,
     reactToComment,
-    isReactingToComment
+    isReactingToComment,
+    highlightedCommentId
   } = useFeed();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
@@ -58,6 +59,9 @@ export default function CommentRepliesModal() {
   const [isGiphyModalOpen, setIsGiphyModalOpen] = useState(false);
   const [isUploadingToR2, setIsUploadingToR2] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const highlightedReplyRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [visibleRepliesCount, setVisibleRepliesCount] = useState(5);
 
   useEffect(() => {
     if (isCommentRepliesModalOpen) {
@@ -66,6 +70,52 @@ export default function CommentRepliesModal() {
       setGifUrl(undefined);
     }
   }, [isCommentRepliesModalOpen]);
+
+  // Function to handle scrolling
+  const scrollToHighlightedReply = useCallback(() => {
+    if (!highlightedReplyRef.current || !scrollAreaRef.current) return;
+
+    const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+    if (!scrollContainer) return;
+
+    const replyElement = highlightedReplyRef.current;
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const replyRect = replyElement.getBoundingClientRect();
+
+    // Calculate the scroll position to center the reply
+    const scrollTop = replyRect.top - containerRect.top - (containerRect.height / 2) + (replyRect.height / 2);
+
+    // Smooth scroll to the position
+    scrollContainer.scrollTo({
+      top: scrollContainer.scrollTop + scrollTop,
+      behavior: 'smooth'
+    });
+
+    // Add highlight animation
+    replyElement.classList.add('highlight-animation');
+
+    // Remove the highlight class after animation
+    setTimeout(() => {
+      replyElement.classList.remove('highlight-animation');
+    }, 2000);
+  }, []);
+
+  // Effect to handle initial scroll
+  useEffect(() => {
+    if (isCommentRepliesModalOpen && highlightedCommentId) {
+      // Wait for the modal to be fully rendered
+      const timer = setTimeout(scrollToHighlightedReply, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isCommentRepliesModalOpen, highlightedCommentId, scrollToHighlightedReply]);
+
+  // Effect to handle window resize
+  useEffect(() => {
+    if (isCommentRepliesModalOpen && highlightedCommentId) {
+      window.addEventListener('resize', scrollToHighlightedReply);
+      return () => window.removeEventListener('resize', scrollToHighlightedReply);
+    }
+  }, [isCommentRepliesModalOpen, highlightedCommentId, scrollToHighlightedReply]);
 
   if (!isCommentRepliesModalOpen || !activeCommentForReplies || !currentUser) {
     return null;
@@ -202,6 +252,13 @@ export default function CommentRepliesModal() {
     .filter(reply => reply.parentId === topLevelComment.id)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
+  const visibleReplies = directReplies.slice(0, visibleRepliesCount);
+  const hasMoreReplies = directReplies.length > visibleRepliesCount;
+
+  const loadMoreReplies = () => {
+    setVisibleRepliesCount(prev => prev + 5);
+  };
+
   const topLevelCommentAuthorInfo = getAuthorDisplayInfo(topLevelComment.author);
   const currentUserInfo = getAuthorDisplayInfo(currentUser);
   const processedTopLevelCommentContent = parseMentions(topLevelComment.content);
@@ -215,7 +272,7 @@ export default function CommentRepliesModal() {
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-grow overflow-y-auto px-4">
+        <ScrollArea ref={scrollAreaRef} className="flex-grow overflow-y-auto px-4">
           <div className="py-3 border-b border-border/30 bg-muted/20 -mx-4 px-4 sticky top-0 z-10">
             <div className="flex items-start gap-2 sm:gap-3">
               <Link href={`/profile/${topLevelCommentAuthorInfo.username}`} passHref>
@@ -261,56 +318,81 @@ export default function CommentRepliesModal() {
             </div>
           </div>
 
-          {directReplies.length > 0 ? (
-            directReplies.map(reply => {
-              const replyAuthorInfo = getAuthorDisplayInfo(reply.author);
-              const processedReplyContent = parseMentions(reply.content);
-              return (
-                <div key={reply.id} className="py-3 border-b border-border/20 last:border-b-0 ml-8">
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <Link href={`/profile/${replyAuthorInfo.username}`} passHref>
-                      <Avatar className="h-8 w-8 border">
-                        <AvatarImage src={replyAuthorInfo.profilePictureUrl} alt={replyAuthorInfo.displayName} />
-                        <AvatarFallback>{getInitials(replyAuthorInfo.displayName)}</AvatarFallback>
-                      </Avatar>
-                    </Link>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <div className="flex items-center gap-1 sm:gap-1.5">
-                            <Link href={`/profile/${replyAuthorInfo.username}`} passHref>
-                            <span className="text-xs font-semibold hover:underline font-headline">{replyAuthorInfo.displayName}</span>
-                            </Link>
-                            {replyAuthorInfo.isIdentity && <Badge variant="outline" className="text-[10px] px-1 py-0"><Award className="h-2 w-2 mr-0.5"/>Id</Badge>}
+          {visibleReplies.length > 0 ? (
+            <>
+              {visibleReplies.map(reply => {
+                const replyAuthorInfo = getAuthorDisplayInfo(reply.author);
+                const processedReplyContent = parseMentions(reply.content);
+                const isHighlighted = reply.id === highlightedCommentId;
+
+                return (
+                  <div 
+                    key={reply.id} 
+                    ref={isHighlighted ? highlightedReplyRef : null}
+                    className={`py-3 border-b border-border/30 ${isHighlighted ? 'bg-primary/5' : ''} relative`}
+                  >
+                    {/* Vertical line connecting to parent */}
+                    <div className="absolute left-4 top-0 bottom-0 w-px bg-border/30" />
+                    
+                    <div className="flex items-start gap-2 sm:gap-3 pl-8">
+                      <Link href={`/profile/${replyAuthorInfo.username}`} passHref>
+                        <Avatar className="h-8 w-8 border relative">
+                          <AvatarImage src={replyAuthorInfo.profilePictureUrl} alt={replyAuthorInfo.displayName} />
+                          <AvatarFallback>{getInitials(replyAuthorInfo.displayName)}</AvatarFallback>
+                          {/* Horizontal line connecting to vertical line */}
+                          <div className="absolute -left-4 top-1/2 w-4 h-px bg-border/30" />
+                        </Avatar>
+                      </Link>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <div className="flex items-center gap-1 sm:gap-1.5">
+                              <Link href={`/profile/${replyAuthorInfo.username}`} passHref>
+                              <span className="text-xs font-semibold hover:underline font-headline">{replyAuthorInfo.displayName}</span>
+                              </Link>
+                              {replyAuthorInfo.isIdentity && <Badge variant="outline" className="text-[10px] px-1 py-0"><Award className="h-2 w-2 mr-0.5"/>Id</Badge>}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">
+                            {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
+                          </span>
                         </div>
-                        <span className="text-[10px] text-muted-foreground">
-                          {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
-                        </span>
+                        <p className="text-sm mb-1">
+                          {processedReplyContent.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
+                        </p>
+                        {reply.mediaUrl && (
+                          <div className="mt-2 max-w-xs">
+                            {reply.mediaType === 'image' ? (
+                              <Image src={reply.mediaUrl} alt="Comment media" width={200} height={200} className="rounded border object-cover" />
+                            ) : reply.mediaType === 'gif' ? (
+                              <Image src={reply.mediaUrl} alt="Comment GIF" width={200} height={200} className="rounded border object-contain" unoptimized />
+                            ) : null}
+                          </div>
+                        )}
+                        <ReactionButton
+                          reactions={reply.detailedReactions}
+                          onReact={(reactionType) => handleReactToSpecificComment(reply.id, reactionType)}
+                          currentUserId={currentUser?.id}
+                          isSubmitting={isReactingToComment}
+                          buttonSize="xs"
+                          popoverSide="bottom"
+                        />
                       </div>
-                      <p className="text-sm mb-1">
-                        {processedReplyContent.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
-                      </p>
-                      {reply.mediaUrl && (
-                        <div className="mt-2 max-w-xs">
-                          {reply.mediaType === 'image' ? (
-                            <Image src={reply.mediaUrl} alt="Comment media" width={200} height={200} className="rounded border object-cover" />
-                          ) : reply.mediaType === 'gif' ? (
-                            <Image src={reply.mediaUrl} alt="Comment GIF" width={200} height={200} className="rounded border object-contain" unoptimized />
-                          ) : null}
-                        </div>
-                      )}
-                      <ReactionButton
-                        reactions={reply.detailedReactions}
-                        onReact={(reactionType) => handleReactToSpecificComment(reply.id, reactionType)}
-                        currentUserId={currentUser?.id}
-                        isSubmitting={isReactingToComment}
-                        buttonSize="xs"
-                        popoverSide="bottom"
-                      />
                     </div>
                   </div>
+                );
+              })}
+              {hasMoreReplies && (
+                <div className="py-3 text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={loadMoreReplies}
+                    className="text-primary hover:text-primary/80"
+                  >
+                    Load More Replies
+                  </Button>
                 </div>
-              );
-            })
+              )}
+            </>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-6">No replies yet.</p>
           )}
@@ -432,4 +514,24 @@ export default function CommentRepliesModal() {
       />
     </Dialog>
   );
+}
+
+// Add styles for the highlight animation
+const styles = `
+  @keyframes highlight-pulse {
+    0% { background-color: transparent; }
+    50% { background-color: hsl(var(--primary) / 0.1); }
+    100% { background-color: transparent; }
+  }
+
+  .highlight-animation {
+    animation: highlight-pulse 2s ease-in-out;
+  }
+`;
+
+// Add the styles to the document
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = styles;
+  document.head.appendChild(styleSheet);
 }
