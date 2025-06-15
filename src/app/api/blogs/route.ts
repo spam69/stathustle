@@ -1,61 +1,75 @@
-
 import { NextResponse } from 'next/server';
-import { mockBlogs, mockUsers, mockIdentities } from '@/lib/mock-data';
-import type { Blog, User, Identity } from '@/types';
+import dbConnect from '@/lib/dbConnect';
+import BlogModel from '@/models/Blog.model';
+import UserModel from '@/models/User.model';
+import IdentityModel from '@/models/Identity.model';
+import mongoose from 'mongoose';
 
 export async function GET() {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  return NextResponse.json(mockBlogs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+  await dbConnect();
+  try {
+    const blogs = await BlogModel.find()
+      .populate('author')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    return NextResponse.json(blogs);
+  } catch (error) {
+    console.error('Get Blogs API error:', error);
+    return NextResponse.json({ message: 'An unexpected error occurred while fetching blogs.' }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
+  await dbConnect();
   try {
-    const { title, slug, content, excerpt, coverImageUrl, authorId } = await request.json(); // Slug is now expected from client (as UUID)
+    const { title, slug, content, excerpt, coverImageUrl, authorId } = await request.json();
 
     if (!title || !slug || !content || !authorId) {
       return NextResponse.json({ message: 'Title, slug, content, and authorId are required.' }, { status: 400 });
     }
 
-    let author: User | Identity | undefined = mockUsers.find(u => u.id === authorId);
-    if (!author) {
-      author = mockIdentities.find(i => i.id === authorId);
+    // Find the author (either User or Identity)
+    let authorDoc = await UserModel.findById(authorId).lean();
+    let authorModelType: 'User' | 'Identity' = 'User';
+
+    if (!authorDoc) {
+      authorDoc = await IdentityModel.findById(authorId).lean();
+      authorModelType = 'Identity';
     }
 
-    if (!author) {
+    if (!authorDoc) {
       return NextResponse.json({ message: 'Author not found.' }, { status: 404 });
     }
 
-    // With UUIDs for slugs, collisions are highly unlikely.
-    // The existing authorSlugExists check will verify if this author somehow submitted the same UUID twice.
-    const authorSlugExists = mockBlogs.some(
-      blog => blog.author.id === author!.id && blog.slug.toLowerCase() === slug.toLowerCase()
-    );
-    if (authorSlugExists) {
-      // This should theoretically almost never happen with UUIDs
-      return NextResponse.json({ message: `Slug (UUID) "${slug}" already exists for this author. This is highly unusual.` }, { status: 409 });
-    }
-    
-    // Global slug check is also less relevant for UUIDs but harmless for mock
-    const globalSlugExists = mockBlogs.some(blog => blog.slug.toLowerCase() === slug.toLowerCase() && blog.author.username.toLowerCase() !== author!.username.toLowerCase());
-    if (globalSlugExists) {
-        console.warn(`UUID Slug "${slug}" collision with a different author detected. This is extremely rare.`);
+    // Check for existing blog with same slug for this author
+    const existingBlog = await BlogModel.findOne({
+      author: authorDoc._id,
+      slug: slug.toLowerCase()
+    });
+
+    if (existingBlog) {
+      return NextResponse.json({ message: `A blog post with this slug already exists for this author.` }, { status: 409 });
     }
 
-
-    const newBlog: Blog = {
-      id: `blog-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      author,
+    const newBlog = new BlogModel({
+      author: authorDoc._id,
+      authorModel: authorModelType,
       title,
-      slug, // Use the client-provided UUID slug
+      slug: slug.toLowerCase(),
       content,
       excerpt: excerpt || undefined,
       coverImageUrl: coverImageUrl || undefined,
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    mockBlogs.unshift(newBlog); 
+    await newBlog.save();
 
-    return NextResponse.json(newBlog, { status: 201 });
+    // Populate the author field before sending response
+    const populatedBlog = await BlogModel.findById(newBlog._id)
+      .populate('author')
+      .lean();
+
+    return NextResponse.json(populatedBlog, { status: 201 });
 
   } catch (error) {
     console.error('Create Blog API error:', error);

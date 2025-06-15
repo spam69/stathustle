@@ -1,4 +1,3 @@
-
 import type { User, Post, Blog, Player, PlayerChatMessage, SportInterest, Comment, Identity, ReactionEntry, Notification, NotificationType } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
 
@@ -303,28 +302,7 @@ export let mockPosts: Post[] = [
 mockPosts.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
 
-export let mockBlogs: Blog[] = [
-  {
-    id: 'blog1',
-    author: mockIdentityAnalystProData,
-    title: 'The Undervalued Stars of MLB: A Statistical Breakdown (by @AnalystPro)',
-    slug: 'undervalued-mlb-stars',
-    excerpt: 'Discover which MLB players are outperforming their fantasy value based on advanced metrics. My analysis points to some key pickups...',
-    content: '<p>Full blog content here... discussing advanced stats like wOBA, FIP, and xBA for several players. Includes charts and tables.</p><img src="https://placehold.co/800x400.png" alt="MLB Stats Chart" data-ai-hint="baseball statistics" /> <p>More analysis follows...</p>',
-    coverImageUrl: 'https://placehold.co/800x450.png',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-  },
-  {
-    id: 'blog2',
-    author: mockUser1Data,
-    title: 'My Top 10 Fantasy Basketball Draft Picks for 2024',
-    slug: 'top-10-fantasy-basketball-2024',
-    excerpt: 'Get ready for your fantasy basketball draft! Here are my top 10 must-have players for the upcoming season, complete with rationale...',
-    content: '<p>Detailed analysis of 10 basketball players, their strengths, weaknesses, and fantasy outlook. </p> <p>Inline images can be added here for each player.</p>',
-    coverImageUrl: 'https://placehold.co/800x450.png',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
-  },
-];
+export let mockBlogs: Blog[] = [];
 
 export const mockPlayerLukaData: Player = {
   id: 'player1',
