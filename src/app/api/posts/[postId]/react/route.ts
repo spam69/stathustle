@@ -183,6 +183,7 @@ export async function POST(
                 'new_reaction_post', 
                 reactingUser, 
                 notificationAuthor.id, 
+                notificationAuthor.isIdentity ? 'Identity' : 'User',
                 { ...post.toObject(), id: post._id.toString(), author: notificationAuthor } as PostType
             );
         } else {
