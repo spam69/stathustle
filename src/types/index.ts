@@ -59,6 +59,8 @@ export interface Comment {
   createdAt: string;
   parentId?: string;
   detailedReactions?: ReactionEntry[];
+  mediaUrl?: string;
+  mediaType?: 'image' | 'gif';
 }
 
 export interface BlogShareDetails {

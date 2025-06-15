@@ -1,13 +1,11 @@
-
 "use client";
 
-import { useEffect, useState }
-from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useNotifications } from "@/contexts/notification-context";
 import { useFeed } from "@/contexts/feed-context";
-import type { Post, User, Identity } from "@/types";
+import type { Post, User, Identity, Comment } from "@/types";
 import PostCard from "./post-card";
 import { Skeleton } from "./ui/skeleton";
 import { AlertTriangle, UserCheck, ArrowRight } from "lucide-react";
@@ -22,14 +20,14 @@ const getActorDisplayName = (actor: User | Identity) => {
 
 const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
 
-
 export default function NotificationDisplayModal() {
   const { 
     isNotificationModalOpen, 
     closeNotificationModal, 
-    activeNotification 
+    activeNotification,
+    markOneAsRead
   } = useNotifications();
-  const { fetchSinglePost } = useFeed(); // To fetch post details
+  const { fetchSinglePost, openCommentRepliesModal } = useFeed();
 
   const [postDetails, setPostDetails] = useState<Post | null>(null);
   const [isLoadingPost, setIsLoadingPost] = useState(false);
@@ -39,11 +37,44 @@ export default function NotificationDisplayModal() {
     if (activeNotification && activeNotification.postId && isNotificationModalOpen) {
       setIsLoadingPost(true);
       setErrorPost(null);
-      setPostDetails(null); // Clear previous post details
+      setPostDetails(null);
       fetchSinglePost(activeNotification.postId)
         .then(post => {
           if (post) {
             setPostDetails(post);
+            
+            // Handle comment/reply notifications
+            if (activeNotification.type === 'new_comment' || activeNotification.type === 'new_reply') {
+              const commentId = activeNotification.commentId;
+              const originalCommentId = activeNotification.originalCommentId;
+              
+              if (commentId) {
+                // Find the comment in the post
+                const comment = post.comments?.find(c => c.id === commentId);
+                if (comment) {
+                  // If it's a reply, find the parent comment
+                  if (comment.parentId) {
+                    const parentComment = post.comments?.find(c => c.id === comment.parentId);
+                    if (parentComment) {
+                      // Open replies modal for the parent comment
+                      openCommentRepliesModal(post, parentComment);
+                      closeNotificationModal();
+                    }
+                  } else {
+                    // If it's a top-level comment, open replies modal for it
+                    openCommentRepliesModal(post, comment);
+                    closeNotificationModal();
+                  }
+                }
+              } else if (originalCommentId) {
+                // If we have the original comment ID, find and open its replies
+                const originalComment = post.comments?.find(c => c.id === originalCommentId);
+                if (originalComment) {
+                  openCommentRepliesModal(post, originalComment);
+                  closeNotificationModal();
+                }
+              }
+            }
           } else {
             setErrorPost("The related post could not be found or has been deleted.");
           }
@@ -56,16 +87,19 @@ export default function NotificationDisplayModal() {
           setIsLoadingPost(false);
         });
     } else if (!activeNotification?.postId) {
-      // If notification is not post-related (e.g., new follower), clear post details
       setPostDetails(null);
       setErrorPost(null);
     }
-  }, [activeNotification, isNotificationModalOpen, fetchSinglePost]);
+  }, [activeNotification, isNotificationModalOpen, fetchSinglePost, openCommentRepliesModal, closeNotificationModal]);
 
   if (!isNotificationModalOpen || !activeNotification) {
     return null;
   }
   
+  const handleClose = () => {
+    markOneAsRead(activeNotification.id);
+  };
+
   const renderContent = () => {
     if (activeNotification.type === 'new_follower') {
       const actor = activeNotification.actor;
@@ -114,25 +148,18 @@ export default function NotificationDisplayModal() {
         );
       }
       if (postDetails) {
-        // TODO: Implement highlighting for specific comment/reply
-        // For now, just showing the PostCard
-        // We might want a more stripped-down version of PostCard for modals or pass props to control its appearance/behavior
         return (
           <div className="p-1 md:p-2 max-h-[70vh] overflow-y-auto"> 
-            <PostCard post={postDetails} isEmbedded={false} /> 
-            {/* 
-              Future enhancement for comments:
-              If activeNotification.commentId or activeNotification.originalCommentId exists,
-              we would need to find this comment within postDetails.comments,
-              assign it a ref, and scroll to it.
-              Could also pass a highlightedCommentId prop to PostCard.
-            */}
+            <PostCard 
+              post={postDetails} 
+              isEmbedded={false}
+              highlightedCommentId={activeNotification.commentId || activeNotification.originalCommentId}
+            /> 
           </div>
         );
       }
     }
     
-    // Fallback for other notification types or if no content is to be shown
     return (
         <div className="p-6">
             <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: activeNotification.message }} />
@@ -145,9 +172,8 @@ export default function NotificationDisplayModal() {
     );
   };
 
-
   return (
-    <Dialog open={isNotificationModalOpen} onOpenChange={(isOpen) => !isOpen && closeNotificationModal()}>
+    <Dialog open={isNotificationModalOpen} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader className="border-b pb-3">
           <DialogTitle className="font-headline">Notification Details</DialogTitle>
@@ -159,7 +185,7 @@ export default function NotificationDisplayModal() {
         {renderContent()}
 
         <DialogFooter className="border-t pt-3">
-          <Button variant="outline" onClick={closeNotificationModal}>
+          <Button variant="outline" onClick={handleClose}>
             Close
           </Button>
         </DialogFooter>
