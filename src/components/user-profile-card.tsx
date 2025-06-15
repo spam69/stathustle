@@ -12,18 +12,21 @@ import { useAuth } from '@/contexts/auth-context';
 import { Badge } from '@/components/ui/badge';
 import ImageUploadModal from './image-upload-modal'; // Import the modal
 import { useToast } from '@/hooks/use-toast';
+import FollowersFollowingModal from './followers-following-modal';
 
 interface UserProfileCardProps {
   profileUser: User | Identity;
+  setProfileUser: (user: User | Identity) => void;
 }
 
-export default function UserProfileCard({ profileUser: initialProfileUser }: UserProfileCardProps) {
+export default function UserProfileCard({ profileUser, setProfileUser }: UserProfileCardProps) {
   const { user: currentUser, updateUserSettings } = useAuth();
-  const [profileUser, setProfileUser] = useState(initialProfileUser); // Local state to reflect UI changes quicker
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [editingImageType, setEditingImageType] = useState<'profile' | 'banner' | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
+  const [isFollowingModalOpen, setIsFollowingModalOpen] = useState(false);
   const { toast } = useToast();
   
   const isIdentityProfile = 'isIdentity' in profileUser && profileUser.isIdentity;
@@ -72,9 +75,7 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
 
     const updatedUser = await updateUserSettings(settingsToUpdate);
     if (updatedUser) {
-      // Update local state to reflect change immediately
-      // The AuthContext also updates its user state, which should propagate,
-      // but updating local state here can provide a faster UI refresh for this specific component.
+      // Update parent state
       setProfileUser(prev => ({ ...prev, ...settingsToUpdate }));
       toast({ title: `${imageType === 'profile' ? 'Profile picture' : 'Banner image'} updated successfully!` });
     }
@@ -112,7 +113,7 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
         throw new Error('Failed to perform follow action');
       }
 
-      // Update local state
+      // Update parent state
       setProfileUser(prev => ({
         ...prev,
         followers: action === 'follow' 
@@ -120,7 +121,6 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
           : (prev.followers || []).filter(id => id !== currentUser.id)
       }));
       setIsFollowing(action === 'follow');
-      
       toast({
         title: action === 'follow' ? "Following" : "Unfollowed",
         description: `You are now ${action === 'follow' ? 'following' : 'not following'} ${profileUser.username}`,
@@ -201,12 +201,18 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
           
           {/* Add follower/following counts */}
           <div className="flex justify-center gap-4 mt-3 text-sm text-muted-foreground">
-            <div>
+            <button
+              onClick={() => setIsFollowersModalOpen(true)}
+              className="hover:text-primary transition-colors"
+            >
               <span className="font-semibold text-foreground">{profileUser.followers?.length || 0}</span> followers
-            </div>
-            <div>
+            </button>
+            <button
+              onClick={() => setIsFollowingModalOpen(true)}
+              className="hover:text-primary transition-colors"
+            >
               <span className="font-semibold text-foreground">{profileUser.following?.length || 0}</span> following
-            </div>
+            </button>
           </div>
           
           {profileUser.bio && (
@@ -304,6 +310,20 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
           profileUsername={profileUser.username}
         />
       )}
+      <FollowersFollowingModal
+        isOpen={isFollowersModalOpen}
+        onClose={() => setIsFollowersModalOpen(false)}
+        profileUser={profileUser}
+        setProfileUser={setProfileUser}
+        type="followers"
+      />
+      <FollowersFollowingModal
+        isOpen={isFollowingModalOpen}
+        onClose={() => setIsFollowingModalOpen(false)}
+        profileUser={profileUser}
+        setProfileUser={setProfileUser}
+        type="following"
+      />
     </>
   );
 }

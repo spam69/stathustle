@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -46,18 +45,23 @@ export default function UserProfilePage() {
     enabled: !!username,
   });
 
+  const [profileUser, setProfileUser] = useState<User | Identity | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [visiblePostsCount, setVisiblePostsCount] = useState(POSTS_PER_PAGE);
 
+  // Keep profileUser in sync with profileData
   useEffect(() => {
-    if (profileData && allFeedPosts) {
+    if (profileData) setProfileUser(profileData);
+  }, [profileData]);
+
+  useEffect(() => {
+    if (profileUser && allFeedPosts) {
       const postsByAuthor = allFeedPosts
-        .filter(p => p.author.id === profileData.id)
+        .filter(p => p.author.id === profileUser.id)
         .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setUserPosts(postsByAuthor);
     }
-  }, [profileData, allFeedPosts]);
-
+  }, [profileUser, allFeedPosts]);
 
   const loadMorePosts = () => {
     setVisiblePostsCount(prevCount => prevCount + POSTS_PER_PAGE);
@@ -78,7 +82,7 @@ export default function UserProfilePage() {
     );
   }
 
-  if (profileError || !profileData) {
+  if (profileError || !profileUser) {
     return (
       <div className="w-full p-4 md:p-6 text-center py-10"> {/* Changed from max-w-3xl mx-auto */}
         <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
@@ -90,11 +94,11 @@ export default function UserProfilePage() {
 
   return (
     <div className="w-full"> {/* Removed max-w-3xl mx-auto, padding can be added here or within children as needed */}
-      <UserProfileCard profileUser={profileData} />
+      <UserProfileCard profileUser={profileUser} setProfileUser={setProfileUser} />
       
       <div className="p-4 md:p-6"> {/* Added padding for the posts section */}
         <h2 className="text-2xl font-bold mt-8 mb-4 font-headline">
-          Posts by {profileData.isIdentity ? (profileData as Identity).displayName || profileData.username : profileData.username}
+          Posts by {profileUser.isIdentity ? (profileUser as Identity).displayName || profileUser.username : profileUser.username}
         </h2>
         {displayedPosts.length > 0 ? (
           displayedPosts.map(post => (

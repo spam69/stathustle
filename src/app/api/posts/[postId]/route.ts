@@ -99,7 +99,7 @@ export async function GET(
 ) {
   await dbConnect();
   try {
-    const { postId } = params;
+    const { postId } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(postId)) {
       return NextResponse.json({ message: 'Invalid Post ID format' }, { status: 400 });

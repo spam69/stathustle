@@ -14,7 +14,7 @@ export async function POST(
 ) {
   await dbConnect();
   try {
-    const { postId } = params;
+    const { postId } = await params;
     const { content, authorId: providedAuthorId, parentId } = await request.json();
 
     const authorIdToUse = providedAuthorId || mockAdminUser.id; // Placeholder

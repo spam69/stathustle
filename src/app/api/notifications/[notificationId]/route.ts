@@ -9,7 +9,7 @@ export async function DELETE(
 ) {
   try {
     await dbConnect();
-    const { notificationId } = params;
+    const { notificationId } = await params;
     if (!mongoose.Types.ObjectId.isValid(notificationId)) {
       return NextResponse.json({ message: 'Invalid notification ID' }, { status: 400 });
     }

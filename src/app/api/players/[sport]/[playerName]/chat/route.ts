@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: { sport: string; playerName: string } }
 ) {
   try {
-    const { sport, playerName } = params;
+    const { sport, playerName } = await params;
     await new Promise(resolve => setTimeout(resolve, 100));
 
     const player = mockPlayers.find(
@@ -36,7 +36,7 @@ export async function POST(
   { params }: { params: { sport: string; playerName: string } }
 ) {
   try {
-    const { sport, playerName } = params;
+    const { sport, playerName } = await params;
     const { message, authorId } = await request.json();
 
     if (!message || !authorId) {

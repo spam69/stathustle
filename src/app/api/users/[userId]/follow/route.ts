@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: { userId: string } }
 ) {
   try {
-    const { userId: followedUserId } = params;
+    const { userId: followedUserId } = await params;
     
     // In a real app, the follower would come from the authenticated session.
     // For this mock, let's assume mockAdminUser is the one performing the follow action.

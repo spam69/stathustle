@@ -10,7 +10,7 @@ export async function GET(
 ) {
   await dbConnect();
   try {
-    const { username, blogSlug } = params;
+    const { username, blogSlug } = await params;
 
     // First find the author (either User or Identity)
     let author = await UserModel.findOne({ username: username.toLowerCase() }).lean();
