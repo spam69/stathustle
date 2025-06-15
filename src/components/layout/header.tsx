@@ -33,6 +33,7 @@ import type { Notification, Identity as IdentityType, Post } from '@/types';
 // import { mockIdentities } from '@/lib/mock-data'; // Removed mockIdentities
 import { useQuery } from '@tanstack/react-query';
 import SearchResultModal from '@/components/search-result-modal';
+import React from 'react';
 
 const NotificationItem = ({
   notification,
@@ -95,6 +96,13 @@ const fetchOwnedIdentities = async (userId: string): Promise<IdentityType[]> => 
   return response.json();
 };
 
+const fetchTeamMemberIdentities = async (userId: string): Promise<IdentityType[]> => {
+  const response = await fetch(`/api/identities/team-member/${userId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch team member identities');
+  }
+  return response.json();
+};
 
 export default function Header() {
   const { 
@@ -236,11 +244,26 @@ export default function Header() {
   const isIdentityActive = !!originalUser;
   const userForIdentityCheck = originalUser || (activePrincipal && !activePrincipal.isIdentity ? activePrincipal : null);
 
-  const { data: ownedIdentities, isLoading: isLoadingOwnedIdentities } = useQuery<IdentityType[], Error>({
+  const { data: ownedIdentities = [], isLoading: isLoadingOwnedIdentities } = useQuery<IdentityType[], Error>({
     queryKey: ['ownedIdentities', userForIdentityCheck?.id],
     queryFn: () => userForIdentityCheck ? fetchOwnedIdentities(userForIdentityCheck.id) : Promise.resolve([]),
-    enabled: !!userForIdentityCheck, // Only fetch if there's a base user to check ownership for
+    enabled: !!userForIdentityCheck,
   });
+
+  const { data: teamMemberIdentities = [], isLoading: isLoadingTeamMemberIdentities } = useQuery<IdentityType[], Error>({
+    queryKey: ['teamMemberIdentities', userForIdentityCheck?.id],
+    queryFn: () => userForIdentityCheck ? fetchTeamMemberIdentities(userForIdentityCheck.id) : Promise.resolve([]),
+    enabled: !!userForIdentityCheck,
+  });
+
+  // Merge and deduplicate identities
+  const allIdentities = React.useMemo(() => {
+    const map = new Map();
+    [...(ownedIdentities || []), ...(teamMemberIdentities || [])].forEach(identity => {
+      map.set(identity.id, identity);
+    });
+    return Array.from(map.values());
+  }, [ownedIdentities, teamMemberIdentities]);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-30 flex h-[var(--header-height)] items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
@@ -432,23 +455,23 @@ export default function Header() {
                   Switch to @{originalUser.username}
                 </DropdownMenuItem>
               ) : (
-                !isLoadingOwnedIdentities && ownedIdentities && ownedIdentities.length > 0 && (
+                !(isLoadingOwnedIdentities || isLoadingTeamMemberIdentities) && allIdentities && allIdentities.length > 0 && (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
                       <Users className="mr-2 h-4 w-4" />
                       <span>Switch to Identity</span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
-                      {isLoadingOwnedIdentities ? (
+                      {(isLoadingOwnedIdentities || isLoadingTeamMemberIdentities) ? (
                         <DropdownMenuItem disabled>Loading identities...</DropdownMenuItem>
                       ) : (
-                        ownedIdentities.map((identity) => (
+                        allIdentities.map((identity) => (
                           <DropdownMenuItem key={identity.id} onClick={() => switchToIdentity(identity)}>
                             {identity.displayName || identity.username}
                           </DropdownMenuItem>
                         ))
                       )}
-                       {ownedIdentities && ownedIdentities.length === 0 && !isLoadingOwnedIdentities && (
+                       {allIdentities && allIdentities.length === 0 && !(isLoadingOwnedIdentities || isLoadingTeamMemberIdentities) && (
                          <DropdownMenuItem disabled>No identities found</DropdownMenuItem>
                        )}
                     </DropdownMenuSubContent>

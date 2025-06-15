@@ -22,6 +22,7 @@ export async function GET(
       profile = await IdentityModel.findOne({ username: usernameRegex })
         .select('+followers +following')
         .populate('owner', 'username profilePictureUrl')
+        .populate('teamMembers.user', 'username profilePictureUrl email')
         .lean();
     }
 

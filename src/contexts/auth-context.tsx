@@ -187,7 +187,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 
   const switchToIdentity = useCallback(async (identity: Identity) => {
-    if (user && !user.isIdentity && user.id === identity.owner.id) {
+    if (
+      user &&
+      !user.isIdentity &&
+      (
+        user.id === identity.owner.id ||
+        (identity.teamMembers && identity.teamMembers.some(tm => tm.user.id === user.id))
+      )
+    ) {
       setOriginalUser(user as AppUserType);
       setUser(identity);
       localStorage.setItem(STATUSTLE_ACTIVE_PROFILE_KEY, JSON.stringify(identity));
@@ -196,7 +203,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       router.push(`/profile/${identity.username}`); // Optional: redirect to identity profile
       router.refresh(); // Force refresh to ensure layout and data reflects new identity
     } else {
-      toast({ title: "Switch Failed", description: "You can only switch to identities you own.", variant: "destructive" });
+      toast({ title: "Switch Failed", description: "You can only switch to identities you own or are a team member of.", variant: "destructive" });
     }
   }, [user, toast, router]);
 
