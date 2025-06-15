@@ -50,11 +50,12 @@ const fetchNotificationsAPI = async (userId: string, page: number = 1, limit: nu
   return response.json();
 };
 
-const markNotificationAsReadAPI = async (notificationId?: string): Promise<{ message: string }> => {
+const markNotificationAsReadAPI = async (notificationId?: string, userId?: string): Promise<{ message: string }> => {
+  console.log('Frontend: Marking as read', { notificationId, userId });
   const response = await fetch('/api/notifications/mark-read', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(notificationId ? { notificationId } : {}),
+    body: JSON.stringify(notificationId ? { notificationId, userId } : { userId }),
   });
   if (!response.ok) {
     const errorData = await response.json();
@@ -74,9 +75,11 @@ const deleteNotificationAPI = async (notificationId: string): Promise<{ message:
   return response.json();
 };
 
-const deleteReadNotificationsAPI = async (): Promise<{ message: string }> => {
+const deleteReadNotificationsAPI = async (userId?: string): Promise<{ message: string }> => {
   const response = await fetch('/api/notifications/delete-read', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
   });
   if (!response.ok) {
     const errorData = await response.json();
@@ -111,8 +114,12 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (data) {
-      console.log('[NotificationContext] Fetched notifications:', data.items);
-      setDisplayedNotifications(data.items);
+      // Ensure every notification has an id property
+      const itemsWithId = data.items.map(n => ({
+        ...n,
+        id: n.id || (n as any)._id,
+      }));
+      setDisplayedNotifications(itemsWithId);
       setCurrentPage(data.currentPage);
       setTotalServerNotificationsCount(data.totalItems);
     }
@@ -150,9 +157,12 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const markAsReadMutation = useMutation< { message: string }, Error, { notificationId?: string } >({
-    mutationFn: ({ notificationId }) => markNotificationAsReadAPI(notificationId),
+    mutationFn: ({ notificationId }) => markNotificationAsReadAPI(notificationId, user?.id),
     onSuccess: (data, variables) => {
-      // toast({ title: "Notifications Updated", description: data.message }); // Can be noisy, consider removing for individual read
+      // Invalidate the notifications query to force a refetch
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      
+      // Update local state optimistically
       setDisplayedNotifications(prev => 
         prev.map(n => {
           if (variables.notificationId && n.id === variables.notificationId && !n.isRead) return { ...n, isRead: true };
@@ -179,7 +189,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const deleteReadNotificationsMutation = useMutation< { message: string }, Error, void >({
-    mutationFn: () => deleteReadNotificationsAPI(),
+    mutationFn: () => deleteReadNotificationsAPI(user?.id),
     onSuccess: (data) => {
       toast({ title: "Notifications Cleared", description: data.message });
       const readCount = displayedNotifications.filter(n => n.isRead).length;

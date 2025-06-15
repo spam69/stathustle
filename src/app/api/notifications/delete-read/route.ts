@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import NotificationModel from '@/models/Notification.model';
-import UserModel from '@/models/User.model';
+import mongoose from 'mongoose';
 
 export async function POST(request: Request) {
   try {
     await dbConnect();
-    // For demo, use the first user in the database
-    const user = await UserModel.findOne();
-    if (!user) {
-      return NextResponse.json({ message: 'No user found in database.' }, { status: 404 });
+    const { userId } = await request.json();
+    console.log('Delete Read: Received userId:', userId);
+    if (!userId) {
+      return NextResponse.json({ message: 'No userId provided.' }, { status: 400 });
     }
-    const userId = user._id;
-    const result = await NotificationModel.deleteMany({ recipientUserId: userId, isRead: true });
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const query = { recipientId: userObjectId, isRead: true };
+    const result = await NotificationModel.deleteMany(query);
     const deletedCount = result.deletedCount || 0;
     return NextResponse.json({ message: `${deletedCount} read notification(s) deleted.` });
   } catch (error) {

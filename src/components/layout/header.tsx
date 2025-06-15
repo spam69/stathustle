@@ -76,7 +76,7 @@ const NotificationItem = ({
       <Button
         variant="ghost"
         size="icon"
-        className="absolute top-1 right-1 h-6 w-6 p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive focus:opacity-100"
+        className="absolute top-1 right-1 h-6 w-6 p-1 text-destructive"
         onClick={handleDelete}
         disabled={isDeleting}
         aria-label="Delete notification"
