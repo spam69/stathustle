@@ -131,9 +131,6 @@ export default function SidebarNav() {
             <p className="text-[10px] text-sidebar-foreground/70 truncate">@{profile.username}</p>
           </div>
         </Link>
-        <Button variant="outline" size="xs" className="rounded-full text-[10px] px-2 py-0.5 h-auto border-sidebar-primary text-sidebar-primary hover:bg-sidebar-primary hover:text-sidebar-primary-foreground shrink-0">
-          Follow
-        </Button>
       </div>
     );
   };
