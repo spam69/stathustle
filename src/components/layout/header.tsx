@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Bell, Search, UserCircle, PlusCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2, Users, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,9 +29,10 @@ import { useNotifications } from '@/contexts/notification-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import type { Notification, Identity as IdentityType } from '@/types';
+import type { Notification, Identity as IdentityType, Post } from '@/types';
 // import { mockIdentities } from '@/lib/mock-data'; // Removed mockIdentities
 import { useQuery } from '@tanstack/react-query';
+import SearchResultModal from '@/components/search-result-modal';
 
 const NotificationItem = ({
   notification,
@@ -107,8 +108,12 @@ export default function Header() {
   const { toggleSidebar, isMobile } = useSidebar();
   const { openCreatePostModal } = useFeed();
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Post[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const {
     displayedNotifications,
     unreadCount,
@@ -126,6 +131,7 @@ export default function Header() {
     totalServerNotificationsCount,
     openNotificationInModal,
   } = useNotifications();
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activePrincipal && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) {
@@ -147,11 +153,59 @@ export default function Header() {
     toast({ title: "Logged Out", description: "You have been successfully logged out."});
   };
 
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error('Search failed');
+      const results = await response.json();
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      toast({
+        title: "Search Error",
+        description: "Failed to perform search. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set new timeout for search
+    searchTimeoutRef.current = setTimeout(() => {
+      handleSearch(query);
+    }, 300);
+  };
+
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const searchInput = event.currentTarget.elements.namedItem('searchQuery') as HTMLInputElement;
-    console.log("Search submitted from modal with value:", searchInput?.value);
+    handleSearch(searchQuery);
+  };
+
+  const handleResultClick = (post: Post) => {
     setIsSearchModalOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedPostId(post.id);
+  };
+
+  const handleCloseSearchResult = () => {
+    setSelectedPostId(null);
   };
 
   const handleNotificationClick = async (notification: Notification) => {
@@ -202,14 +256,54 @@ export default function Header() {
       </Link>
 
       <div className="flex flex-1 items-center justify-end gap-1 md:gap-2">
-        <form className="ml-auto hidden sm:flex flex-1 sm:flex-initial">
+        <form className="ml-auto hidden sm:flex flex-1 sm:flex-initial" onSubmit={handleSearchSubmit}>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search..."
+              placeholder="Search posts..."
               className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px]"
+              value={searchQuery}
+              onChange={handleSearchChange}
             />
+            {isSearching && (
+              <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+            {searchQuery && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-lg max-h-[400px] overflow-y-auto">
+                {searchResults.map((post) => (
+                  <button
+                    key={post.id}
+                    className="w-full p-3 text-left hover:bg-accent/50 transition-colors border-b last:border-b-0"
+                    onClick={() => handleResultClick(post)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={post.author.profilePictureUrl} alt={post.author.username} />
+                        <AvatarFallback>{getInitials(post.author.displayName || post.author.username)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {post.author.displayName || post.author.username}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {post.content}
+                        </p>
+                        {post.tags && post.tags.length > 0 && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {post.tags.map((tag, index) => (
+                              <span key={index} className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </form>
 
@@ -221,7 +315,7 @@ export default function Header() {
         </div>
 
         {activePrincipal && (
-          <Button variant="ghost" size="icon" onClick={openCreatePostModal} aria-label="Create Post">
+          <Button variant="ghost" size="icon" onClick={() => openCreatePostModal()} aria-label="Create Post">
             <PlusSquare className="h-5 w-5" />
           </Button>
         )}
@@ -363,7 +457,7 @@ export default function Header() {
               )}
 
               {isMobile && (
-                <DropdownMenuItem onClick={openCreatePostModal}>
+                <DropdownMenuItem onClick={() => openCreatePostModal()}>
                   <PlusSquare className="mr-2 h-4 w-4" />
                   Create Post
                 </DropdownMenuItem>
@@ -413,25 +507,73 @@ export default function Header() {
       <Dialog open={isSearchModalOpen} onOpenChange={setIsSearchModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-headline">Search StatHustle</DialogTitle>
+            <DialogTitle className="font-headline">Search Posts</DialogTitle>
             <DialogDescription>
-              Find players, posts, blogs, or users.
+              Search through posts by content or tags
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 mt-4">
-            <Input
-              name="searchQuery"
-              type="search"
-              placeholder="Search..."
-              className="flex-1"
-              autoFocus
-            />
+            <div className="relative flex-1">
+              <Input
+                name="searchQuery"
+                type="search"
+                placeholder="Search posts..."
+                className="flex-1"
+                autoFocus
+                value={searchQuery}
+                onChange={handleSearchChange}
+              />
+              {isSearching && (
+                <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
             <Button type="submit" size="icon" aria-label="Submit search">
               <Search className="h-4 w-4" />
             </Button>
           </form>
+          {searchQuery && searchResults.length > 0 && (
+            <div className="mt-4 max-h-[400px] overflow-y-auto">
+              {searchResults.map((post) => (
+                <button
+                  key={post.id}
+                  className="w-full p-3 text-left hover:bg-accent/50 transition-colors border-b last:border-b-0"
+                  onClick={() => handleResultClick(post)}
+                >
+                  <div className="flex items-start gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={post.author.profilePictureUrl} alt={post.author.username} />
+                      <AvatarFallback>{getInitials(post.author.displayName || post.author.username)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {post.author.displayName || post.author.username}
+                      </p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {post.content}
+                      </p>
+                      {post.tags && post.tags.length > 0 && (
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {post.tags.map((tag, index) => (
+                            <span key={index} className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      <SearchResultModal
+        isOpen={!!selectedPostId}
+        onClose={handleCloseSearchResult}
+        postId={selectedPostId}
+      />
     </header>
   );
 }
