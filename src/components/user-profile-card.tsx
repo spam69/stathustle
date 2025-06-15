@@ -1,13 +1,12 @@
-
 "use client";
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Mail, Link as LinkIcon, MapPin, Briefcase, BarChartBig, Edit3, Users, Award, Edit2, ImageIcon } from "lucide-react";
+import { Mail, Link as LinkIcon, MapPin, Briefcase, BarChartBig, Edit3, Users, Award, Edit2, ImageIcon, UserPlus, UserMinus, Loader2 } from "lucide-react";
 import type { User, Identity } from "@/types";
 import { useAuth } from '@/contexts/auth-context';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +22,8 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
   const [profileUser, setProfileUser] = useState(initialProfileUser); // Local state to reflect UI changes quicker
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [editingImageType, setEditingImageType] = useState<'profile' | 'banner' | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   
   const isIdentityProfile = 'isIdentity' in profileUser && profileUser.isIdentity;
@@ -35,6 +36,14 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
       isCurrentUserProfile = currentUser.id === profileUser.id;
     }
   }
+
+  // Check if current user is following this profile
+  useEffect(() => {
+    if (currentUser && profileUser) {
+      const isFollowingProfile = profileUser.followers?.includes(currentUser.id);
+      setIsFollowing(!!isFollowingProfile);
+    }
+  }, [currentUser, profileUser]);
 
   const getInitials = (name: string) => {
     return name
@@ -73,6 +82,59 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
     setEditingImageType(null);
   };
 
+  const handleFollowAction = async (action: 'follow' | 'unfollow') => {
+    if (!currentUser) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to follow users and identities.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/follow', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          followerId: currentUser.id,
+          followerModel: currentUser.isIdentity ? 'Identity' : 'User',
+          followingId: profileUser.id,
+          followingModel: isIdentityProfile ? 'Identity' : 'User',
+          action
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to perform follow action');
+      }
+
+      // Update local state
+      setProfileUser(prev => ({
+        ...prev,
+        followers: action === 'follow' 
+          ? [...(prev.followers || []), currentUser.id]
+          : (prev.followers || []).filter(id => id !== currentUser.id)
+      }));
+      setIsFollowing(action === 'follow');
+      
+      toast({
+        title: action === 'follow' ? "Following" : "Unfollowed",
+        description: `You are now ${action === 'follow' ? 'following' : 'not following'} ${profileUser.username}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to perform follow action. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <>
@@ -137,6 +199,16 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
               )}
           </div>
           
+          {/* Add follower/following counts */}
+          <div className="flex justify-center gap-4 mt-3 text-sm text-muted-foreground">
+            <div>
+              <span className="font-semibold text-foreground">{profileUser.followers?.length || 0}</span> followers
+            </div>
+            <div>
+              <span className="font-semibold text-foreground">{profileUser.following?.length || 0}</span> following
+            </div>
+          </div>
+          
           {profileUser.bio && (
             <p className="mt-3 text-sm max-w-md mx-auto">{profileUser.bio}</p>
           )}
@@ -186,7 +258,20 @@ export default function UserProfileCard({ profileUser: initialProfileUser }: Use
           )}
           {!isCurrentUserProfile && (
               <div className="mt-4 space-x-2">
-                  <Button>Follow {isIdentityProfile ? 'Identity' : 'User'}</Button>
+                  <Button 
+                    onClick={() => handleFollowAction(isFollowing ? 'unfollow' : 'follow')}
+                    disabled={isLoading}
+                    variant={isFollowing ? "outline" : "default"}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : isFollowing ? (
+                      <UserMinus className="mr-2 h-4 w-4" />
+                    ) : (
+                      <UserPlus className="mr-2 h-4 w-4" />
+                    )}
+                    {isFollowing ? 'Unfollow' : 'Follow'} {isIdentityProfile ? 'Identity' : 'User'}
+                  </Button>
                   <Button variant="outline">Message</Button>
               </div>
           )}

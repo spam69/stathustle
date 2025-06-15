@@ -14,10 +14,15 @@ export async function GET(
     // Case-insensitive search for username
     const usernameRegex = new RegExp(`^${username}$`, 'i');
 
-    let profile = await UserModel.findOne({ username: usernameRegex }).lean();
+    let profile = await UserModel.findOne({ username: usernameRegex })
+      .select('+followers +following')
+      .lean();
     
     if (!profile) {
-      profile = await IdentityModel.findOne({ username: usernameRegex }).populate('owner', 'username profilePictureUrl').lean();
+      profile = await IdentityModel.findOne({ username: usernameRegex })
+        .select('+followers +following')
+        .populate('owner', 'username profilePictureUrl')
+        .lean();
     }
 
     if (profile) {
@@ -25,6 +30,15 @@ export async function GET(
       const transformedProfile = { ...profile, id: profile._id.toString() };
       delete (transformedProfile as any)._id;
       delete (transformedProfile as any).__v;
+
+      // Transform followers and following arrays
+      if (transformedProfile.followers) {
+        transformedProfile.followers = transformedProfile.followers.map((f: any) => f.toString());
+      }
+      if (transformedProfile.following) {
+        transformedProfile.following = transformedProfile.following.map((f: any) => f.toString());
+      }
+
       if ((transformedProfile as any).owner && (transformedProfile as any).owner._id) {
         (transformedProfile as any).owner.id = (transformedProfile as any).owner._id.toString();
         delete (transformedProfile as any).owner._id;

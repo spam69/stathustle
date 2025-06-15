@@ -1,4 +1,3 @@
-
 import mongoose, { Schema, Document, models, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import type { User as UserType, SportInterest, SocialLink } from '@/types'; // Using UserType to avoid naming conflict
@@ -13,6 +12,10 @@ export interface IUserSchema extends Omit<UserType, 'id' | 'sportInterests' | 's
   createdAt: Date;
   updatedAt: Date;
   comparePassword: (candidatePassword: string) => Promise<boolean>;
+  followers: Array<mongoose.Types.ObjectId>;
+  followerModel: string;
+  following: Array<mongoose.Types.ObjectId>;
+  followingModel: string;
 }
 
 const SportInterestSchema = new Schema<SportInterest>({
@@ -37,6 +40,10 @@ const UserSchema = new Schema<IUserSchema>({
   themePreference: { type: String, enum: ['light', 'dark', 'system', 'pink', 'blue'], default: 'system' },
   bio: { type: String, maxlength: 300 },
   isIdentity: { type: Boolean, default: false, required: true },
+  followers: [{ type: Schema.Types.ObjectId, refPath: 'followerModel' }],
+  followerModel: { type: String, enum: ['User', 'Identity'] },
+  following: [{ type: Schema.Types.ObjectId, refPath: 'followingModel' }],
+  followingModel: { type: String, enum: ['User', 'Identity'] },
 }, {
   timestamps: true,
   toJSON: {

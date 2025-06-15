@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import UserModel from '@/models/User.model';
@@ -34,6 +33,10 @@ export async function POST(request: Request) {
       bio: bio || "",
       themePreference: 'system',
       isIdentity: false,
+      followers: [],
+      following: [],
+      followerModel: 'User',
+      followingModel: 'User'
     });
 
     const savedUser = await newUser.save();

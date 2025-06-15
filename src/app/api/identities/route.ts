@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
 import IdentityModel from '@/models/Identity.model';
@@ -46,6 +45,10 @@ export async function POST(request: Request) {
       username,
       owner: ownerId, // Store owner as ObjectId string
       isIdentity: true, // Explicitly set
+      followers: [],
+      following: [],
+      followerModel: 'Identity',
+      followingModel: 'Identity'
     };
 
     if (displayName) newIdentityData.displayName = displayName;

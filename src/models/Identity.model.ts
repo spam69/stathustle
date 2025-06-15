@@ -1,4 +1,3 @@
-
 import mongoose, { Schema, Document, models, Model } from 'mongoose';
 import type { Identity as IdentityType, User as UserType, TeamMember as TeamMemberType, SocialLink } from '@/types';
 import { IUserSchema } from './User.model'; // Import User document interface for owner reference
@@ -15,6 +14,10 @@ export interface IIdentitySchema extends Omit<IdentityType, 'id' | 'owner' | 'te
   socialLinks?: Array<{ platform: string; url: string; _id?: mongoose.Types.ObjectId }>;
   createdAt: Date;
   updatedAt: Date;
+  followers: Array<mongoose.Types.ObjectId>;
+  followerModel: string;
+  following: Array<mongoose.Types.ObjectId>;
+  followingModel: string;
 }
 
 const SocialLinkSchema = new Schema<SocialLink>({
@@ -39,6 +42,10 @@ const IdentitySchema = new Schema<IIdentitySchema>({
   teamMembers: [TeamMemberSchema],
   isIdentity: { type: Boolean, default: true, required: true },
   themePreference: { type: String, enum: ['light', 'dark', 'system', 'pink', 'blue'], default: 'system' },
+  followers: [{ type: Schema.Types.ObjectId, refPath: 'followerModel' }],
+  followerModel: { type: String, enum: ['User', 'Identity'] },
+  following: [{ type: Schema.Types.ObjectId, refPath: 'followingModel' }],
+  followingModel: { type: String, enum: ['User', 'Identity'] },
 }, {
   timestamps: true,
   toJSON: {

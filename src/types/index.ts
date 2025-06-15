@@ -20,6 +20,8 @@ export interface User {
   themePreference?: 'light' | 'dark' | 'pink' | 'blue';
   bio?: string;
   isIdentity?: false;
+  followers?: string[]; // Array of user/identity IDs that follow this user
+  following?: string[]; // Array of user/identity IDs that this user follows
 }
 
 export interface TeamMember {
@@ -40,6 +42,8 @@ export interface Identity {
   teamMembers?: TeamMember[];
   isIdentity: true;
   themePreference?: 'light' | 'dark' | 'pink' | 'blue';
+  followers?: string[]; // Array of user/identity IDs that follow this identity
+  following?: string[]; // Array of user/identity IDs that this identity follows
 }
 
 export interface ReactionEntry {
