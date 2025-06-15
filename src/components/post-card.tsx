@@ -341,7 +341,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                       <div className="grid gap-0.5 flex-1">
                           <p className="text-xs text-primary font-semibold uppercase tracking-wider">Blog Post</p>
                           <CardTitle className="text-base font-semibold hover:underline font-headline text-foreground">
-                              <Link href={blogShareDetails.url} target="_blank" rel="noopener noreferrer">
+                              <Link href={`/blogs/${blogShareDetails.authorUsername}/${blogShareDetails.url.split('/').pop()}`} target="_blank" rel="noopener noreferrer">
                                   {blogShareDetails.title}
                               </Link>
                           </CardTitle>
@@ -357,7 +357,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                   )}
                   <CardFooter className="p-3 bg-primary/10">
                       <Button asChild variant="default" size="sm" className="w-full font-headline bg-primary hover:bg-primary/90">
-                          <Link href={blogShareDetails.url} target="_blank" rel="noopener noreferrer">
+                          <Link href={`/blogs/${blogShareDetails.authorUsername}/${blogShareDetails.url.split('/').pop()}`} target="_blank" rel="noopener noreferrer">
                               Read Blog <ArrowRight className="ml-2 h-4 w-4" />
                           </Link>
                       </Button>
