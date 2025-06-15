@@ -10,7 +10,8 @@ const getActorDisplayName = (actor: User | Identity) => {
 export async function createNotification(
   type: NotificationType,
   actor: User | Identity,
-  recipientUserId: string,
+  recipientId: string,
+  recipientModel: 'User' | 'Identity',
   post?: Post,
   comment?: Comment,
   originalComment?: Comment
@@ -19,11 +20,11 @@ export async function createNotification(
     console.warn('[Notifications] createNotification called with invalid actor:', actor);
     return;
   }
-  if (actor.id === recipientUserId && type.startsWith('new_reaction')) return;
-  if (actor.id === recipientUserId && type === 'new_follower') return;
+  if (actor.id === recipientId && type.startsWith('new_reaction')) return;
+  if (actor.id === recipientId && type === 'new_follower') return;
 
   let message = '';
-  let link = `/profile/${recipientUserId}`;
+  let link = `/profile/${recipientId}`;
   const actorName = `<strong>${getActorDisplayName(actor)}</strong>`;
   const postContentPreview = post?.content ? `"${post.content.substring(0, 30).replace(/<[^>]+>/g, '')}..."` : (post ? 'your post' : 'content');
   let relevantCommentContentPreview = '';
@@ -59,7 +60,8 @@ export async function createNotification(
     type,
     actor: new mongoose.Types.ObjectId(actor.id),
     actorModel: 'isIdentity' in actor && actor.isIdentity ? 'Identity' : 'User',
-    recipientUserId: new mongoose.Types.ObjectId(recipientUserId),
+    recipientId: new mongoose.Types.ObjectId(recipientId),
+    recipientModel,
     postId: post?.id ? new mongoose.Types.ObjectId(post.id) : undefined,
     commentId: comment?.id ? new mongoose.Types.ObjectId(comment.id) : undefined,
     originalCommentId: originalComment?.id ? new mongoose.Types.ObjectId(originalComment.id) : undefined,

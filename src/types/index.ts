@@ -1,4 +1,3 @@
-
 import type { ReactionType } from '@/lib/reactions';
 
 export type SportInterestLevel = 'very interested' | 'somewhat interested' | 'no interest';
@@ -124,7 +123,8 @@ export interface Notification {
   id: string;
   type: NotificationType;
   actor: User | Identity;
-  recipientUserId: string;
+  recipientId: string;
+  recipientModel: 'User' | 'Identity';
   postId?: string;
   commentId?: string;
   originalCommentId?: string;

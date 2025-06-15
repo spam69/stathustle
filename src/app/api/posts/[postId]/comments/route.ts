@@ -61,13 +61,25 @@ export async function POST(
     await post.save();
 
     // Fetch post author for notification if needed
+    let postRecipientId: string | undefined;
+    let postRecipientModel: 'User' | 'Identity' | undefined;
     const postAuthorDoc = await (post.authorModel === 'User' ? UserModel.findById(post.author) : IdentityModel.findById(post.author)).lean();
+    if (postAuthorDoc) {
+      if (post.authorModel === 'Identity' && postAuthorDoc.owner && postAuthorDoc.owner._id) {
+        postRecipientId = postAuthorDoc.owner._id.toString();
+        postRecipientModel = 'User';
+      } else if (post.authorModel === 'User' && postAuthorDoc._id) {
+        postRecipientId = postAuthorDoc._id.toString();
+        postRecipientModel = 'User';
+      }
+    }
 
-    if (postAuthorDoc && postAuthorDoc._id.toString() !== authorDoc._id.toString()) {
+    if (postRecipientId && postRecipientModel && postRecipientId !== authorDoc._id.toString()) {
         createNotification(
             'new_comment', 
             authorForNotification as UserType | IdentityType, // Cast: fetched earlier
-            postAuthorDoc._id.toString(), 
+            postRecipientId,
+            postRecipientModel,
             post.toObject({ virtuals: true }) as PostType, 
             newComment.toObject({ virtuals: true }) as CommentType
         );
@@ -77,13 +89,23 @@ export async function POST(
       const originalComment = await CommentModel.findById(parentId)
         .populate('author') // Populate to get author's ID for notification
         .lean();
-      if (originalComment && originalComment.author && originalComment.author._id.toString() !== authorDoc._id.toString()) {
-        // Ensure originalComment.author is populated or at least has _id
-        const originalCommentAuthorId = originalComment.author._id.toString();
+      let replyRecipientId: string | undefined;
+      let replyRecipientModel: 'User' | 'Identity' | undefined;
+      if (originalComment && originalComment.author) {
+        if (originalComment.author.isIdentity && originalComment.author.owner && originalComment.author.owner._id) {
+          replyRecipientId = originalComment.author.owner._id.toString();
+          replyRecipientModel = 'User';
+        } else if (!originalComment.author.isIdentity && originalComment.author._id) {
+          replyRecipientId = originalComment.author._id.toString();
+          replyRecipientModel = 'User';
+        }
+      }
+      if (originalComment && replyRecipientId && replyRecipientModel && replyRecipientId !== authorDoc._id.toString()) {
         createNotification(
             'new_reply', 
             authorForNotification as UserType | IdentityType,
-            originalCommentAuthorId, 
+            replyRecipientId,
+            replyRecipientModel,
             post.toObject({ virtuals: true }) as PostType, 
             newComment.toObject({ virtuals: true }) as CommentType,
             originalComment as CommentType

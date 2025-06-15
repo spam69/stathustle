@@ -183,17 +183,44 @@ export async function POST(
          const commentAuthorObject = comment.author.toObject ? comment.author.toObject() : comment.author;
          const postAuthorObject = post.author.toObject ? post.author.toObject() : post.author;
          
+         // Determine recipientId and recipientModel: if Identity, use owner; if User, use _id
+         let recipientId: string | undefined;
+         let recipientModel: 'User' | 'Identity' | undefined;
+         if (comment.authorModel === 'Identity') {
+           let identity = commentAuthorObject;
+           // If owner is not populated, fetch the identity with owner populated
+           if (!identity.owner || (!identity.owner._id && typeof identity.owner !== 'string')) {
+             const populatedIdentity = await IdentityModel.findById(identity._id).populate('owner').lean();
+             if (populatedIdentity && populatedIdentity.owner) {
+               identity = populatedIdentity;
+             }
+           }
+           if (identity.owner) {
+             if (typeof identity.owner === 'object' && identity.owner._id) {
+               recipientId = identity.owner._id.toString();
+               recipientModel = 'User';
+             } else if (typeof identity.owner === 'string') {
+               recipientId = identity.owner;
+               recipientModel = 'User';
+             }
+           }
+         } else if (comment.authorModel === 'User' && commentAuthorObject._id) {
+           recipientId = commentAuthorObject._id.toString();
+           recipientModel = 'User';
+         }
+         
          const clientCommentForNotification = await transformClientComment(comment.toObject());
-         if (clientCommentForNotification && postAuthorObject?._id) {
+         if (clientCommentForNotification && postAuthorObject?._id && recipientId && recipientModel && recipientId !== reactingUser.id.toString()) {
             createNotification(
                 'new_reaction_comment',
                 reactingUser,
-                commentAuthorObject._id.toString(),
+                recipientId,
+                recipientModel,
                 { ...post.toObject(), id: post._id.toString(), author: postAuthorObject } as PostType,
                 clientCommentForNotification
             );
          } else {
-           console.warn(`[API/REACT_COMMENT] Notification for comment reaction skipped. Missing data. CommentAuthor:`, commentAuthorObject, `PostAuthor:`, postAuthorObject, `ClientComment:`, clientCommentForNotification)
+           console.warn(`[API/REACT_COMMENT] Notification for comment reaction skipped. Missing data. CommentAuthor:`, commentAuthorObject, `PostAuthor:`, postAuthorObject, `ClientComment:`, clientCommentForNotification, `RecipientId:`, recipientId, `RecipientModel:`, recipientModel)
          }
       }
     }
