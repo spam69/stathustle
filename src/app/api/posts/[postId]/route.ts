@@ -141,7 +141,7 @@ export async function PUT(
 ) {
   await dbConnect();
   try {
-    const { postId } = params;
+    const { postId } = await params;
     const body = await request.json();
     const { content, mediaUrl, mediaType, tags } = body;
 
