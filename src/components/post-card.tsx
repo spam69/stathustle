@@ -1,4 +1,3 @@
-
 "use client";
 
 import axios from 'axios';
@@ -53,6 +52,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import SearchResultModal from './search-result-modal';
 
 
 interface PostCardProps {
@@ -83,6 +83,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const [isLoadingOriginalPost, setIsLoadingOriginalPost] = useState(false);
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSharedPostModalOpen, setIsSharedPostModalOpen] = useState(false);
   const queryClient = useQueryClient();
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -174,24 +175,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
 
   const handleSharedPostClick = async () => {
     if (!sharedOriginalPostId) return;
-    const originalPostElement = document.getElementById(`post-card-${sharedOriginalPostId}`);
-    if (originalPostElement) {
-      originalPostElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return; 
-    }
-    if (!postToDisplayAsShared || postToDisplayAsShared.id !== sharedOriginalPostId) { 
-      setIsLoadingOriginalPost(true);
-      const fetchedDirectOriginal = await fetchSinglePost(sharedOriginalPostId); 
-      setIsLoadingOriginalPost(false);
-      if (fetchedDirectOriginal) {
-        setCurrentPost(prev => ({...prev, sharedOriginalPost: fetchedDirectOriginal}));
-        setTimeout(() => cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
-      } else {
-        toast({ title: "Error", description: "Could not load the original post.", variant: "destructive"});
-      }
-    } else {
-        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    setIsSharedPostModalOpen(true);
   };
 
   const handleEditPost = () => {
@@ -314,6 +298,14 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
 
   return (
     <>
+      {/* Shared Post Modal */}
+      {sharedOriginalPostId && isSharedPostModalOpen && (
+        <SearchResultModal
+          isOpen={isSharedPostModalOpen}
+          onClose={() => setIsSharedPostModalOpen(false)}
+          postId={sharedOriginalPostId}
+        />
+      )}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <Card ref={cardRef} id={`post-card-${currentPost.id}`} className={`mb-0.5 overflow-hidden shadow-none border-b border-border rounded-none bg-transparent hover:bg-card/30 transition-colors duration-200 ${isEmbedded ? 'shadow-none ml-0 border-none' : ''}`}>
           {renderPostContent(currentPost, true)}
