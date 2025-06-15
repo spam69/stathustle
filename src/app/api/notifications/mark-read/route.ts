@@ -16,10 +16,10 @@ export async function POST(request: Request) {
 
     let updatedCount = 0;
     if (notificationId) {
-      const result = await NotificationModel.updateOne({ _id: notificationId, recipientUserId: userId }, { $set: { isRead: true } });
+      const result = await NotificationModel.updateOne({ _id: notificationId, recipientId: userId }, { $set: { isRead: true } });
       updatedCount = result.modifiedCount;
     } else {
-      const result = await NotificationModel.updateMany({ recipientUserId: userId, isRead: false }, { $set: { isRead: true } });
+      const result = await NotificationModel.updateMany({ recipientId: userId, isRead: false }, { $set: { isRead: true } });
       updatedCount = result.modifiedCount;
     }
     return NextResponse.json({ message: `${updatedCount} notification(s) marked as read.` });

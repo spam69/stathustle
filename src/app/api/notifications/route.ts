@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     }
 
     // Query notifications for the user, sorted by createdAt descending
-    const filter = { recipientUserId: new mongoose.Types.ObjectId(userId) };
+    const filter = { recipientId: new mongoose.Types.ObjectId(userId) };
     const totalItems = await NotificationModel.countDocuments(filter);
     const notifications = await NotificationModel.find(filter)
       .sort({ createdAt: -1 })
