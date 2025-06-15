@@ -28,6 +28,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Owner user not found' }, { status: 404 });
     }
 
+    // Prevent a user from owning more than one identity
+    const alreadyOwnsIdentity = await IdentityModel.findOne({ owner: ownerId });
+    if (alreadyOwnsIdentity) {
+      return NextResponse.json({ message: 'You can only create one identity as owner.' }, { status: 409 });
+    }
+
     // Check for existing identity username (case-insensitive for username)
     const existingIdentity = await IdentityModel.findOne({ username: new RegExp(`^${username}$`, 'i') });
     if (existingIdentity) {

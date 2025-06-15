@@ -492,11 +492,13 @@ export default function Header() {
                 </Link>
               </DropdownMenuItem>
               {!isIdentityActive && (
-                <DropdownMenuItem asChild>
-                <Link href="/settings/identity/create">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Create New Identity
-                  </Link>
-                </DropdownMenuItem>
+                ownedIdentities && ownedIdentities.length === 0 && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings/identity/create">
+                      <PlusCircle className="mr-2 h-4 w-4" /> Create New Identity
+                    </Link>
+                  </DropdownMenuItem>
+                )
               )}
               <DropdownMenuItem asChild>
                 <Link href="/settings">

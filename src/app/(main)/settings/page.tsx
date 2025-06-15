@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
@@ -20,6 +19,7 @@ import { Newspaper, Users, PlusCircle, Loader2 } from 'lucide-react';
 // Image related imports removed: UploadCloud, X as CloseIcon, Image as ImageIcon, Avatar, AvatarFallback, AvatarImage, Image
 // Image util imports removed: handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState
 import { useToast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
 
 const settingsSchema = z.object({
   bio: z.string().max(300, "Bio cannot exceed 300 characters.").optional().nullable(),
@@ -57,8 +57,10 @@ export default function SettingsPage() {
       router.push('/login');
     }
     if (user) {
+      // Only access sportInterests if user is a User (not Identity)
+      const isUser = (u: any): u is User => 'sportInterests' in u;
       const initialSportInterests = availableSports.map(sportName => {
-        const userInterest = user.sportInterests?.find(interest => interest.sport === sportName);
+        const userInterest = isUser(user) && user.sportInterests?.find((interest: any) => interest.sport === sportName);
         return {
           sport: sportName,
           level: userInterest ? userInterest.level : 'no interest',
@@ -66,13 +68,12 @@ export default function SettingsPage() {
       });
 
       form.reset({
-        bio: user.bio || "",
-        // profilePictureUrl: user.profilePictureUrl || "", // Removed
-        // bannerImageUrl: user.bannerImageUrl || "", // Removed
+        bio: typeof (user as any).bio === 'string' ? (user as any).bio : (user as any).bio ? String((user as any).bio) : "",
         sportInterests: initialSportInterests,
-        themePreference: (user.themePreference as 'light' | 'dark' | 'system' || theme || 'system'),
+        themePreference: ((user as any).themePreference === 'light' || (user as any).themePreference === 'dark')
+          ? (user as any).themePreference
+          : ((theme === 'light' || theme === 'dark') ? theme : 'light'),
       });
-      // Removed image state initialization logic
     }
   }, [user, authLoading, router, form, theme]);
 
@@ -97,7 +98,18 @@ export default function SettingsPage() {
 
   // Removed handleRemoveProfilePic and handleRemoveBanner functions
 
-  const userOwnedIdentity = user ? mockIdentities.find(identity => identity.owner.id === user.id) : null;
+  // Fetch owned identities from API
+  const { data: ownedIdentities = [], isLoading: isLoadingOwnedIdentities } = useQuery({
+    queryKey: ['ownedIdentities', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const res = await fetch(`/api/identities/owned-by/${user.id}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user,
+  });
+  const userOwnedIdentity = ownedIdentities && ownedIdentities.length > 0 ? ownedIdentities[0] : null;
 
   if (authLoading || !user) {
     return <div className="text-center p-10"><Loader2 className="h-8 w-8 animate-spin mx-auto" /> <p className="mt-2">Loading settings...</p></div>;
@@ -217,7 +229,7 @@ export default function SettingsPage() {
         <CardContent>
           {userOwnedIdentity ? (
             <div>
-              <p className="text-sm text-muted-foreground mb-1">You manage the identity:</p>
+              <p className="text-sm text-muted-foreground mb-1">You already own the identity:</p>
               <Link href={`/profile/${userOwnedIdentity.username}`} className="font-semibold text-primary hover:underline text-lg">
                 @{userOwnedIdentity.username}
               </Link>
@@ -227,11 +239,6 @@ export default function SettingsPage() {
                     <Users className="mr-2 h-4 w-4" /> Manage Team
                   </Link>
                 </Button>
-                <Button asChild>
-                  <Link href={`/blogs/create?identityId=${userOwnedIdentity.id}`}>
-                    <Newspaper className="mr-2 h-4 w-4" /> Create Blog Post
-                  </Link>
-                </Button>
               </div>
             </div>
           ) : (
@@ -239,11 +246,14 @@ export default function SettingsPage() {
               <p className="text-sm text-muted-foreground mb-3">
                 Create an identity to share your analysis, build a brand, and collaborate with a team.
               </p>
-              <Button asChild>
+              <Button asChild disabled={!!userOwnedIdentity}>
                 <Link href="/settings/identity/create">
                   <PlusCircle className="mr-2 h-4 w-4" /> Create New Identity
                 </Link>
               </Button>
+              {userOwnedIdentity && (
+                <p className="text-xs text-destructive mt-2">You can only create one identity as owner.</p>
+              )}
             </div>
           )}
         </CardContent>
