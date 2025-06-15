@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import SearchResultModal from './search-result-modal';
+import ReactionsModal from "./reactions-modal";
 
 
 interface PostCardProps {
@@ -84,6 +85,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSharedPostModalOpen, setIsSharedPostModalOpen] = useState(false);
+  const [isReactionsModalOpen, setIsReactionsModalOpen] = useState(false);
   const queryClient = useQueryClient();
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -306,6 +308,12 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
           postId={sharedOriginalPostId}
         />
       )}
+      {/* Reactions Modal */}
+      <ReactionsModal
+        isOpen={isReactionsModalOpen}
+        onClose={() => setIsReactionsModalOpen(false)}
+        reactions={currentPost.detailedReactions || []}
+      />
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <Card ref={cardRef} id={`post-card-${currentPost.id}`} className={`mb-0.5 overflow-hidden shadow-none border-b border-border rounded-none bg-transparent hover:bg-card/30 transition-colors duration-200 ${isEmbedded ? 'shadow-none ml-0 border-none' : ''}`}>
           {renderPostContent(currentPost, true)}
@@ -383,7 +391,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false }: Post
                             <r.Icon key={r.type} className={cn("h-3.5 w-3.5 -ml-1 first:ml-0", r.colorClass)} />
                           ))}
                         </div>
-                        <span className="hover:underline cursor-pointer">{totalReactionsCount}</span>
+                        <span className="hover:underline cursor-pointer" onClick={() => setIsReactionsModalOpen(true)}>{totalReactionsCount}</span>
                       </>
                     ) : (
                        <span className="h-[14px]">0 Reacts</span> 
