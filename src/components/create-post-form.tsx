@@ -25,7 +25,7 @@ const postSchema = z.object({
   content: z.string().max(1000, "Post too long.").optional(),
   sharedOriginalPostId: z.string().optional(),
   blogShareUrl: z.string().url().optional(),
-}).refine(data => data.content || data.sharedOriginalPostId || data.blogShareUrl, {
+}).refine(data => data.content?.trim() || data.sharedOriginalPostId || data.blogShareUrl, {
   message: "Post cannot be empty unless you are sharing something.",
   path: ["content"],
 });
@@ -191,11 +191,6 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
       toast({ title: "Error", description: "You must be logged in to post.", variant: "destructive" });
       return;
     }
-    // Validation is now handled by Zod schema's refine, form.formState.isValid will reflect this
-    // if (!data.content && !imageToUpload && !gifUrl && !data.sharedOriginalPostId && !pendingBlogShare) {
-    //   toast({ title: "Error", description: "Post cannot be empty.", variant: "destructive" });
-    //   return;
-    // }
 
     let finalMediaUrl: string | undefined = gifUrl;
     let finalMediaType: 'image' | 'gif' | undefined = gifUrl ? 'gif' : undefined;
@@ -221,7 +216,7 @@ export default function CreatePostForm({ onPostCreated, isSubmitting, isModal = 
     }
 
     const postData = {
-      content: data.content || "",
+      content: data.content?.trim() || "",
       mediaUrl: finalMediaUrl,
       mediaType: finalMediaType,
       sharedOriginalPostId: postToShare && postToShare.id ? postToShare.id : undefined,
