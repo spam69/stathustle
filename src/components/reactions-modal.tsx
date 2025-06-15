@@ -6,6 +6,7 @@ import { REACTION_DEFINITIONS, getReactionDefinition } from "@/lib/reactions";
 import type { ReactionEntry, User, Identity } from "@/types";
 import { useEffect, useState, useMemo } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 
 interface ReactionsModalProps {
   isOpen: boolean;
@@ -52,6 +53,8 @@ export default function ReactionsModal({ isOpen, onClose, reactions }: Reactions
       reactionDef: getReactionDefinition(r.reactionType)
     }));
   }, [reactions, usersMap]);
+
+  useModalBackButton(isOpen, onClose);
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>

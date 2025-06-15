@@ -10,6 +10,7 @@ import Link from 'next/link';
 import type { User, Identity } from "@/types";
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 
 interface FollowersFollowingModalProps {
   isOpen: boolean;
@@ -32,6 +33,8 @@ export default function FollowersFollowingModal({ isOpen, onClose, profileUser, 
       fetchUsers();
     }
   }, [isOpen, profileUser, type]);
+
+  useModalBackButton(isOpen, onClose);
 
   const fetchUsers = async () => {
     setIsLoading(true);

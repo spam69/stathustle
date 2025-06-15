@@ -9,6 +9,7 @@ import { GiphyFetch } from '@giphy/js-fetch-api';
 import type { IGif } from '@giphy/js-types';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Loader2, AlertTriangle } from 'lucide-react';
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 
 const GIPHY_API_KEY = process.env.NEXT_PUBLIC_GIPHY_API_KEY;
 let gf: GiphyFetch | null = null;
@@ -53,6 +54,8 @@ export default function GiphyPickerModal({ isOpen, onClose, onGifSelect }: Giphy
     onGifSelect(gif);
     onClose();
   };
+
+  useModalBackButton(isOpen, onClose);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>

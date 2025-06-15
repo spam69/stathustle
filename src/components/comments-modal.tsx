@@ -22,6 +22,7 @@ import MentionTextarea from './mention-textarea';
 import GiphyPickerModal from './giphy-picker-modal';
 import type { IGif } from '@giphy/js-types';
 import Image from 'next/image';
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 
 interface CommentsModalProps {
   post: Post | null;
@@ -67,6 +68,8 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
       setReplyingTo(null);
     }
   }, [isOpen]);
+
+  useModalBackButton(isOpen, onClose);
 
   if (!post) return null;
 

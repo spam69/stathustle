@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
@@ -9,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, UploadCloud, X as CloseIcon, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { handleImageFileChange, uploadImageToR2, resetImageState, type ImageFileState } from '@/lib/image-upload-utils';
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 
 interface ImageUploadModalProps {
   isOpen: boolean;
@@ -37,6 +37,8 @@ export default function ImageUploadModal({
         setImageState({ file: null, previewUrl: currentImageUrl || null, isUploading: false, uploadedUrl: currentImageUrl || null });
     }
   }, [isOpen, currentImageUrl, imageType]);
+
+  useModalBackButton(isOpen, onClose);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     handleImageFileChange(event, setImageState);

@@ -23,6 +23,7 @@ import MentionTextarea from './mention-textarea';
 import Image from 'next/image';
 import GiphyPickerModal from './giphy-picker-modal';
 import { Loader2 } from 'lucide-react';
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
   if (!author || typeof author !== 'object') {
@@ -122,6 +123,8 @@ export default function CommentRepliesModal() {
       return () => window.removeEventListener('resize', scrollToHighlightedReply);
     }
   }, [isCommentRepliesModalOpen, highlightedCommentId, scrollToHighlightedReply]);
+
+  useModalBackButton(isCommentRepliesModalOpen, closeCommentRepliesModal);
 
   if (!isCommentRepliesModalOpen || !activeCommentForReplies || !currentUser) {
     return null;

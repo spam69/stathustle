@@ -8,6 +8,7 @@ import type { Post } from "@/types";
 import PostCard from "./post-card";
 import { Skeleton } from "./ui/skeleton";
 import { AlertTriangle } from "lucide-react";
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 
 interface SearchResultModalProps {
   isOpen: boolean;
@@ -47,6 +48,8 @@ export default function SearchResultModal({ isOpen, onClose, postId }: SearchRes
       setErrorPost(null);
     }
   }, [postId, isOpen, fetchSinglePost]);
+
+  useModalBackButton(isOpen, onClose);
 
   if (!isOpen || !postId) {
     return null;

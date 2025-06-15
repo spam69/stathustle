@@ -12,6 +12,7 @@ import { AlertTriangle, UserCheck, ArrowRight } from "lucide-react";
 import UserProfileCard from './user-profile-card'; // For displaying follower info
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { useModalBackButton } from "@/hooks/use-modal-back-button";
 
 const getActorDisplayName = (actor: User | Identity) => {
   if (!actor) return 'Someone';
@@ -99,6 +100,9 @@ export default function NotificationDisplayModal() {
   const handleClose = () => {
     markOneAsRead(activeNotification.id);
   };
+
+  // Use the custom hook to close modal on back button
+  useModalBackButton(isNotificationModalOpen, handleClose);
 
   const renderContent = () => {
     if (activeNotification.type === 'new_follower') {
