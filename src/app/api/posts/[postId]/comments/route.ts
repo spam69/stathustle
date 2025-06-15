@@ -114,8 +114,6 @@ export async function POST(
     }
     
     const commentToReturn = newComment.toObject({ virtuals: true }) as CommentType;
-    commentToReturn.author = authorDoc as UserType | IdentityType; // Populate author for response
-
     return NextResponse.json(commentToReturn, { status: 201 });
   } catch (error: any) {
     console.error(`Comment API error for post ${params.postId}:`, error);

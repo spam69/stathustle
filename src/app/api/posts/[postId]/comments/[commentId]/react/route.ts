@@ -12,9 +12,17 @@ import mongoose from 'mongoose';
 // Helper to transform author for client consumption
 const transformClientAuthor = async (authorRef: any, authorModelType: 'User' | 'Identity'): Promise<UserType | IdentityType | undefined> => {
   if (!authorRef) return undefined;
+  // If authorRef is a full user object, extract _id and log a warning
+  if (typeof authorRef === 'object' && authorRef.username && authorRef._id) {
+    console.warn('transformClientAuthor received a full user object, extracting _id:', authorRef);
+    authorRef = authorRef._id;
+  } else if (typeof authorRef === 'object' && authorRef.username && !authorRef._id && authorRef.id) {
+    // Sometimes the id field is used instead of _id
+    console.warn('transformClientAuthor received a full user object with id, extracting id:', authorRef);
+    authorRef = authorRef.id;
+  }
   const Model = authorModelType === 'User' ? UserModel : IdentityModel;
-  // Ensure authorRef itself is not already the final object due to .lean() on parent and direct assignment
-  const authorIdToFetch = authorRef._id || authorRef;
+  const authorIdToFetch = (authorRef && authorRef._id) ? authorRef._id : authorRef;
   const author = await Model.findById(authorIdToFetch).lean();
   if (!author) return undefined;
   return {
@@ -30,6 +38,18 @@ const transformClientAuthor = async (authorRef: any, authorModelType: 'User' | '
 // Helper to transform comment for client consumption
 const transformClientComment = async (commentDoc: any): Promise<CommentTypeClient | null> => {
     if (!commentDoc) return null;
+    if (!commentDoc._id) {
+        console.warn('[transformClientComment] Missing _id in commentDoc:', commentDoc);
+        return null;
+    }
+    if (!commentDoc.content) {
+        console.warn('[transformClientComment] Missing content in commentDoc:', commentDoc);
+        return null;
+    }
+    if (!commentDoc.createdAt) {
+        console.warn('[transformClientComment] Missing createdAt in commentDoc:', commentDoc);
+        return null;
+    }
     const author = await transformClientAuthor(commentDoc.author, commentDoc.authorModel);
     if (!author) {
         console.warn(`[API/REACT_COMMENT] Failed to transform author for comment ${commentDoc._id}. AuthorRef:`, commentDoc.author, `AuthorModel:`, commentDoc.authorModel);
@@ -40,15 +60,22 @@ const transformClientComment = async (commentDoc: any): Promise<CommentTypeClien
         id: commentDoc._id.toString(),
         author,
         content: commentDoc.content,
-        createdAt: commentDoc.createdAt.toISOString(),
+        createdAt: (typeof commentDoc.createdAt === 'string' ? commentDoc.createdAt : commentDoc.createdAt.toISOString()),
         parentId: commentDoc.parentId?.toString(),
         detailedReactions: (commentDoc.detailedReactions || []).map((r: any) => ({
             userId: r.userId?.toString(),
             reactionType: r.reactionType,
-            createdAt: r.createdAt?.toISOString(),
+            createdAt: r.createdAt ? (typeof r.createdAt === 'string' ? r.createdAt : r.createdAt.toISOString()) : undefined,
         })),
     };
 };
+
+function sanitizeCommentAuthor(comment: any) {
+  if (comment && comment.author && typeof comment.author === 'object' && comment.author._id) {
+    comment.author = comment.author._id;
+  }
+  return comment;
+}
 
 // Helper to transform the entire post for client consumption
 const transformPostForClient = async (postDoc: any): Promise<PostType | null> => {
@@ -60,7 +87,11 @@ const transformPostForClient = async (postDoc: any): Promise<PostType | null> =>
   }
 
   const clientComments = await Promise.all(
-      (postDoc.comments || []).map(async (c: any) => await transformClientComment(c))
+      (postDoc.comments || []).map(async (c: any) => {
+        let commentObj = c && c.toObject ? c.toObject() : { ...c };
+        commentObj = sanitizeCommentAuthor(commentObj);
+        return await transformClientComment(commentObj);
+      })
   );
   
   let sharedOriginalPostTransformed: PostType | undefined = undefined;
@@ -109,8 +140,10 @@ export async function POST(
   context: { params: Promise<{ postId: string; commentId: string }> }
 ) {
   await dbConnect();
+  let postId: string | undefined;
+  let commentId: string | undefined;
   try {
-    const { postId, commentId } = await context.params;
+    ({ postId, commentId } = await context.params);
     const { reactionType, userId: reactingUserId } = (await request.json()) as { reactionType: ReactionType | null, userId: string };
     
     if (!reactingUserId) {
@@ -209,14 +242,22 @@ export async function POST(
            recipientModel = 'User';
          }
          
-         const clientCommentForNotification = await transformClientComment(comment.toObject());
+         let commentObj = comment.toObject();
+         commentObj = sanitizeCommentAuthor(commentObj);
+         const clientCommentForNotification = await transformClientComment(commentObj);
          if (clientCommentForNotification && postAuthorObject?._id && recipientId && recipientModel && recipientId !== reactingUser.id.toString()) {
+            const transformedPostAuthor = await transformClientAuthor(post.author, post.authorModel);
+            const notificationPost = {
+              ...post.toObject(),
+              id: post._id.toString(),
+              author: transformedPostAuthor
+            };
             createNotification(
                 'new_reaction_comment',
                 reactingUser,
                 recipientId,
                 recipientModel,
-                { ...post.toObject(), id: post._id.toString(), author: postAuthorObject } as PostType,
+                notificationPost,
                 clientCommentForNotification
             );
          } else {

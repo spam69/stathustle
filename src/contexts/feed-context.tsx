@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Post, User, Comment as CommentType, Identity, BlogShareDetails } from '@/types';
@@ -102,13 +101,13 @@ const reactToPostAPI = async (data: { postId: string; reactionType: ReactionType
 };
 
 const reactToCommentAPI = async (data: { postId: string; commentId: string; reactionType: ReactionType | null; userId: string }): Promise<Post> => {
-  const { postId, commentId, ...payload } = data;
+  const { postId, commentId, userId, reactionType } = data;
   const response = await fetch(`/api/posts/${postId}/comments/${commentId}/react`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ userId, reactionType }),
   });
-   if (!response.ok) {
+  if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.message || 'Failed to react to comment');
   }
