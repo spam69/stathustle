@@ -106,11 +106,11 @@ const transformPostForClient = async (postDoc: any): Promise<PostType | null> =>
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { postId: string; commentId: string } }
+  context: { params: Promise<{ postId: string; commentId: string }> }
 ) {
   await dbConnect();
   try {
-    const { postId, commentId } = params;
+    const { postId, commentId } = await context.params;
     const { reactionType, userId: reactingUserId } = (await request.json()) as { reactionType: ReactionType | null, userId: string };
     
     if (!reactingUserId) {
@@ -249,7 +249,7 @@ export async function POST(
     return NextResponse.json(finalPostForClient);
 
   } catch (error: any) {
-    console.error(`[API/POSTS/.../REACT_COMMENT] Error for post ${params.postId}, comment ${params.commentId}:`, error.message, error.stack);
+    console.error(`[API/POSTS/.../REACT_COMMENT] Error for post ${postId}, comment ${commentId}:`, error.message, error.stack);
     return NextResponse.json({ message: error.message || 'An unexpected error occurred' }, { status: 500 });
   }
 }
