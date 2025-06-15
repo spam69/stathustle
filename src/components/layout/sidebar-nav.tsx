@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, LayoutGrid, Newspaper, Users, BarChart3, SettingsIcon, PlusSquare, CircleUser, Search, X, Loader2 } from 'lucide-react';
+import { Home, LayoutGrid, Newspaper, Users, BarChart3, SettingsIcon, PlusSquare, CircleUser, Search, X, Loader2, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   SidebarMenu,
@@ -41,6 +41,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/', label: 'Home', icon: Home, exactMatch: true },
   { href: '/blogs', label: 'Blogs', icon: Newspaper },
+  { href: '/leagues', label: 'Leagues', icon: Trophy },
+  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/players', label: 'Players', icon: Users },
   { href: '/profile', label: 'Profile', icon: CircleUser, authRequired: true },
 ];
