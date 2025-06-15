@@ -25,10 +25,13 @@ import GiphyPickerModal from './giphy-picker-modal';
 import { Loader2 } from 'lucide-react';
 
 const getAuthorDisplayInfo = (author: User | Identity) => {
+  if (!author || typeof author !== 'object') {
+    return { username: '', displayName: '', profilePictureUrl: '', isIdentity: false };
+  }
   const username = author.username;
-  const displayName = 'isIdentity' in author && (author as Identity).displayName ? (author as Identity).displayName : author.username;
+  const displayName = typeof author === 'object' && 'isIdentity' in author && (author as Identity).displayName ? (author as Identity).displayName : author.username;
   const profilePictureUrl = author.profilePictureUrl;
-  const isIdentity = 'isIdentity' in author && (author as Identity).isIdentity;
+  const isIdentity = typeof author === 'object' && 'isIdentity' in author && (author as Identity).isIdentity;
   return { username, displayName, profilePictureUrl, isIdentity };
 };
 
@@ -263,7 +266,7 @@ export default function CommentRepliesModal() {
               const replyAuthorInfo = getAuthorDisplayInfo(reply.author);
               const processedReplyContent = parseMentions(reply.content);
               return (
-                <div key={reply.id} className="py-3 border-b border-border/20 last:border-b-0">
+                <div key={reply.id} className="py-3 border-b border-border/20 last:border-b-0 ml-8">
                   <div className="flex items-start gap-2 sm:gap-3">
                     <Link href={`/profile/${replyAuthorInfo.username}`} passHref>
                       <Avatar className="h-8 w-8 border">
@@ -315,12 +318,38 @@ export default function CommentRepliesModal() {
 
         <DialogFooter className="p-4 border-t bg-background shrink-0">
           <form onSubmit={handleReplySubmit} className="w-full space-y-2">
-            <div className="flex items-start gap-2">
+            {(imageToUpload?.localPreviewUrl || gifUrl) && (
+              <div className="mb-2 border border-border rounded-md p-2 max-w-xs bg-card/50 relative">
+                <p className="text-xs text-muted-foreground mb-1">Attached {imageToUpload ? 'image' : 'GIF'}:</p>
+                <Image 
+                  src={imageToUpload ? imageToUpload.localPreviewUrl : gifUrl!} 
+                  alt="Selected media" 
+                  width={200} 
+                  height={gifUrl ? 120 : 150}
+                  objectFit={gifUrl ? 'contain' : 'cover'}
+                  className="rounded max-h-40 w-auto" 
+                  data-ai-hint="uploaded media" 
+                  unoptimized={!!imageToUpload}
+                />
+                {gifUrl && <p className="text-[10px] text-muted-foreground mt-0.5">via GIPHY</p>}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute top-1 right-1 h-6 w-6 text-destructive/70 hover:text-destructive" 
+                  onClick={removeMedia} 
+                  title="Remove media" 
+                  disabled={isCommenting || isUploadingToR2}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <div className="flex items-end gap-2">
               <Avatar className="h-9 w-9 border mt-1 shrink-0">
                 <AvatarImage src={currentUserInfo.profilePictureUrl} alt={currentUserInfo.displayName} />
                 <AvatarFallback>{getInitials(currentUserInfo.displayName)}</AvatarFallback>
               </Avatar>
-              <div className="flex-1">
+              <div className="flex-1 flex flex-col gap-1">
                 <MentionTextarea
                   ref={replyInputRef}
                   placeholder={`Reply to @${topLevelCommentAuthorInfo.displayName}...`}
@@ -330,95 +359,68 @@ export default function CommentRepliesModal() {
                   maxLength={500}
                   disabled={isCommenting || isUploadingToR2}
                 />
-                {(imageToUpload?.localPreviewUrl || gifUrl) && (
-                  <div className="mt-2 border border-border rounded-md p-2 max-w-xs bg-card/50 relative">
-                    <p className="text-xs text-muted-foreground mb-1">Attached {imageToUpload ? 'image' : 'GIF'}:</p>
-                    <Image 
-                      src={imageToUpload ? imageToUpload.localPreviewUrl : gifUrl!} 
-                      alt="Selected media" 
-                      width={200} 
-                      height={gifUrl ? 120 : 150}
-                      objectFit={gifUrl ? 'contain' : 'cover'}
-                      className="rounded max-h-40 w-auto" 
-                      data-ai-hint="uploaded media" 
-                      unoptimized={!!imageToUpload}
-                    />
-                    {gifUrl && <p className="text-[10px] text-muted-foreground mt-0.5">via GIPHY</p>}
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="absolute top-1 right-1 h-6 w-6 text-destructive/70 hover:text-destructive" 
-                      onClick={removeMedia} 
-                      title="Remove media" 
-                      disabled={isCommenting || isUploadingToR2}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 mt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-primary hover:bg-primary/10"
+                    title="Add Image"
+                    onClick={handleImageUploadClick}
+                    disabled={isCommenting || isUploadingToR2}
+                  >
+                    <ImageIcon className="h-5 w-5" />
+                  </Button>
+                  <input
+                    type="file"
+                    ref={imageInputRef}
+                    onChange={handleImageFileChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-primary hover:bg-primary/10"
+                    title="Add GIF"
+                    onClick={() => setIsGiphyModalOpen(true)}
+                    disabled={isCommenting || isUploadingToR2}
+                  >
+                    <Film className="h-5 w-5" />
+                  </Button>
+                  <EmojiPicker
+                    onEmojiSelect={handleEmojiSelectForReply}
+                    triggerButtonSize="icon"
+                    triggerButtonVariant="ghost"
+                    popoverSide="top"
+                  />
+                  <div className="flex-1" />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isCommenting || isUploadingToR2 || (!newReplyText.trim() && !imageToUpload && !gifUrl)}
+                    className="font-headline rounded-full px-6"
+                  >
+                    {isUploadingToR2 ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : isCommenting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Posting...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="mr-2 h-4 w-4" />
+                        Reply
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-primary hover:bg-primary/10"
-                  title="Add Image"
-                  onClick={handleImageUploadClick}
-                  disabled={isCommenting || isUploadingToR2}
-                >
-                  <ImageIcon className="h-5 w-5" />
-                </Button>
-                <input
-                  type="file"
-                  ref={imageInputRef}
-                  onChange={handleImageFileChange}
-                  accept="image/*"
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-primary hover:bg-primary/10"
-                  title="Add GIF"
-                  onClick={() => setIsGiphyModalOpen(true)}
-                  disabled={isCommenting || isUploadingToR2}
-                >
-                  <Film className="h-5 w-5" />
-                </Button>
-                <EmojiPicker
-                  onEmojiSelect={handleEmojiSelectForReply}
-                  triggerButtonSize="icon"
-                  triggerButtonVariant="ghost"
-                  popoverSide="top"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                size="sm"
-                disabled={isCommenting || isUploadingToR2 || (!newReplyText.trim() && !imageToUpload && !gifUrl)}
-                className="font-headline rounded-full px-6"
-              >
-                {isUploadingToR2 ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : isCommenting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Posting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Reply
-                  </>
-                )}
-              </Button>
             </div>
           </form>
         </DialogFooter>
