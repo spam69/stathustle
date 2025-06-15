@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -89,13 +88,13 @@ export default function GiphyPickerModal({ isOpen, onClose, onGifSelect }: Giphy
               <Grid
                 key={debouncedSearchTerm} // Important to re-fetch when search term changes
                 fetchGifs={fetchGifs}
-                width={550} // Adjust width as needed based on modal size
+                width={window.innerWidth > 768 ? 550 : window.innerWidth - 64} // Responsive width based on screen size
                 columns={3}
                 gutter={6}
                 onGifClick={handleGifClick}
                 hideAttribution 
                 noLink
-                className="[&>div]:overflow-visible" 
+                className="[&>div]:overflow-visible [&_img]:!w-full [&_img]:!h-auto [&_img]:!object-contain" 
               />
             </div>
           </>
