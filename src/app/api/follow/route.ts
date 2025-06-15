@@ -63,7 +63,7 @@ export async function POST(request: Request) {
           recipientId: followingId,
           recipientModel: followingModel,
           message: `${followerDoc.username} started following you`,
-          link: `/${followerModel.toLowerCase()}/${followerDoc.username}`,
+          link: `/profile/${followerDoc.username}`,
           isRead: false
         });
       }
