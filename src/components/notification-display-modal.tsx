@@ -13,6 +13,7 @@ import { AlertTriangle, UserCheck, ArrowRight } from "lucide-react";
 import UserProfileCard from './user-profile-card'; // For displaying follower info
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import PostCard from './post-card';
 
 const getActorDisplayName = (actor: User | Identity) => {
   if (!actor) return 'Someone';
@@ -46,11 +47,9 @@ export default function NotificationDisplayModal() {
           if (post) {
             setPostDetails(post);
             
-            // For post-related notifications, automatically open comments modal and close notification modal
-            if (activeNotification.type === 'new_reply' || activeNotification.type === 'new_comment' || activeNotification.type === 'new_reaction_post' || activeNotification.type === 'new_reaction_comment') {
-              // Mark notification as read
+            // For comment/reply notifications, automatically open comments modal
+            if (activeNotification.type === 'new_reply' || activeNotification.type === 'new_comment' || activeNotification.type === 'new_reaction_comment') {
               markOneAsRead(activeNotification.id);
-              // Close notification modal and open comments modal
               closeNotificationModal();
               if (currentUser) {
                 openCommentsModal(post.id, currentUser, activeNotification.commentId || activeNotification.originalCommentId);
@@ -139,14 +138,24 @@ export default function NotificationDisplayModal() {
         );
       }
       if (postDetails) {
+        // For post reactions, show the post card directly.
+        // For other types that fall through, they will show a button to open the comments modal.
+        if (activeNotification.type === 'new_reaction_post') {
+            return (
+              <div className="p-1 md:p-2 max-h-[70vh] overflow-y-auto"> 
+                <PostCard 
+                  post={postDetails} 
+                  isEmbedded={false}
+                /> 
+              </div>
+            );
+        }
+        
         return (
           <div className="p-6 text-center">
             <p className="text-lg font-medium mb-2" dangerouslySetInnerHTML={{ __html: activeNotification.message }} />
             <p className="text-sm text-muted-foreground mb-4">
-              {activeNotification.type === 'new_reply' && 'Someone replied to a comment'}
-              {activeNotification.type === 'new_comment' && 'Someone commented on a post'}
-              {activeNotification.type === 'new_reaction_post' && 'Someone reacted to a post'}
-              {activeNotification.type === 'new_reaction_comment' && 'Someone reacted to a comment'}
+              Click below to view the conversation.
             </p>
             <Button onClick={handleViewPost} className="w-full">
               View Post & Comments <ArrowRight className="ml-2 h-4 w-4" />

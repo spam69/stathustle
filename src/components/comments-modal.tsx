@@ -68,6 +68,10 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
   const [newlyAddedCommentId, setNewlyAddedCommentId] = useState<string | null>(null);
   const newlyAddedCommentRef: MutableRefObject<HTMLDivElement | null> = useRef(null);
   const topLevelCommentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [hasScrolledToHighlight, setHasScrolledToHighlight] = useState(false);
+  const [isHighlightingNew, setIsHighlightingNew] = useState(false);
+  const [isHighlightingFromNotification, setIsHighlightingFromNotification] = useState(false);
+  const [notificationHighlightCommentId, setNotificationHighlightCommentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -75,6 +79,13 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
       setReplyingTo(null);
       setExpandedReplies(new Set());
       setRepliesCounts({});
+      setHasScrolledToHighlight(false);
+      
+      // Clear all refs to prevent stale refs from causing issues
+      highlightedReplyRef.current = null;
+      highlightedCommentRef.current = null;
+      newlyAddedCommentRef.current = null;
+      topLevelCommentRefs.current = {};
       
       // If there's a highlighted comment, find its parent and expand replies
       if (highlightedCommentId && post) {
@@ -96,6 +107,14 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
       }
     } else {
         setNewlyAddedCommentId(null);
+        setNotificationHighlightCommentId(null);
+        setIsHighlightingFromNotification(false);
+        
+        // Clear all refs when modal closes
+        highlightedReplyRef.current = null;
+        highlightedCommentRef.current = null;
+        newlyAddedCommentRef.current = null;
+        topLevelCommentRefs.current = {};
     }
     // By using post.id in the dependency array, we ensure this effect only re-runs
     // when the modal is opened for a new post, not every time the current post's
@@ -103,49 +122,84 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, highlightedCommentId, post?.id]);
 
-  // Scroll to highlighted reply after modal opens and replies are expanded
+  // Unified scroll effect for highlighted comments and replies from notifications
   useEffect(() => {
-    if (isOpen && highlightedCommentId && highlightedReplyRef.current) {
-      // Wait for the modal to be fully rendered and replies to be expanded
-      const timer = setTimeout(() => {
-        highlightedReplyRef.current?.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
-        });
-      }, 300);
-      return () => clearTimeout(timer);
+    if (!isOpen || !highlightedCommentId || hasScrolledToHighlight) {
+        return;
     }
-  }, [isOpen, highlightedCommentId, expandedReplies, repliesCounts]);
 
-  // Scroll to highlighted top-level comment
-  useEffect(() => {
-    if (isOpen && highlightedCommentId && highlightedCommentRef.current) {
-        // Ensure we only scroll if the highlighted item is a top-level comment
-        const comment = post?.comments?.find(c => c.id === highlightedCommentId);
-        if (comment && !comment.parentId) {
-            const timer = setTimeout(() => {
-                highlightedCommentRef.current?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center'
-                });
+    let scrollTimerId: NodeJS.Timeout;
+
+    const scrollToAction = (ref: MutableRefObject<HTMLDivElement | null>) => {
+        if (ref.current) {
+            scrollTimerId = setTimeout(() => {
+                ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setHasScrolledToHighlight(true);
+                
+                // Clear the ref after scrolling to prevent reuse
+                setTimeout(() => {
+                    ref.current = null;
+                }, 1000); // Clear after scroll animation completes
             }, 300);
-            return () => clearTimeout(timer);
         }
-    }
-  }, [isOpen, highlightedCommentId, post]); // Reruns when the post object changes
+    };
 
-  // Scroll to newly added comment
+    const comment = post?.comments?.find(c => c.id === highlightedCommentId);
+    if (!comment) return;
+
+    if (comment.parentId) {
+        // It's a reply, use the reply ref and ensure parent is expanded
+        if (expandedReplies.has(comment.parentId)) {
+            scrollToAction(highlightedReplyRef);
+        }
+    } else {
+        // It's a top-level comment, use the comment ref
+        scrollToAction(highlightedCommentRef);
+    }
+
+    return () => {
+        clearTimeout(scrollTimerId);
+    }
+  }, [isOpen, highlightedCommentId, hasScrolledToHighlight, post, expandedReplies]);
+
+  // Apply fading highlight effect for comments opened from notifications
+  useEffect(() => {
+    if (isOpen && highlightedCommentId && !notificationHighlightCommentId) {
+      const comment = post?.comments?.find(c => c.id === highlightedCommentId);
+      if (comment) {
+        setNotificationHighlightCommentId(highlightedCommentId);
+        setIsHighlightingFromNotification(true);
+        
+        const highlightTimer = setTimeout(() => {
+          setIsHighlightingFromNotification(false);
+          setNotificationHighlightCommentId(null);
+        }, 1800);
+
+        return () => clearTimeout(highlightTimer);
+      }
+    }
+  }, [isOpen, highlightedCommentId, post, notificationHighlightCommentId]);
+
+  // Scroll to newly added comment and apply temporary highlight
   useEffect(() => {
     if (newlyAddedCommentId && newlyAddedCommentRef.current) {
+        setIsHighlightingNew(true);
         newlyAddedCommentRef.current.scrollIntoView({
             behavior: 'smooth',
             block: 'center'
         });
-        // Clear the ID after a short delay to remove highlighting/prevent re-scrolling
-        const timer = setTimeout(() => {
-            setNewlyAddedCommentId(null);
-        }, 1500);
-        return () => clearTimeout(timer);
+
+        const highlightTimer = setTimeout(() => {
+            setIsHighlightingNew(false);
+            setNewlyAddedCommentId(null); // Clear ID after highlight
+            
+            // Clear the ref after scrolling and highlighting is complete
+            setTimeout(() => {
+                newlyAddedCommentRef.current = null;
+            }, 200); // Small delay to ensure highlight animation completes
+        }, 1800);
+
+        return () => clearTimeout(highlightTimer);
     }
   }, [newlyAddedCommentId, post?.comments]); // Reruns when comments update
 
@@ -314,10 +368,18 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
         startReplyToTopLevelComment(parentComment);
       }
       setTimeout(() => {
-        topLevelCommentRefs.current[commentId]?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest'
-        });
+        const element = topLevelCommentRefs.current[commentId];
+        if (element) {
+          element.scrollIntoView({
+              behavior: 'smooth',
+              block: 'nearest'
+          });
+          
+          // Clear the ref after scrolling to prevent reuse
+          setTimeout(() => {
+            topLevelCommentRefs.current[commentId] = null;
+          }, 800); // Clear after scroll animation completes
+        }
       }, 150);
     } else {
       // If we are collapsing the replies, and we were replying to that parent comment, cancel the reply.
@@ -343,16 +405,17 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     const replyAuthorInfo = getAuthorDisplayInfo(reply.author);
     const processedReplyContent = parseMentions(reply.content);
     const isHighlighted = reply.id === highlightedCommentId;
-    const isNewlyAdded = reply.id === newlyAddedCommentId;
+    const isNewlyAddedAndHighlighted = isHighlightingNew && reply.id === newlyAddedCommentId;
+    const isNotificationHighlighted = isHighlightingFromNotification && reply.id === notificationHighlightCommentId;
 
     return (
       <div 
         key={reply.id} 
         ref={(el) => {
-          if (isNewlyAdded && el) newlyAddedCommentRef.current = el;
-          if (isHighlighted && el) highlightedReplyRef.current = el;
+          if (reply.id === newlyAddedCommentId) newlyAddedCommentRef.current = el;
+          if (isHighlighted) highlightedReplyRef.current = el;
         }}
-        className={`py-2 relative rounded-md transition-colors duration-1000 ease-out ${isHighlighted ? 'bg-primary/5' : ''} ${isNewlyAdded ? 'bg-primary/10' : ''}`}
+        className={`py-2 relative rounded-md transition-colors duration-1000 ease-out ${isNewlyAddedAndHighlighted || isNotificationHighlighted ? 'bg-primary/10' : ''}`}
       >
         {/* Vertical line connecting to parent */}
         <div className="absolute left-4 top-0 bottom-0 w-px bg-border/70" />
@@ -424,16 +487,18 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     const hasMoreReplies = directReplies.length > visibleRepliesCount;
     const isNewlyAdded = comment.id === newlyAddedCommentId;
     const isHighlighted = comment.id === highlightedCommentId;
+    const isNewlyAddedAndHighlighted = isHighlightingNew && comment.id === newlyAddedCommentId;
+    const isNotificationHighlighted = isHighlightingFromNotification && comment.id === notificationHighlightCommentId;
 
     return (
       <div 
         key={comment.id} 
         ref={(el) => {
-          if (el) topLevelCommentRefs.current[comment.id] = el;
-          if (isNewlyAdded && el) newlyAddedCommentRef.current = el;
+          topLevelCommentRefs.current[comment.id] = el;
+          if (comment.id === newlyAddedCommentId && el) newlyAddedCommentRef.current = el;
           if (isHighlighted && el) highlightedCommentRef.current = el;
         }}
-        className={`py-3 border-b border-border/30 last:border-b-0 rounded-md transition-colors duration-1000 ease-out ${isNewlyAdded ? 'bg-primary/10' : ''} ${isHighlighted ? 'bg-primary/5' : ''}`}
+        className={`py-3 border-b border-border/30 last:border-b-0 rounded-md transition-colors duration-1000 ease-out ${isNewlyAddedAndHighlighted || isNotificationHighlighted ? 'bg-primary/10' : ''}`}
       >
         <div className="flex items-start gap-2 sm:gap-3">
           <Link href={`/profile/${authorInfo.username}`} passHref>
