@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Fragment, useRef } from 'react';
+import { useState, useEffect, Fragment, useRef, MutableRefObject } from 'react';
 import type { Post, Comment as CommentType, User, Identity } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -63,9 +63,10 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
   // New state for managing expanded replies and pagination
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
   const [repliesCounts, setRepliesCounts] = useState<Record<string, number>>({});
-  const highlightedReplyRef = useRef<HTMLDivElement>(null);
+  const highlightedReplyRef: MutableRefObject<HTMLDivElement | null> = useRef(null);
+  const highlightedCommentRef: MutableRefObject<HTMLDivElement | null> = useRef(null);
   const [newlyAddedCommentId, setNewlyAddedCommentId] = useState<string | null>(null);
-  const newlyAddedReplyRef = useRef<HTMLDivElement>(null);
+  const newlyAddedCommentRef: MutableRefObject<HTMLDivElement | null> = useRef(null);
   const topLevelCommentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
@@ -116,17 +117,37 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     }
   }, [isOpen, highlightedCommentId, expandedReplies, repliesCounts]);
 
-  // Scroll to newly added reply
+  // Scroll to highlighted top-level comment
   useEffect(() => {
-    if (newlyAddedCommentId && newlyAddedReplyRef.current) {
-        newlyAddedReplyRef.current.scrollIntoView({
+    if (isOpen && highlightedCommentId && highlightedCommentRef.current) {
+        // Ensure we only scroll if the highlighted item is a top-level comment
+        const comment = post?.comments?.find(c => c.id === highlightedCommentId);
+        if (comment && !comment.parentId) {
+            const timer = setTimeout(() => {
+                highlightedCommentRef.current?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }
+  }, [isOpen, highlightedCommentId, post]); // Reruns when the post object changes
+
+  // Scroll to newly added comment
+  useEffect(() => {
+    if (newlyAddedCommentId && newlyAddedCommentRef.current) {
+        newlyAddedCommentRef.current.scrollIntoView({
             behavior: 'smooth',
             block: 'center'
         });
-        const timer = setTimeout(() => setNewlyAddedCommentId(null), 1000);
+        // Clear the ID after a short delay to remove highlighting/prevent re-scrolling
+        const timer = setTimeout(() => {
+            setNewlyAddedCommentId(null);
+        }, 1500);
         return () => clearTimeout(timer);
     }
-  }, [newlyAddedCommentId, post]); // Reruns when post data updates
+  }, [newlyAddedCommentId, post?.comments]); // Reruns when comments update
 
   if (!post) return null;
 
@@ -322,12 +343,16 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     const replyAuthorInfo = getAuthorDisplayInfo(reply.author);
     const processedReplyContent = parseMentions(reply.content);
     const isHighlighted = reply.id === highlightedCommentId;
+    const isNewlyAdded = reply.id === newlyAddedCommentId;
 
     return (
       <div 
         key={reply.id} 
-        ref={reply.id === newlyAddedCommentId ? newlyAddedReplyRef : (isHighlighted ? highlightedReplyRef : null)}
-        className={`py-2 ${isHighlighted ? 'bg-primary/5' : ''} relative`}
+        ref={(el) => {
+          if (isNewlyAdded && el) newlyAddedCommentRef.current = el;
+          if (isHighlighted && el) highlightedReplyRef.current = el;
+        }}
+        className={`py-2 relative rounded-md transition-colors duration-1000 ease-out ${isHighlighted ? 'bg-primary/5' : ''} ${isNewlyAdded ? 'bg-primary/10' : ''}`}
       >
         {/* Vertical line connecting to parent */}
         <div className="absolute left-4 top-0 bottom-0 w-px bg-border/70" />
@@ -363,14 +388,24 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
                 ) : null}
               </div>
             )}
-            <ReactionButton
-              reactions={reply.detailedReactions}
-              onReact={(reactionType) => handleReactToCommentClick(reply.id, reactionType)}
-              currentUserId={currentUser?.id}
-              isSubmitting={isReactingToComment}
-              buttonSize="xs"
-              popoverSide="bottom"
-            />
+            <div className="flex items-center gap-2 mt-1">
+                <ReactionButton
+                  reactions={reply.detailedReactions}
+                  onReact={(reactionType) => handleReactToCommentClick(reply.id, reactionType)}
+                  currentUserId={currentUser?.id}
+                  isSubmitting={isReactingToComment}
+                  buttonSize="xs"
+                  popoverSide="bottom"
+                />
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-foreground h-auto py-1 px-2"
+                    onClick={() => startReplyToTopLevelComment(parentComment)}
+                >
+                    Reply
+                </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -387,12 +422,18 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     const visibleRepliesCount = repliesCounts[comment.id] || 5;
     const visibleReplies = directReplies.slice(0, visibleRepliesCount);
     const hasMoreReplies = directReplies.length > visibleRepliesCount;
+    const isNewlyAdded = comment.id === newlyAddedCommentId;
+    const isHighlighted = comment.id === highlightedCommentId;
 
     return (
       <div 
         key={comment.id} 
-        ref={el => { topLevelCommentRefs.current[comment.id] = el; }}
-        className="py-3 border-b border-border/30 last:border-b-0"
+        ref={(el) => {
+          if (el) topLevelCommentRefs.current[comment.id] = el;
+          if (isNewlyAdded && el) newlyAddedCommentRef.current = el;
+          if (isHighlighted && el) highlightedCommentRef.current = el;
+        }}
+        className={`py-3 border-b border-border/30 last:border-b-0 rounded-md transition-colors duration-1000 ease-out ${isNewlyAdded ? 'bg-primary/10' : ''} ${isHighlighted ? 'bg-primary/5' : ''}`}
       >
         <div className="flex items-start gap-2 sm:gap-3">
           <Link href={`/profile/${authorInfo.username}`} passHref>
