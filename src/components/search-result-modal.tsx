@@ -27,7 +27,7 @@ export default function SearchResultModal({ isOpen, onClose, postId }: SearchRes
       setIsLoadingPost(true);
       setErrorPost(null);
       setPostDetails(null);
-      fetchSinglePost(postId)
+      fetchSinglePost(postId, true) // Update cache with fresh data for search results
         .then(post => {
           if (post) {
             setPostDetails(post);

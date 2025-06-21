@@ -33,8 +33,9 @@ interface FeedContextType {
   reactToComment: (data: { postId:string; commentId: string; reactionType: ReactionType | null; }) => void;
   isReactingToComment: boolean;
 
-  fetchSinglePost: (postId: string) => Promise<Post | null>;
+  fetchSinglePost: (postId: string, updateCache?: boolean) => Promise<Post | null>;
   findPostInFeed: (postId: string) => Post | undefined;
+  updatePostInCache: (post: Post) => void;
 }
 
 const FeedContext = createContext<FeedContextType | undefined>(undefined);
@@ -143,11 +144,13 @@ export const FeedProvider = ({ children }: { children: ReactNode }) => {
     return post;
   });
 
-  const fetchSinglePost = useCallback(async (postId: string): Promise<Post | null> => {
+  const fetchSinglePost = useCallback(async (postId: string, updateCache?: boolean): Promise<Post | null> => {
     try {
       const cachedPosts = queryClient.getQueryData<Post[]>(['posts']);
       const cachedPost = cachedPosts?.find(p => p.id === postId);
-      if (cachedPost) {
+      
+      // If updateCache is true, always fetch fresh data
+      if (!updateCache && cachedPost) {
         let fullyPopulatedCachedPost = { ...cachedPost };
         if (fullyPopulatedCachedPost.sharedOriginalPostId && !fullyPopulatedCachedPost.sharedOriginalPost) {
             const originalFromCache = cachedPosts?.find(p => p.id === fullyPopulatedCachedPost.sharedOriginalPostId);
@@ -166,6 +169,23 @@ export const FeedProvider = ({ children }: { children: ReactNode }) => {
               post.sharedOriginalPost = original;
             }
         }
+        
+        // Update cache if requested and post was found
+        if (updateCache && post) {
+          queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
+            if (!oldData) return [post];
+            const existingIndex = oldData.findIndex(p => p.id === postId);
+            if (existingIndex >= 0) {
+              // Update existing post
+              const updatedData = [...oldData];
+              updatedData[existingIndex] = post;
+              return updatedData;
+            } else {
+              // Add new post to beginning
+              return [post, ...oldData];
+            }
+          });
+        }
       }
       return post;
     } catch (error) {
@@ -174,6 +194,22 @@ export const FeedProvider = ({ children }: { children: ReactNode }) => {
       return null;
     }
   }, [queryClient, toast]);
+
+  const updatePostInCache = useCallback((post: Post) => {
+    queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
+      if (!oldData) return [post];
+      const existingIndex = oldData.findIndex(p => p.id === post.id);
+      if (existingIndex >= 0) {
+        // Update existing post
+        const updatedData = [...oldData];
+        updatedData[existingIndex] = post;
+        return updatedData;
+      } else {
+        // Add new post to beginning
+        return [post, ...oldData];
+      }
+    });
+  }, [queryClient]);
 
   const openCreatePostModal = useCallback(async (data?: { postToShare?: Post; blogToShare?: BlogShareDetails }) => {
     if (isPreparingShare && !data?.blogToShare) return; 
@@ -184,7 +220,7 @@ export const FeedProvider = ({ children }: { children: ReactNode }) => {
       let currentPostToEvaluate = data.postToShare;
       try {
         while (currentPostToEvaluate.sharedOriginalPostId) {
-          const originalPost = await fetchSinglePost(currentPostToEvaluate.sharedOriginalPostId);
+          const originalPost = await fetchSinglePost(currentPostToEvaluate.sharedOriginalPostId, false); // Don't update cache for share preparation
           if (originalPost) {
             currentPostToEvaluate = originalPost; 
           } else {
@@ -331,6 +367,7 @@ export const FeedProvider = ({ children }: { children: ReactNode }) => {
       isReactingToComment: reactToCommentMutation.isPending,
       fetchSinglePost,
       findPostInFeed,
+      updatePostInCache,
       isPublishingPost: publishPostMutation.isPending,
       isCommenting: addCommentMutation.isPending,
     }}>

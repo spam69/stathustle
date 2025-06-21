@@ -42,7 +42,7 @@ export default function NotificationDisplayModal() {
       setIsLoadingPost(true);
       setErrorPost(null);
       setPostDetails(null);
-      fetchSinglePost(activeNotification.postId)
+      fetchSinglePost(activeNotification.postId, true) // Update cache with fresh data for notifications
         .then(post => {
           if (post) {
             setPostDetails(post);
