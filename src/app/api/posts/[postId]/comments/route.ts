@@ -108,7 +108,7 @@ export async function POST(
       }
     }
 
-    if (postRecipientId && postRecipientModel && postRecipientId !== authorDoc._id.toString()) {
+    if (!parentId && postRecipientId && postRecipientModel && postRecipientId !== authorDoc._id.toString()) {
         createNotification(
             'new_comment', 
             authorForNotification as UserType | IdentityType,
