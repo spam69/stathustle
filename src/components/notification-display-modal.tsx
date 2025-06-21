@@ -73,6 +73,8 @@ export default function NotificationDisplayModal() {
   
   const handleClose = () => {
     markOneAsRead(activeNotification.id);
+    closeNotificationModal();
+    console.log('handleClose');
   };
 
   const renderContent = () => {
