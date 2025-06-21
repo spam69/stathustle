@@ -42,6 +42,14 @@ export default function NotificationDisplayModal() {
         .then(post => {
           if (post) {
             setPostDetails(post);
+            
+            // For reply notifications, automatically open comments modal and close notification modal
+            if (activeNotification.type === 'new_reply' && activeNotification.commentId) {
+              // Mark notification as read
+              markOneAsRead(activeNotification.id);
+              // Close notification modal - the PostCard will handle opening comments modal with highlighted comment
+              closeNotificationModal();
+            }
           } else {
             setErrorPost("The related post could not be found or has been deleted.");
           }
@@ -57,7 +65,7 @@ export default function NotificationDisplayModal() {
       setPostDetails(null);
       setErrorPost(null);
     }
-  }, [activeNotification, isNotificationModalOpen, fetchSinglePost]);
+  }, [activeNotification, isNotificationModalOpen, fetchSinglePost, markOneAsRead, closeNotificationModal]);
 
   if (!isNotificationModalOpen || !activeNotification) {
     return null;

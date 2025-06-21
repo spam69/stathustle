@@ -63,6 +63,7 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
   // New state for managing expanded replies and pagination
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
   const [repliesCounts, setRepliesCounts] = useState<Record<string, number>>({});
+  const highlightedReplyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -70,8 +71,41 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
       setReplyingTo(null);
       setExpandedReplies(new Set());
       setRepliesCounts({});
+      
+      // If there's a highlighted comment, find its parent and expand replies
+      if (highlightedCommentId && post) {
+        const highlightedComment = post.comments?.find(c => c.id === highlightedCommentId);
+        if (highlightedComment && highlightedComment.parentId) {
+          // This is a reply, expand the parent comment's replies
+          const parentCommentId = highlightedComment.parentId;
+          setExpandedReplies(new Set([parentCommentId]));
+          
+          // Find the position of the highlighted reply to determine how many replies to load
+          const parentReplies = post.comments?.filter(c => c.parentId === parentCommentId) || [];
+          const replyIndex = parentReplies.findIndex(c => c.id === highlightedCommentId);
+          if (replyIndex >= 0) {
+            // Load enough replies to show the highlighted one (5 per page)
+            const repliesToLoad = Math.ceil((replyIndex + 1) / 5) * 5;
+            setRepliesCounts({ [parentCommentId]: repliesToLoad });
+          }
+        }
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, highlightedCommentId, post]);
+
+  // Scroll to highlighted reply after modal opens and replies are expanded
+  useEffect(() => {
+    if (isOpen && highlightedCommentId && highlightedReplyRef.current) {
+      // Wait for the modal to be fully rendered and replies to be expanded
+      const timer = setTimeout(() => {
+        highlightedReplyRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, highlightedCommentId, expandedReplies, repliesCounts]);
 
   if (!post) return null;
 
@@ -234,6 +268,7 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     return (
       <div 
         key={reply.id} 
+        ref={isHighlighted ? highlightedReplyRef : null}
         className={`py-2 ${isHighlighted ? 'bg-primary/5' : ''} relative`}
       >
         {/* Vertical line connecting to parent */}

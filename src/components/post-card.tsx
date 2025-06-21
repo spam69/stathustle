@@ -96,6 +96,13 @@ export default function PostCard({ post: initialPost, isEmbedded = false, highli
     setCurrentPost(initialPost);
   }, [initialPost]);
 
+  // Auto-open comments modal when there's a highlighted comment
+  useEffect(() => {
+    if (highlightedCommentId && currentUser && !isEmbedded) {
+      setIsCommentsModalOpen(true);
+    }
+  }, [highlightedCommentId, currentUser, isEmbedded]);
+
   const { author, content, createdAt, mediaUrl, mediaType, shares, repliesCount, detailedReactions, sharedOriginalPostId, blogShareDetails } = currentPost;
   const postToDisplayAsShared = currentPost.sharedOriginalPost;
 
