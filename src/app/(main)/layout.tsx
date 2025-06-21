@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useAuth } from '@/contexts/auth-context';
 import { useFeed } from '@/contexts/feed-context';
 import NotificationDisplayModal from '@/components/notification-display-modal';
-import CommentRepliesModal from '@/components/comment-replies-modal';
 import { Suspense } from 'react';
+import type { BlogShareDetails } from '@/types';
 
 function CreatePostModal() {
   const { 
@@ -47,7 +47,6 @@ function CreatePostModal() {
             onPostCreated={handleModalPostCreated} 
             isSubmitting={isPublishingPost} 
             isModal={true}
-            onCancelShare={handleModalClose} 
         />
       </DialogContent>
     </Dialog>
@@ -80,7 +79,6 @@ export default function MainLayout({
           </div>
           <CreatePostModal />
           <NotificationDisplayModal />
-          <CommentRepliesModal />
         </div>
       </SidebarProvider>
     </FeedProvider>

@@ -2,15 +2,10 @@
 
 import type { Post, User, Comment as CommentType, Identity, BlogShareDetails } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
-import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from 'react';
-import { useAuth } from './auth-context';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { useAuth } from '@/contexts/auth-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-
-interface ActiveCommentForReplies {
-  post: Post;
-  topLevelComment: CommentType;
-}
 
 interface FeedContextType {
   posts: Post[];
@@ -24,14 +19,8 @@ interface FeedContextType {
   pendingBlogShare: BlogShareDetails | null;
   isPreparingShare: boolean; 
 
-  isCommentRepliesModalOpen: boolean;
-  activeCommentForReplies: ActiveCommentForReplies | null;
-  openCommentRepliesModal: (post: Post, comment: CommentType, highlightedCommentId?: string) => void;
-  closeCommentRepliesModal: () => void;
-  highlightedCommentId: string | undefined;
-
   publishPost: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif'; sharedOriginalPostId?: string; blogShareDetails?: BlogShareDetails }) => void;
-  addCommentToFeedPost: (data: { postId: string; content: string; parentId?: string }) => void;
+  addCommentToFeedPost: (data: { postId: string; content: string; parentId?: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }) => void;
   reactToPost: (data: { postId: string; reactionType: ReactionType | null }) => void;
   reactToComment: (data: { postId: string; commentId: string; reactionType: ReactionType | null }) => void;
   
@@ -137,10 +126,6 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
   const [pendingBlogShare, setPendingBlogShare] = useState<BlogShareDetails | null>(null);
   const [isPreparingShare, setIsPreparingShare] = useState(false); 
 
-  const [isCommentRepliesModalOpen, setIsCommentRepliesModalOpen] = useState(false);
-  const [activeCommentForReplies, setActiveCommentForReplies] = useState<ActiveCommentForReplies | null>(null);
-  const [highlightedCommentId, setHighlightedCommentId] = useState<string | undefined>();
-
   const { data: posts = [], isLoading: isPostsLoading, error: postsError } = useQuery<Post[], Error>({
     queryKey: ['posts'],
     queryFn: fetchPostsAPI,
@@ -222,18 +207,6 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     setIsPreparingShare(false); 
   }, []);
 
-  const openCommentRepliesModal = useCallback((post: Post, comment: CommentType, highlightedCommentId?: string) => {
-    setActiveCommentForReplies({ post, topLevelComment: comment });
-    setHighlightedCommentId(highlightedCommentId);
-    setIsCommentRepliesModalOpen(true);
-  }, []);
-
-  const closeCommentRepliesModal = useCallback(() => {
-    setIsCommentRepliesModalOpen(false);
-    setActiveCommentForReplies(null);
-    setHighlightedCommentId(undefined);
-  }, []);
-
   const publishPostMutation = useMutation<Post, Error, { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif'; sharedOriginalPostId?: string; blogShareDetails?: BlogShareDetails }>({
     mutationFn: (postData) => {
       if (!user) throw new Error("User not logged in");
@@ -256,18 +229,6 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     },
     onSuccess: (newComment, variables) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] }); 
-      if (variables.parentId && activeCommentForReplies && variables.parentId === activeCommentForReplies.topLevelComment.id) {
-        setActiveCommentForReplies(prev => {
-          if (!prev) return null;
-          const updatedTopLevelComment = { ...prev.topLevelComment };
-          const updatedPost = {
-            ...prev.post,
-            comments: [...(prev.post.comments || []), newComment],
-            repliesCount: (prev.post.repliesCount || 0) + 1,
-          };
-          return { post: updatedPost, topLevelComment: updatedTopLevelComment };
-        });
-      }
       toast({ title: "Success", description: variables.parentId ? "Reply posted!" : "Comment posted!"});
     },
     onError: (error) => {
@@ -299,22 +260,6 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
         return oldData?.map(post => post.id === updatedPostContainingComment.id ? updatedPostContainingComment : post) || [];
       });
-      if(activeCommentForReplies && activeCommentForReplies.post.id === updatedPostContainingComment.id) {
-        setActiveCommentForReplies(prev => {
-          if(!prev) return null;
-          const reactedCommentId = updatedPostContainingComment.comments?.find(c => 
-            c.detailedReactions?.some(r => r.userId === user?.id) && 
-            (c.id === activeCommentForReplies.topLevelComment.id || c.parentId === activeCommentForReplies.topLevelComment.id)
-          )?.id;
-
-          if (reactedCommentId === prev.topLevelComment.id) {
-            const updatedTopLevel = updatedPostContainingComment.comments?.find(c => c.id === reactedCommentId);
-            return updatedTopLevel ? { ...prev, topLevelComment: updatedTopLevel } : prev;
-          } else {
-             return { ...prev, post: updatedPostContainingComment };
-          }
-        });
-      }
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message || "Failed to react to comment.", variant: "destructive" });
@@ -333,12 +278,6 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       pendingBlogShare,
       isPreparingShare, 
       
-      isCommentRepliesModalOpen,
-      activeCommentForReplies,
-      openCommentRepliesModal,
-      closeCommentRepliesModal,
-      highlightedCommentId,
-
       publishPost: publishPostMutation.mutate,
       addCommentToFeedPost: addCommentMutation.mutate,
       reactToPost: reactToPostMutation.mutate,

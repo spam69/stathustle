@@ -27,7 +27,7 @@ export default function NotificationDisplayModal() {
     activeNotification,
     markOneAsRead
   } = useNotifications();
-  const { fetchSinglePost, openCommentRepliesModal } = useFeed();
+  const { fetchSinglePost } = useFeed();
 
   const [postDetails, setPostDetails] = useState<Post | null>(null);
   const [isLoadingPost, setIsLoadingPost] = useState(false);
@@ -42,39 +42,6 @@ export default function NotificationDisplayModal() {
         .then(post => {
           if (post) {
             setPostDetails(post);
-            
-            // Handle comment/reply notifications
-            if (activeNotification.type === 'new_comment' || activeNotification.type === 'new_reply') {
-              const commentId = activeNotification.commentId;
-              const originalCommentId = activeNotification.originalCommentId;
-              
-              if (commentId) {
-                // Find the comment in the post
-                const comment = post.comments?.find(c => c.id === commentId);
-                if (comment) {
-                  // If it's a reply, find the parent comment
-                  if (comment.parentId) {
-                    const parentComment = post.comments?.find(c => c.id === comment.parentId);
-                    if (parentComment) {
-                      // Open replies modal for the parent comment
-                      openCommentRepliesModal(post, parentComment, commentId);
-                      closeNotificationModal();
-                    }
-                  } else {
-                    // If it's a top-level comment, open replies modal for it
-                    openCommentRepliesModal(post, comment, commentId);
-                    closeNotificationModal();
-                  }
-                }
-              } else if (originalCommentId) {
-                // If we have the original comment ID, find and open its replies
-                const originalComment = post.comments?.find(c => c.id === originalCommentId);
-                if (originalComment) {
-                  openCommentRepliesModal(post, originalComment);
-                  closeNotificationModal();
-                }
-              }
-            }
           } else {
             setErrorPost("The related post could not be found or has been deleted.");
           }
@@ -90,7 +57,7 @@ export default function NotificationDisplayModal() {
       setPostDetails(null);
       setErrorPost(null);
     }
-  }, [activeNotification, isNotificationModalOpen, fetchSinglePost, openCommentRepliesModal, closeNotificationModal]);
+  }, [activeNotification, isNotificationModalOpen, fetchSinglePost]);
 
   if (!isNotificationModalOpen || !activeNotification) {
     return null;

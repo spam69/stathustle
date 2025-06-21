@@ -51,8 +51,7 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     addCommentToFeedPost, 
     isCommenting, 
     reactToComment, 
-    isReactingToComment,
-    openCommentRepliesModal 
+    isReactingToComment
   } = useFeed();
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
   const [imageToUpload, setImageToUpload] = useState<{ file: File, localPreviewUrl: string } | null>(null);
@@ -60,11 +59,17 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
   const [isGiphyModalOpen, setIsGiphyModalOpen] = useState(false);
   const [isUploadingToR2, setIsUploadingToR2] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  
+  // New state for managing expanded replies and pagination
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
+  const [repliesCounts, setRepliesCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (isOpen) {
       setNewCommentText('');
       setReplyingTo(null);
+      setExpandedReplies(new Set());
+      setRepliesCounts({});
     }
   }, [isOpen]);
 
@@ -197,13 +202,86 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     reactToComment({ postId: post.id, commentId, reactionType });
   };
 
-  const handleOpenRepliesModal = (topLevelComment: CommentType) => {
-    openCommentRepliesModal(post, topLevelComment, highlightedCommentId);
+  const toggleReplies = (commentId: string) => {
+    setExpandedReplies(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(commentId)) {
+        newSet.delete(commentId);
+      } else {
+        newSet.add(commentId);
+      }
+      return newSet;
+    });
+  };
+
+  const loadMoreReplies = (commentId: string) => {
+    setRepliesCounts(prev => ({
+      ...prev,
+      [commentId]: (prev[commentId] || 5) + 5
+    }));
   };
 
   const handleEmojiSelectForComment = (emoji: string) => {
     setNewCommentText(prev => prev + emoji);
     commentInputRef.current?.focus();
+  };
+
+  const renderReply = (reply: CommentType, parentComment: CommentType) => {
+    const replyAuthorInfo = getAuthorDisplayInfo(reply.author);
+    const processedReplyContent = parseMentions(reply.content);
+    const isHighlighted = reply.id === highlightedCommentId;
+
+    return (
+      <div 
+        key={reply.id} 
+        className={`py-2 ${isHighlighted ? 'bg-primary/5' : ''} relative`}
+      >
+        {/* Vertical line connecting to parent */}
+        <div className="absolute left-4 top-0 bottom-0 w-px bg-border/70" />
+        
+        <div className="flex items-start gap-2 sm:gap-3 pl-8">
+          <Link href={`/profile/${replyAuthorInfo.username}`} passHref>
+            <Avatar className="h-7 w-7 border">
+              <AvatarImage src={replyAuthorInfo.profilePictureUrl} alt={replyAuthorInfo.displayName} />
+              <AvatarFallback>{getInitials(replyAuthorInfo.displayName)}</AvatarFallback>
+            </Avatar>
+          </Link>
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-0.5">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <Link href={`/profile/${replyAuthorInfo.username}`} passHref>
+                  <span className="text-xs font-semibold hover:underline font-headline">{replyAuthorInfo.displayName}</span>
+                </Link>
+                {replyAuthorInfo.isIdentity && <Badge variant="outline" className="text-[10px] px-1 py-0"><Award className="h-2 w-2 mr-0.5"/>Id</Badge>}
+              </div>
+              <span className="text-[10px] text-muted-foreground">
+                {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
+              </span>
+            </div>
+            <p className="text-sm mb-1">
+              {processedReplyContent.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
+            </p>
+            {reply.mediaUrl && (
+              <div className="mt-2 max-w-xs">
+                {reply.mediaType === 'image' ? (
+                  <Image src={reply.mediaUrl} alt="Comment media" width={200} height={200} className="rounded border object-cover" />
+                ) : reply.mediaType === 'gif' ? (
+                  <Image src={reply.mediaUrl} alt="Comment GIF" width={200} height={200} className="rounded border object-contain" unoptimized />
+                ) : null}
+              </div>
+            )}
+            <ReactionButton
+              reactions={reply.detailedReactions}
+              onReact={(reactionType) => handleReactToCommentClick(reply.id, reactionType)}
+              currentUserId={currentUser?.id}
+              isSubmitting={isReactingToComment}
+              buttonSize="xs"
+              popoverSide="bottom"
+            />
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderTopLevelComment = (comment: CommentType) => {
@@ -212,6 +290,10 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     const directReplies = (post.comments || []).filter(reply => reply.parentId === comment.id);
     const repliesCount = directReplies.length;
     const processedCommentContent = parseMentions(comment.content);
+    const isExpanded = expandedReplies.has(comment.id);
+    const visibleRepliesCount = repliesCounts[comment.id] || 5;
+    const visibleReplies = directReplies.slice(0, visibleRepliesCount);
+    const hasMoreReplies = directReplies.length > visibleRepliesCount;
 
     return (
       <div key={comment.id} className="py-3 border-b border-border/30 last:border-b-0">
@@ -268,13 +350,33 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => handleOpenRepliesModal(comment)}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  onClick={() => toggleReplies(comment.id)}
                 >
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   {repliesCount} {repliesCount === 1 ? 'Reply' : 'Replies'}
                 </Button>
               )}
             </div>
+            
+            {/* Inline replies section */}
+            {isExpanded && repliesCount > 0 && (
+              <div className="mt-3 space-y-1">
+                {visibleReplies.map(reply => renderReply(reply, comment))}
+                {hasMoreReplies && (
+                  <div className="pl-8 pt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => loadMoreReplies(comment.id)}
+                      className="text-xs text-primary hover:text-primary/80"
+                    >
+                      Load More Replies
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
