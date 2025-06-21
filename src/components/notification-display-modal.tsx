@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { useNotifications } from "@/contexts/notification-context";
 import { useFeed } from "@/contexts/feed-context";
+import { useCommentsModal } from "@/contexts/comments-modal-context";
+import { useAuth } from "@/contexts/auth-context";
 import type { Post, User, Identity, Comment } from "@/types";
-import PostCard from "./post-card";
 import { Skeleton } from "./ui/skeleton";
 import { AlertTriangle, UserCheck, ArrowRight } from "lucide-react";
 import UserProfileCard from './user-profile-card'; // For displaying follower info
@@ -28,6 +29,8 @@ export default function NotificationDisplayModal() {
     markOneAsRead
   } = useNotifications();
   const { fetchSinglePost } = useFeed();
+  const { openCommentsModal } = useCommentsModal();
+  const { user: currentUser } = useAuth();
 
   const [postDetails, setPostDetails] = useState<Post | null>(null);
   const [isLoadingPost, setIsLoadingPost] = useState(false);
@@ -43,12 +46,15 @@ export default function NotificationDisplayModal() {
           if (post) {
             setPostDetails(post);
             
-            // For reply notifications, automatically open comments modal and close notification modal
-            if (activeNotification.type === 'new_reply' && activeNotification.commentId) {
+            // For post-related notifications, automatically open comments modal and close notification modal
+            if (activeNotification.type === 'new_reply' || activeNotification.type === 'new_comment' || activeNotification.type === 'new_reaction_post' || activeNotification.type === 'new_reaction_comment') {
               // Mark notification as read
               markOneAsRead(activeNotification.id);
-              // Close notification modal - the PostCard will handle opening comments modal with highlighted comment
+              // Close notification modal and open comments modal
               closeNotificationModal();
+              if (currentUser) {
+                openCommentsModal(post.id, currentUser, activeNotification.commentId || activeNotification.originalCommentId);
+              }
             }
           } else {
             setErrorPost("The related post could not be found or has been deleted.");
@@ -65,7 +71,7 @@ export default function NotificationDisplayModal() {
       setPostDetails(null);
       setErrorPost(null);
     }
-  }, [activeNotification, isNotificationModalOpen, fetchSinglePost, markOneAsRead, closeNotificationModal]);
+  }, [activeNotification, isNotificationModalOpen, fetchSinglePost, markOneAsRead, closeNotificationModal, openCommentsModal, currentUser]);
 
   if (!isNotificationModalOpen || !activeNotification) {
     return null;
@@ -75,6 +81,14 @@ export default function NotificationDisplayModal() {
     markOneAsRead(activeNotification.id);
     closeNotificationModal();
     console.log('handleClose');
+  };
+
+  const handleViewPost = () => {
+    if (postDetails && currentUser) {
+      markOneAsRead(activeNotification.id);
+      closeNotificationModal();
+      openCommentsModal(postDetails.id, currentUser, activeNotification.commentId || activeNotification.originalCommentId);
+    }
   };
 
   const renderContent = () => {
@@ -126,12 +140,17 @@ export default function NotificationDisplayModal() {
       }
       if (postDetails) {
         return (
-          <div className="p-1 md:p-2 max-h-[70vh] overflow-y-auto"> 
-            <PostCard 
-              post={postDetails} 
-              isEmbedded={false}
-              highlightedCommentId={activeNotification.commentId || activeNotification.originalCommentId}
-            /> 
+          <div className="p-6 text-center">
+            <p className="text-lg font-medium mb-2" dangerouslySetInnerHTML={{ __html: activeNotification.message }} />
+            <p className="text-sm text-muted-foreground mb-4">
+              {activeNotification.type === 'new_reply' && 'Someone replied to a comment'}
+              {activeNotification.type === 'new_comment' && 'Someone commented on a post'}
+              {activeNotification.type === 'new_reaction_post' && 'Someone reacted to a post'}
+              {activeNotification.type === 'new_reaction_comment' && 'Someone reacted to a comment'}
+            </p>
+            <Button onClick={handleViewPost} className="w-full">
+              View Post & Comments <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         );
       }

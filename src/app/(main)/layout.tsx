@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import Header from '@/components/layout/header';
 import SidebarNav from '@/components/layout/sidebar-nav';
 import { Sidebar, SidebarProvider, SidebarInset, SidebarContent } from '@/components/ui/sidebar';
-import { FeedProvider } from '@/contexts/feed-context';
 import CreatePostForm from '@/components/create-post-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/auth-context';
@@ -59,7 +58,6 @@ export default function MainLayout({
   children: ReactNode;
 }) {
   return (
-    <FeedProvider>
       <SidebarProvider>
         <div className="flex min-h-screen flex-col bg-background">
           <Header /> 
@@ -81,6 +79,5 @@ export default function MainLayout({
           <NotificationDisplayModal />
         </div>
       </SidebarProvider>
-    </FeedProvider>
   );
 }

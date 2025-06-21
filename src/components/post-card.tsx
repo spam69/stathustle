@@ -24,7 +24,7 @@ import { formatDistanceToNow } from 'date-fns';
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import CommentsModal from './comments-modal';
+import { useCommentsModal } from '@/contexts/comments-modal-context';
 import { Badge } from './ui/badge';
 import ReactionButton from './reaction-button';
 import { useFeed } from '@/contexts/feed-context';
@@ -74,6 +74,7 @@ interface ReactionSummaryDisplayItem {
 export default function PostCard({ post: initialPost, isEmbedded = false, highlightedCommentId }: PostCardProps) {
   const { user: currentUser } = useAuth(); // Removed originalUser as activePrincipalId handles it
   const { toast } = useToast();
+  const { openCommentsModal } = useCommentsModal();
   const {
     reactToPost, 
     openCreatePostModal,
@@ -84,7 +85,6 @@ export default function PostCard({ post: initialPost, isEmbedded = false, highli
 
   const [currentPost, setCurrentPost] = useState<Post>(initialPost);
   const [isLoadingOriginalPost, setIsLoadingOriginalPost] = useState(false);
-  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSharedPostModalOpen, setIsSharedPostModalOpen] = useState(false);
   const [isReactionsModalOpen, setIsReactionsModalOpen] = useState(false);
@@ -99,9 +99,9 @@ export default function PostCard({ post: initialPost, isEmbedded = false, highli
   // Auto-open comments modal when there's a highlighted comment
   useEffect(() => {
     if (highlightedCommentId && currentUser && !isEmbedded) {
-      setIsCommentsModalOpen(true);
+      openCommentsModal(currentPost.id, currentUser, highlightedCommentId);
     }
-  }, [highlightedCommentId, currentUser, isEmbedded]);
+  }, [highlightedCommentId, currentUser, isEmbedded, currentPost, openCommentsModal]);
 
   const { author, content, createdAt, mediaUrl, mediaType, shares, repliesCount, detailedReactions, sharedOriginalPostId, blogShareDetails } = currentPost;
   const postToDisplayAsShared = currentPost.sharedOriginalPost;
@@ -165,7 +165,7 @@ export default function PostCard({ post: initialPost, isEmbedded = false, highli
       toast({ title: "Login Required", description: "Please login to view comments.", variant: "destructive" });
       return;
     }
-    setIsCommentsModalOpen(prev => !prev);
+    openCommentsModal(currentPost.id, currentUser, highlightedCommentId);
   };
 
   const handleReactToPostMain = (reactionType: ReactionType | null) => {
@@ -470,15 +470,6 @@ export default function PostCard({ post: initialPost, isEmbedded = false, highli
       </AlertDialog>
 
 
-      {!isEmbedded && isCommentsModalOpen && currentPost && currentUser && (
-        <CommentsModal
-          post={currentPost}
-          isOpen={isCommentsModalOpen}
-          onClose={handleToggleCommentsModal}
-          currentUser={currentUser}
-          highlightedCommentId={highlightedCommentId}
-        />
-      )}
     </>
   );
 }

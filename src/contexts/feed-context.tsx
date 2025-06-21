@@ -1,6 +1,6 @@
 "use client";
 
-import type { Post, User, Comment as CommentType, Identity, BlogShareDetails } from '@/types';
+import type { Post, User, Identity, BlogShareDetails } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { useAuth } from '@/contexts/auth-context';
@@ -11,25 +11,30 @@ interface FeedContextType {
   posts: Post[];
   isPostsLoading: boolean;
   postsError: Error | null;
-  
-  isCreatePostModalOpen: boolean;
-  openCreatePostModal: (data?: { postToShare?: Post; blogToShare?: BlogShareDetails }) => Promise<void>;
-  closeCreatePostModal: () => void;
-  postToShare: Post | null; 
-  pendingBlogShare: BlogShareDetails | null;
-  isPreparingShare: boolean; 
-
-  publishPost: (data: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif'; sharedOriginalPostId?: string; blogShareDetails?: BlogShareDetails }) => void;
-  addCommentToFeedPost: (data: { postId: string; content: string; parentId?: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }) => void;
-  reactToPost: (data: { postId: string; reactionType: ReactionType | null }) => void;
-  reactToComment: (data: { postId: string; commentId: string; reactionType: ReactionType | null }) => void;
-  
-  fetchSinglePost: (postId: string) => Promise<Post | null>; 
-
+  hasMorePosts: boolean;
+  loadMorePosts: () => void;
+  isFetchingMore: boolean;
+  publishPost: (postData: { content: string; mediaUrl?: string; mediaType?: 'image' | 'gif', sharedOriginalPostId?: string, blogShareDetails?: BlogShareDetails }) => void;
   isPublishingPost: boolean;
+  addCommentToFeedPost: (commentData: { postId: string; text: string; parentId?: string, mediaUrl?: string; mediaType?: 'image' | 'gif' }) => Promise<CommentType>;
   isCommenting: boolean;
+  
+  // Create Post Modal
+  isCreatePostModalOpen: boolean;
+  openCreatePostModal: (options?: { postToShare?: Post, pendingBlogShare?: BlogShareDetails }) => void;
+  closeCreatePostModal: () => void;
+  postToShare: Post | null;
+  pendingBlogShare: BlogShareDetails | null;
+  isPreparingShare: boolean;
+
+  // Reactions
+  reactToPost: (data: { postId: string; reactionType: ReactionType | null }) => void;
   isReactingToPost: boolean;
+  reactToComment: (data: { postId:string; commentId: string; reactionType: ReactionType | null; }) => void;
   isReactingToComment: boolean;
+
+  fetchSinglePost: (postId: string) => Promise<Post | null>;
+  findPostInFeed: (postId: string) => Post | undefined;
 }
 
 const FeedContext = createContext<FeedContextType | undefined>(undefined);
@@ -113,11 +118,7 @@ const fetchSinglePostAPI = async (postId: string): Promise<Post | null> => {
   return response.json();
 };
 
-interface FeedProviderProps {
-  children: ReactNode;
-}
-
-export const FeedProvider = ({ children }: FeedProviderProps) => {
+export const FeedProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth(); // Removed token from here as it's not used directly in this context after JWT removal
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -130,6 +131,16 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     queryKey: ['posts'],
     queryFn: fetchPostsAPI,
     staleTime: 1000 * 60 * 1, 
+  });
+
+  const displayedPosts = posts.map(post => {
+    if (post.sharedOriginalPostId && !post.sharedOriginalPost) {
+      const original = posts.find(p => p.id === post.sharedOriginalPostId);
+      if (original) {
+        return { ...post, sharedOriginalPost: original };
+      }
+    }
+    return post;
   });
 
   const fetchSinglePost = useCallback(async (postId: string): Promise<Post | null> => {
@@ -213,6 +224,7 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       return createPostAPI({ ...postData, authorId: user.id });
     },
     onSuccess: () => {
+      // No need to optimistically update here for now, as react-query will refetch and handle it.
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       closeCreatePostModal();
       toast({ title: "Success", description: "Your post has been published!" });
@@ -222,10 +234,13 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     }
   });
 
-  const addCommentMutation = useMutation<CommentType, Error, { postId: string; content: string; parentId?: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }>({
+  const addCommentMutation = useMutation<CommentType, Error, { postId: string; text: string; parentId?: string; mediaUrl?: string; mediaType?: 'image' | 'gif' }>({
     mutationFn: (commentData) => {
       if (!user) throw new Error("User not logged in");
-      return addCommentAPI({ ...commentData, authorId: user.id });
+      // API expects 'content', but context type uses 'text'. Let's adapt here.
+      const apiPayload = { ...commentData, content: commentData.text, authorId: user.id };
+      // delete (apiPayload as any).text; // Not strictly necessary but good practice
+      return addCommentAPI(apiPayload);
     },
     onSuccess: (newComment, variables) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] }); 
@@ -251,26 +266,56 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
     }
   });
 
-  const reactToCommentMutation = useMutation<Post, Error, { postId: string; commentId: string; reactionType: ReactionType | null }>({
+  const reactToCommentMutation = useMutation<Post, Error, { postId: string; commentId: string; reactionType: ReactionType | null; }>({
     mutationFn: (data) => {
       if (!user) throw new Error("User not logged in");
       return reactToCommentAPI({ ...data, userId: user.id });
     },
-    onSuccess: (updatedPostContainingComment) => {
+    onSuccess: (updatedPost) => {
       queryClient.setQueryData(['posts'], (oldData: Post[] | undefined) => {
-        return oldData?.map(post => post.id === updatedPostContainingComment.id ? updatedPostContainingComment : post) || [];
+        return oldData?.map(post => post.id === updatedPost.id ? updatedPost : post) || [];
       });
     },
     onError: (error) => {
-      toast({ title: "Error", description: error.message || "Failed to react to comment.", variant: "destructive" });
+      toast({ title: "Error reacting to comment", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deletePostMutation = useMutation<Post, Error, { postId: string }>({
+    mutationFn: async ({ postId }) => {
+      if (!user) throw new Error("User not logged in");
+      const response = await fetch(`/api/posts/${postId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete post');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      toast({ title: "Success", description: "Post deleted successfully!" });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message || "Failed to delete post.", variant: "destructive" });
     }
   });
 
+  const findPostInFeed = (postId: string): Post | undefined => {
+    return displayedPosts.find(p => p.id === postId);
+  };
+
   return (
     <FeedContext.Provider value={{
-      posts,
+      posts: displayedPosts,
       isPostsLoading,
       postsError,
+      hasMorePosts: false, // This will be added if pagination is implemented
+      loadMorePosts: () => {}, // This will be added if pagination is implemented
+      isFetchingMore: false, // This will be added if pagination is implemented
       isCreatePostModalOpen,
       openCreatePostModal,
       closeCreatePostModal,
@@ -278,15 +323,16 @@ export const FeedProvider = ({ children }: FeedProviderProps) => {
       pendingBlogShare,
       isPreparingShare, 
       
-      publishPost: publishPostMutation.mutate,
-      addCommentToFeedPost: addCommentMutation.mutate,
-      reactToPost: reactToPostMutation.mutate,
-      reactToComment: reactToCommentMutation.mutate,
+      publishPost: (data) => publishPostMutation.mutate(data),
+      addCommentToFeedPost: addCommentMutation.mutateAsync,
+      reactToPost: (data) => reactToPostMutation.mutate(data),
+      isReactingToPost: reactToPostMutation.isPending,
+      reactToComment: (data) => reactToCommentMutation.mutate(data),
+      isReactingToComment: reactToCommentMutation.isPending,
       fetchSinglePost,
+      findPostInFeed,
       isPublishingPost: publishPostMutation.isPending,
       isCommenting: addCommentMutation.isPending,
-      isReactingToPost: reactToPostMutation.isPending,
-      isReactingToComment: reactToCommentMutation.isPending,
     }}>
       {children}
     </FeedContext.Provider>

@@ -2,6 +2,7 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { Providers } from '@/components/providers'; // Import the new Providers component
+import GlobalCommentsModal from '@/components/global-comments-modal';
 
 export const metadata: Metadata = {
   title: 'StatHustle Social',
@@ -24,6 +25,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <Providers>
           {children}
+          <GlobalCommentsModal />
         </Providers>
       </body>
     </html>

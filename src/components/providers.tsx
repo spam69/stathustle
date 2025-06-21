@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider as TanstackQueryClientProvider } from 
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import { AuthProvider as AppAuthProvider } from '@/contexts/auth-context';
 import { NotificationProvider } from '@/contexts/notification-context';
+import { CommentsModalProvider } from '@/contexts/comments-modal-context';
+import { FeedProvider } from '@/contexts/feed-context';
 import { Toaster as AppToaster } from "@/components/ui/toaster";
 
 // queryClient instance is now created inside the component using useState
@@ -27,8 +29,12 @@ export function Providers({ children }: { children: ReactNode }) {
       >
         <AppAuthProvider>
           <NotificationProvider>
-            {children}
-            <AppToaster />
+            <FeedProvider>
+              <CommentsModalProvider>
+                {children}
+                <AppToaster />
+              </CommentsModalProvider>
+            </FeedProvider>
           </NotificationProvider>
         </AppAuthProvider>
       </NextThemesProvider>

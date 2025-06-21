@@ -64,6 +64,9 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
   const [repliesCounts, setRepliesCounts] = useState<Record<string, number>>({});
   const highlightedReplyRef = useRef<HTMLDivElement>(null);
+  const [newlyAddedCommentId, setNewlyAddedCommentId] = useState<string | null>(null);
+  const newlyAddedReplyRef = useRef<HTMLDivElement>(null);
+  const topLevelCommentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -90,8 +93,14 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
           }
         }
       }
+    } else {
+        setNewlyAddedCommentId(null);
     }
-  }, [isOpen, highlightedCommentId, post]);
+    // By using post.id in the dependency array, we ensure this effect only re-runs
+    // when the modal is opened for a new post, not every time the current post's
+    // data is updated (e.g., when a new comment is added).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, highlightedCommentId, post?.id]);
 
   // Scroll to highlighted reply after modal opens and replies are expanded
   useEffect(() => {
@@ -106,6 +115,18 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
       return () => clearTimeout(timer);
     }
   }, [isOpen, highlightedCommentId, expandedReplies, repliesCounts]);
+
+  // Scroll to newly added reply
+  useEffect(() => {
+    if (newlyAddedCommentId && newlyAddedReplyRef.current) {
+        newlyAddedReplyRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+        const timer = setTimeout(() => setNewlyAddedCommentId(null), 1000);
+        return () => clearTimeout(timer);
+    }
+  }, [newlyAddedCommentId, post]); // Reruns when post data updates
 
   if (!post) return null;
 
@@ -188,6 +209,17 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
       toast({ title: 'Error', description: 'Comment cannot be empty and you must be logged in.', variant: 'destructive' });
       return;
     }
+
+    if (replyingTo) {
+        const parentId = replyingTo.id;
+        if (!expandedReplies.has(parentId)) {
+            setExpandedReplies(prev => new Set(prev).add(parentId));
+        }
+        const currentRepliesCount = post.comments?.filter(c => c.parentId === parentId).length || 0;
+        const newTotalReplies = currentRepliesCount + 1;
+        setRepliesCounts(prev => ({ ...prev, [parentId]: newTotalReplies}));
+    }
+
     let finalMediaUrl: string | undefined = gifUrl;
     let finalMediaType: 'image' | 'gif' | undefined = gifUrl ? 'gif' : undefined;
     if (imageToUpload) {
@@ -209,11 +241,17 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
       }
       setIsUploadingToR2(false);
     }
-    addCommentToFeedPost({ postId: post.id, content: newCommentText.trim(), parentId: replyingTo?.id, mediaUrl: finalMediaUrl, mediaType: finalMediaType });
-    setNewCommentText('');
-    setReplyingTo(null);
-    setImageToUpload(null);
-    setGifUrl(undefined);
+    try {
+        const newComment = await addCommentToFeedPost({ postId: post.id, text: newCommentText.trim(), parentId: replyingTo?.id, mediaUrl: finalMediaUrl, mediaType: finalMediaType });
+        setNewlyAddedCommentId(newComment.id);
+        setNewCommentText('');
+        setReplyingTo(null);
+        setImageToUpload(null);
+        setGifUrl(undefined);
+    } catch (error) {
+        console.error("Failed to post comment:", error);
+        // Error toast is handled in the context
+    }
   };
 
   const startReplyToTopLevelComment = (commentToReply: CommentType) => {
@@ -237,6 +275,8 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
   };
 
   const toggleReplies = (commentId: string) => {
+    const isExpanding = !expandedReplies.has(commentId);
+    
     setExpandedReplies(prev => {
       const newSet = new Set(prev);
       if (newSet.has(commentId)) {
@@ -246,6 +286,24 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
       }
       return newSet;
     });
+
+    if (isExpanding) {
+      const parentComment = post.comments?.find(c => c.id === commentId);
+      if (parentComment) {
+        startReplyToTopLevelComment(parentComment);
+      }
+      setTimeout(() => {
+        topLevelCommentRefs.current[commentId]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest'
+        });
+      }, 150);
+    } else {
+      // If we are collapsing the replies, and we were replying to that parent comment, cancel the reply.
+      if (replyingTo?.id === commentId) {
+        cancelReply();
+      }
+    }
   };
 
   const loadMoreReplies = (commentId: string) => {
@@ -268,7 +326,7 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     return (
       <div 
         key={reply.id} 
-        ref={isHighlighted ? highlightedReplyRef : null}
+        ref={reply.id === newlyAddedCommentId ? newlyAddedReplyRef : (isHighlighted ? highlightedReplyRef : null)}
         className={`py-2 ${isHighlighted ? 'bg-primary/5' : ''} relative`}
       >
         {/* Vertical line connecting to parent */}
@@ -331,7 +389,11 @@ export default function CommentsModal({ post, isOpen, onClose, currentUser, high
     const hasMoreReplies = directReplies.length > visibleRepliesCount;
 
     return (
-      <div key={comment.id} className="py-3 border-b border-border/30 last:border-b-0">
+      <div 
+        key={comment.id} 
+        ref={el => { topLevelCommentRefs.current[comment.id] = el; }}
+        className="py-3 border-b border-border/30 last:border-b-0"
+      >
         <div className="flex items-start gap-2 sm:gap-3">
           <Link href={`/profile/${authorInfo.username}`} passHref>
             <Avatar className="h-9 w-9 border">
