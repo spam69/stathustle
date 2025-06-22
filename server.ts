@@ -23,6 +23,7 @@ const app = next({ dev });
 const handle = app.getRequestHandler();
 
 const PORT = process.env.PORT || 3000;
+const ORIGIN = process.env.ORIGIN;
 
 interface SocketWithUser extends Socket {
     data: {
@@ -39,7 +40,7 @@ app.prepare().then(() => {
   const io = new Server(httpServer, {
     path: '/api/ws',
     cors: {
-      origin: "http://localhost:9002",
+      origin: ORIGIN,
       methods: ["GET", "POST"],
       credentials: true
     }
