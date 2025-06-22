@@ -23,7 +23,7 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 const ORIGIN = process.env.ORIGIN;
 
 interface SocketWithUser extends Socket {
@@ -207,19 +207,23 @@ app.prepare().then(() => {
             if (conversation) {
                 conversation.unreadCounts = conversation.unreadCounts || {};
                 conversation.unreadCounts[userId] = 0;
+                // Mark the unreadCounts field as modified so Mongoose saves the change.
+                conversation.markModified('unreadCounts');
                 await conversation.save();
                 console.log(`[WebSocket] Updated unread count for user ${userId} in conversation ${conversationId}`);
+                
+                // Also emit a full conversation update to the user who marked it as read
+                const otherId = conversation.participants.find((p) => p.toString() !== userId);
+                if (otherId) {
+                    const participantInfo = await getParticipantInfo(otherId.toString());
+                    const conversationForClient = {
+                        ...(conversation.toObject()),
+                        participant: participantInfo,
+                        unreadCount: 0,
+                    };
+                    io.to(userId).emit('conversation', conversationForClient);
+                }
             }
-
-            // Emit conversation update to all participants
-            const participants = conversation?.participants || [];
-            participants.forEach(participantId => {
-                io.to(participantId.toString()).emit('conversation', {
-                    id: conversationId,
-                    unreadCounts: conversation?.unreadCounts || {},
-                    updatedAt: conversation?.updatedAt,
-                });
-            });
 
         } catch (error) {
             console.error('[WebSocket] Error handling read event:', error);
