@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Search, UserCircle, PlusCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2, Users, Repeat } from 'lucide-react';
+import { Bell, Search, UserCircle, PlusCircle, LogIn, LogOut, Settings, UserPlus, Menu, PlusSquare, CheckCheck, CircleSlash, RefreshCw, Trash2, X as CloseIcon, Loader2, Users, Repeat, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -33,6 +33,8 @@ import type { Notification, Identity as IdentityType, Post } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import SearchResultModal from '@/components/search-result-modal';
 import React from 'react';
+import { useMessagingContext } from '@/contexts/MessagingContext';
+import { MessagingModal } from '@/components/messaging/MessagingModal';
 
 const NotificationItem = ({
   notification,
@@ -139,6 +141,8 @@ export default function Header() {
     openNotificationInModal,
   } = useNotifications();
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [isMessagingOpen, setIsMessagingOpen] = useState(false);
+  const { unreadCount: messagingUnreadCount } = useMessagingContext();
 
   useEffect(() => {
     if (activePrincipal && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) {
@@ -339,6 +343,27 @@ export default function Header() {
         {activePrincipal && (
           <Button variant="ghost" size="icon" onClick={() => openCreatePostModal()} aria-label="Create Post">
             <PlusSquare className="h-5 w-5" />
+          </Button>
+        )}
+
+        {activePrincipal && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="relative" 
+            onClick={() => setIsMessagingOpen(true)} 
+            aria-label="Messages"
+          >
+            <MessageCircle className="h-5 w-5" />
+            {messagingUnreadCount > 0 && (
+              <Badge
+                variant="destructive"
+                className="absolute -top-1 -right-1 h-4 w-4 min-w-[1rem] p-0.5 text-xs flex items-center justify-center rounded-full"
+              >
+                {messagingUnreadCount > 9 ? '9+' : messagingUnreadCount}
+              </Badge>
+            )}
+            <span className="sr-only">Messages</span>
           </Button>
         )}
 
@@ -597,6 +622,11 @@ export default function Header() {
         isOpen={!!selectedPostId}
         onClose={handleCloseSearchResult}
         postId={selectedPostId}
+      />
+
+      <MessagingModal
+        isOpen={isMessagingOpen}
+        onClose={() => setIsMessagingOpen(false)}
       />
     </header>
   );

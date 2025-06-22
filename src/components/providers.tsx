@@ -9,6 +9,7 @@ import { AuthProvider as AppAuthProvider } from '@/contexts/auth-context';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { CommentsModalProvider } from '@/contexts/comments-modal-context';
 import { FeedProvider } from '@/contexts/feed-context';
+import { MessagingProvider } from '@/contexts/MessagingContext';
 import { Toaster as AppToaster } from "@/components/ui/toaster";
 
 // queryClient instance is now created inside the component using useState
@@ -31,8 +32,10 @@ export function Providers({ children }: { children: ReactNode }) {
           <NotificationProvider>
             <FeedProvider>
               <CommentsModalProvider>
-                {children}
-                <AppToaster />
+                <MessagingProvider>
+                  {children}
+                  <AppToaster />
+                </MessagingProvider>
               </CommentsModalProvider>
             </FeedProvider>
           </NotificationProvider>
