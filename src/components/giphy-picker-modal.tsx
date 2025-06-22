@@ -29,10 +29,23 @@ export default function GiphyPickerModal({ isOpen, onClose, onGifSelect }: Giphy
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const [isFetching, setIsFetching] = useState(false);
+  const [gridWidth, setGridWidth] = useState(550);
+
+  useEffect(() => {
+    if (isOpen) {
+      const calculateWidth = () => {
+        const newWidth = window.innerWidth > 768 ? 550 : window.innerWidth - 64;
+        setGridWidth(newWidth);
+      };
+      calculateWidth();
+      window.addEventListener('resize', calculateWidth);
+      return () => window.removeEventListener('resize', calculateWidth);
+    }
+  }, [isOpen]);
 
   const fetchGifs = useCallback(async (offset: number) => {
     if (!gf) {
-      return { data: [], pagination: { total_count: 0, count: 0, offset: 0 } };
+      return { data: [], pagination: { total_count: 0, count: 0, offset: 0 }, meta: { status: 404, msg: 'Not Found', response_id: '' } };
     }
     setIsFetching(true);
     try {
@@ -42,7 +55,7 @@ export default function GiphyPickerModal({ isOpen, onClose, onGifSelect }: Giphy
       return await gf.trending({ offset, limit: 12 });
     } catch (error) {
         console.error("Error fetching GIFs:", error);
-        return { data: [], pagination: { total_count: 0, count: 0, offset: 0 } };
+        return { data: [], pagination: { total_count: 0, count: 0, offset: 0 }, meta: { status: 500, msg: 'Server Error', response_id: '' } };
     } finally {
         setIsFetching(false);
     }
@@ -88,7 +101,7 @@ export default function GiphyPickerModal({ isOpen, onClose, onGifSelect }: Giphy
               <Grid
                 key={debouncedSearchTerm} // Important to re-fetch when search term changes
                 fetchGifs={fetchGifs}
-                width={window.innerWidth > 768 ? 550 : window.innerWidth - 64} // Responsive width based on screen size
+                width={gridWidth} // Responsive width based on screen size
                 columns={3}
                 gutter={6}
                 onGifClick={handleGifClick}
