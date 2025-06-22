@@ -222,7 +222,7 @@ export function MessagingModal({ isOpen, onClose }: MessagingModalProps) {
                               </div>
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground truncate">
+                          <div className="text-sm text-muted-foreground truncate block max-w-[200px]">
                             {conversation.lastMessage?.content || 'No messages yet'}
                           </div>
                         </div>
