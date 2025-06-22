@@ -8,7 +8,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { Message, Conversation, UserSearchResult } from '@/types/messaging';
 import { FileUpload } from '@/components/FileUpload';
 import GiphyPickerModal from '@/components/giphy-picker-modal';
-import { ImageIcon, GiftIcon, SendIcon } from 'lucide-react';
+import EmojiPicker from '@/components/emoji-picker';
+import { ImageIcon, SendIcon, Film } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
 import type { IGif } from '@giphy/js-types';
@@ -82,6 +83,10 @@ export function MessagingModal({ isOpen, onClose }: MessagingModalProps) {
     } catch (error) {
       console.error('Failed to send file:', error);
     }
+  };
+
+  const handleEmojiSelect = (emoji: string) => {
+    setMessageInput(prev => prev + emoji);
   };
 
   const handleGifSelect = async (gif: IGif) => {
@@ -305,12 +310,13 @@ export function MessagingModal({ isOpen, onClose }: MessagingModalProps) {
                         <ImageIcon className="h-5 w-5" />
                       </Button>
                     </FileUpload>
+                    <EmojiPicker onEmojiSelect={handleEmojiSelect} />
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => setIsGiphyModalOpen(true)}
                     >
-                      <GiftIcon className="h-5 w-5" />
+                      <Film className="h-5 w-5" />
                     </Button>
                     <Input
                       placeholder="Type a message..."
