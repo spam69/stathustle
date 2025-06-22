@@ -17,6 +17,14 @@ export function useMessaging() {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  useEffect(() => {
+    const totalUnread = conversations.reduce(
+      (acc, conv) => acc + (conv.unreadCount || 0),
+      0
+    );
+    setUnreadCount(totalUnread);
+  }, [conversations]);
+
   const openMessagingModal = useCallback(() => setIsMessagingOpen(true), []);
   const closeMessagingModal = useCallback(() => {
     setIsMessagingOpen(false);
@@ -117,11 +125,6 @@ export function useMessaging() {
         updated[index] = conversation;
         return updated;
       });
-      // Update unread count
-      setUnreadCount(
-        prev =>
-          prev + (conversation.unreadCount || 0)
-      );
     });
 
     setSocket(newSocket);
@@ -161,7 +164,6 @@ export function useMessaging() {
       };
       return updated;
     });
-    setUnreadCount(prev => prev + 1);
   }, [user]);
 
   // Fetch conversations
@@ -178,12 +180,6 @@ export function useMessaging() {
       const data = await response.json();
       console.log('[Client] Fetched conversations:', data.conversations);
       setConversations(data.conversations);
-      setUnreadCount(
-        data.conversations.reduce(
-          (acc: number, conv: Conversation) => acc + (conv.unreadCount || 0),
-          0
-        )
-      );
     } catch (error) {
       console.error('[Client] Error fetching conversations:', error);
       toast({
