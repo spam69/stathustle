@@ -3,6 +3,33 @@ import dbConnect from '@/lib/dbConnect';
 import ConversationModel from '@/models/Conversation.model';
 import MessageModel from '@/models/Message.model';
 import UserModel from '@/models/User.model';
+import IdentityModel from '@/models/Identity.model';
+
+async function getParticipantInfo(participantId: string) {
+    // Try finding a user first
+    let participant = await UserModel.findById(participantId).lean();
+    if (participant) {
+        return {
+            id: participant._id.toString(),
+            username: participant.username,
+            displayName: participant.username,
+            avatar: participant.profilePictureUrl,
+            isIdentity: false
+        };
+    }
+    // If not a user, try finding an identity
+    participant = await IdentityModel.findById(participantId).lean();
+    if (participant) {
+        return {
+            id: participant._id.toString(),
+            username: participant.username,
+            displayName: participant.displayName || participant.username,
+            avatar: participant.profilePictureUrl,
+            isIdentity: true
+        };
+    }
+    return null;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -43,13 +70,13 @@ export async function GET(req: NextRequest) {
     for (const conv of conversations) {
       const otherId = conv.participants.find((id: any) => id.toString() !== userId);
       if (otherId) {
-        const otherUserDoc = await UserModel.findById(otherId);
-        if (otherUserDoc) {
-            const otherUser = otherUserDoc.toObject();
+        const otherParticipantInfo = await getParticipantInfo(otherId.toString());
+        if (otherParticipantInfo) {
             conv.participant = {
-              id: otherUser.id,
-              username: otherUser.username,
-              avatar: otherUser.profilePictureUrl,
+              id: otherParticipantInfo.id,
+              username: otherParticipantInfo.username,
+              displayName: otherParticipantInfo.displayName,
+              avatar: otherParticipantInfo.avatar,
               isOnline: false // TODO: Add online status logic
             };
         }
@@ -103,14 +130,14 @@ export async function POST(req: NextRequest) {
       // Enrich with participant info
       const otherId = conversation.participants.find((id) => id.toString() !== userId);
       if (otherId) {
-        const otherUserDoc = await UserModel.findById(otherId);
-        if (otherUserDoc) {
-            const otherUser = otherUserDoc.toObject();
+        const otherParticipantInfo = await getParticipantInfo(otherId.toString());
+        if (otherParticipantInfo) {
             conversation = conversation.toObject();
             conversation.participant = {
-              id: otherUser.id,
-              username: otherUser.username,
-              avatar: otherUser.profilePictureUrl,
+              id: otherParticipantInfo.id,
+              username: otherParticipantInfo.username,
+              displayName: otherParticipantInfo.displayName,
+              avatar: otherParticipantInfo.avatar,
               isOnline: false // TODO: Add online status logic
             };
         }
@@ -127,15 +154,15 @@ export async function POST(req: NextRequest) {
 
     // Enrich with participant info for new conversation
     const otherId = participantId;
-    const otherUserDoc = await UserModel.findById(otherId);
-    if (otherUserDoc) {
-        const otherUser = otherUserDoc.toObject();
+    const otherParticipantInfo = await getParticipantInfo(otherId);
+    if (otherParticipantInfo) {
         conversation = conversation.toObject();
         conversation.participant = {
-          id: otherUser.id,
-          username: otherUser.username,
-          avatar: otherUser.profilePictureUrl,
-          isOnline: false // TODO: Add online status logic
+            id: otherParticipantInfo.id,
+            username: otherParticipantInfo.username,
+            displayName: otherParticipantInfo.displayName,
+            avatar: otherParticipantInfo.avatar,
+            isOnline: false // TODO: Add online status logic
         };
     }
     conversation.unreadCount = 0;

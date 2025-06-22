@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import ImageUploadModal from './image-upload-modal'; // Import the modal
 import { useToast } from '@/hooks/use-toast';
 import FollowersFollowingModal from './followers-following-modal';
+import { useMessagingContext } from '@/contexts/MessagingContext';
 
 interface UserProfileCardProps {
   profileUser: User | Identity;
@@ -28,6 +29,7 @@ export default function UserProfileCard({ profileUser, setProfileUser }: UserPro
   const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
   const [isFollowingModalOpen, setIsFollowingModalOpen] = useState(false);
   const { toast } = useToast();
+  const { conversations, startConversation, setCurrentConversation } = useMessagingContext();
   
   const isIdentityProfile = 'isIdentity' in profileUser && profileUser.isIdentity;
   
@@ -136,6 +138,25 @@ export default function UserProfileCard({ profileUser, setProfileUser }: UserPro
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleMessageClick = () => {
+    if (!currentUser) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to send messages.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const existingConversation = conversations.find(c => c.participants.includes(profileUser.id));
+
+    if (existingConversation) {
+      setCurrentConversation(existingConversation);
+    } else {
+      startConversation(profileUser.id);
     }
   };
 
@@ -290,7 +311,7 @@ export default function UserProfileCard({ profileUser, setProfileUser }: UserPro
                 )}
                 {isFollowing ? 'Unfollow' : 'Follow'} {isIdentityProfile ? 'Identity' : 'User'}
               </Button>
-              <Button variant="outline">Message</Button>
+              <Button variant="outline" onClick={handleMessageClick}>Message</Button>
             </div>
           )}
 

@@ -181,7 +181,7 @@ export function MessagingModal({ isOpen, onClose }: MessagingModalProps) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <div className="font-medium truncate">
-                            {conversation.participant?.username}
+                            {conversation.participant?.displayName || conversation.participant?.username}
                           </div>
                           {conversation.unreadCount > 0 && (
                             <div className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
@@ -219,7 +219,7 @@ export function MessagingModal({ isOpen, onClose }: MessagingModalProps) {
                     </div>
                     <div>
                       <div className="font-medium">
-                        {currentConversation.participant?.username}
+                        {currentConversation.participant?.displayName || currentConversation.participant?.username}
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {currentConversation.participant?.isOnline ? 'Online' : 'Offline'}

@@ -15,6 +15,9 @@ interface MessagingContextType {
   startConversation: (userId: string) => Promise<void>;
   loadMoreMessages: () => Promise<void>;
   setCurrentConversation: (conversation: Conversation | null) => void;
+  isMessagingOpen: boolean;
+  openMessagingModal: () => void;
+  closeMessagingModal: () => void;
 }
 
 const MessagingContext = createContext<ReturnType<typeof useMessaging> | undefined>(undefined);

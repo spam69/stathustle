@@ -141,8 +141,12 @@ export default function Header() {
     openNotificationInModal,
   } = useNotifications();
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [isMessagingOpen, setIsMessagingOpen] = useState(false);
-  const { unreadCount: messagingUnreadCount } = useMessagingContext();
+  const { 
+    unreadCount: messagingUnreadCount,
+    isMessagingOpen,
+    openMessagingModal,
+    closeMessagingModal 
+  } = useMessagingContext();
 
   useEffect(() => {
     if (activePrincipal && !isLoadingInitial && displayedNotifications.length === 0 && totalServerNotificationsCount === 0) {
@@ -351,7 +355,7 @@ export default function Header() {
             variant="ghost" 
             size="icon" 
             className="relative" 
-            onClick={() => setIsMessagingOpen(true)} 
+            onClick={openMessagingModal} 
             aria-label="Messages"
           >
             <MessageCircle className="h-5 w-5" />
@@ -626,7 +630,7 @@ export default function Header() {
 
       <MessagingModal
         isOpen={isMessagingOpen}
-        onClose={() => setIsMessagingOpen(false)}
+        onClose={closeMessagingModal}
       />
     </header>
   );

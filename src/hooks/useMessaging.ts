@@ -13,8 +13,16 @@ export function useMessaging() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+
+  const openMessagingModal = useCallback(() => setIsMessagingOpen(true), []);
+  const closeMessagingModal = useCallback(() => {
+    setIsMessagingOpen(false);
+    setCurrentConversation(null);
+    setMessages([]);
+  }, []);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -345,6 +353,7 @@ export function useMessaging() {
         const filtered = prev.filter(c => c.id !== conversation.id);
         return [conversation, ...filtered];
       });
+      openMessagingModal();
     } catch (error) {
       console.error('[Client] Error starting conversation:', error);
       toast({
@@ -413,10 +422,11 @@ export function useMessaging() {
     setCurrentConversation(conversation);
     if (conversation) {
       loadMessages(conversation.id);
+      openMessagingModal();
     } else {
       setMessages([]);
     }
-  }, [loadMessages]);
+  }, [loadMessages, openMessagingModal]);
 
   return {
     conversations,
@@ -425,11 +435,14 @@ export function useMessaging() {
     unreadCount,
     isConnected,
     onlineUsers,
+    isMessagingOpen,
     searchUsers,
     sendMessage,
     startConversation,
     loadMoreMessages,
     setCurrentConversation: setCurrentConversationAndLoadMessages,
-    markAsRead
+    markAsRead,
+    openMessagingModal,
+    closeMessagingModal
   };
 } 

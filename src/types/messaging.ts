@@ -25,6 +25,7 @@ export interface Conversation {
 export interface UserSearchResult {
   id: string;
   username: string;
+  displayName?: string;
   email?: string;
   avatar?: string;
   isOnline?: boolean;
