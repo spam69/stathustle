@@ -205,6 +205,27 @@ export function useMessaging() {
     );
   }, [onlineUsers, user]);
 
+  useEffect(() => {
+    if (currentConversation) {
+      const participantId = currentConversation.participants.find(p => p !== user?.id);
+      if (participantId && currentConversation.participant) {
+        setCurrentConversation(prev => {
+          if (!prev || !prev.participant) return prev;
+          const isOnline = onlineUsers.has(participantId);
+          if (prev.participant.isOnline === isOnline) return prev;
+          
+          return {
+            ...prev,
+            participant: {
+              ...prev.participant,
+              isOnline,
+            }
+          };
+        });
+      }
+    }
+  }, [onlineUsers, user, currentConversation]);
+
   // Search users
   const searchUsers = async (query: string): Promise<UserSearchResult[]> => {
     try {

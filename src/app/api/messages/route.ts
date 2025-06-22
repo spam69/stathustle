@@ -62,6 +62,14 @@ export async function GET(req: NextRequest) {
 
     console.log('[Messages API] Found messages:', messages.length);
 
+    // Manually transform messages to include senderId and receiverId
+    const transformedMessages = messages.map(msg => ({
+      ...msg,
+      id: msg._id.toString(),
+      senderId: msg.sender.toString(),
+      receiverId: msg.receiver.toString(),
+    }));
+
     // Mark messages as read for the user - Fix field name to match schema
     await MessageModel.updateMany(
       {
@@ -76,7 +84,7 @@ export async function GET(req: NextRequest) {
     conversation.unreadCounts[userId] = 0;
     await conversation.save();
 
-    return NextResponse.json(messages);
+    return NextResponse.json(transformedMessages);
   } catch (error) {
     console.error('[Messages API] Error fetching messages:', error);
     return NextResponse.json(
