@@ -114,16 +114,33 @@ export function useMessaging() {
       });
     });
 
-    newSocket.on('conversation', (conversation: Conversation) => {
-      console.log('[Client] Received conversation update:', conversation);
+    newSocket.on('conversation', (conversationUpdate: Partial<Conversation> & { unreadCounts?: Record<string, number> }) => {
+      console.log('[Client] Received conversation update:', conversationUpdate);
       setConversations(prev => {
-        const index = prev.findIndex(c => c.id === conversation.id);
+        const index = prev.findIndex(c => c.id === conversationUpdate.id);
+
         if (index === -1) {
-          return [conversation, ...prev];
+          console.warn(`[Client] Received conversation update for a conversation not in state: ${conversationUpdate.id}`);
+          return prev;
         }
+
         const updated = [...prev];
-        updated[index] = conversation;
-        return updated;
+        const existingConversation = updated[index];
+        
+        let newUnreadCount = existingConversation.unreadCount;
+        if (conversationUpdate.unreadCounts && user) {
+          if (typeof conversationUpdate.unreadCounts[user.id] === 'number') {
+            newUnreadCount = conversationUpdate.unreadCounts[user.id];
+          }
+        }
+
+        updated[index] = {
+          ...existingConversation,
+          ...conversationUpdate,
+          unreadCount: newUnreadCount,
+        };
+
+        return updated.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       });
     });
 
@@ -139,32 +156,12 @@ export function useMessaging() {
     // eslint-disable-next-line
   }, [user]);
 
-  // Update conversation with new message
-  const updateConversationWithMessage = useCallback((message: Message) => {
-    console.log('[Client] Updating conversation with message:', message);
-    setConversations(prev => {
-      const conversation = prev.find(c =>
-        c.participants.includes(message.senderId) &&
-        c.participants.includes(message.receiverId)
-      );
-      if (!conversation) {
-        console.log('[Client] No conversation found for message');
-        return prev;
-      }
-      const updated = [...prev];
-      const index = updated.findIndex(c => c.id === conversation.id);
-      updated[index] = {
-        ...conversation,
-        lastMessage: message,
-        updatedAt: new Date(),
-        unreadCount:
-          message.receiverId === user?.id
-            ? (conversation.unreadCount || 0) + 1
-            : conversation.unreadCount
-      };
-      return updated;
-    });
-  }, [user]);
+  // Mark messages as read
+  const markAsRead = useCallback((conversationId: string) => {
+    if (socket) {
+      socket.emit('read', { conversationId });
+    }
+  }, [socket]);
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -189,6 +186,40 @@ export function useMessaging() {
       });
     }
   }, [user, toast]);
+
+  // Update conversation with new message
+  const updateConversationWithMessage = useCallback((message: Message) => {
+    console.log('[Client] Updating conversation with message:', message);
+    
+    // If the message is for the currently open conversation, mark it as read immediately.
+    if (currentConversation?.id && currentConversation.id === message.conversationId && message.receiverId === user?.id) {
+      markAsRead(currentConversation.id);
+    }
+
+    setConversations(prev => {
+      const conversation = prev.find(c =>
+        c.participants &&
+        c.participants.includes(message.senderId) &&
+        c.participants.includes(message.receiverId)
+      );
+
+      if (!conversation) {
+        console.log('[Client] No conversation found for message, fetching all conversations again.');
+        fetchConversations();
+        return prev;
+      }
+
+      const updatedConversation = {
+        ...conversation,
+        lastMessage: message,
+        updatedAt: new Date(),
+        unreadCount: conversation.unreadCount,
+      };
+      
+      const filtered = prev.filter(c => c.id !== conversation.id);
+      return [updatedConversation, ...filtered];
+    });
+  }, [user, fetchConversations, currentConversation, markAsRead]);
 
   // Update conversations with online status
   useEffect(() => {
@@ -229,6 +260,35 @@ export function useMessaging() {
       }
     }
   }, [onlineUsers, user, currentConversation]);
+
+  useEffect(() => {
+    if (socket && user) {
+      const handleMessage = (message: Message & { clientMessageId: string }) => {
+        console.log('[Client] Received message:', message);
+
+        if (message.clientMessageId) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === message.clientMessageId ? { ...message, id: message.id } : m
+            )
+          );
+        } else if (message.receiverId === user.id) {
+          // If the message is for the current user and it's not an optimistic one
+          if (currentConversation?.id === message.conversationId) {
+            setMessages(prev => [...prev, message]);
+          }
+        }
+        
+        updateConversationWithMessage(message);
+      };
+
+      socket.on('message', handleMessage);
+
+      return () => {
+        socket.off('message', handleMessage);
+      };
+    }
+  }, [socket, user, currentConversation, updateConversationWithMessage]);
 
   // Search users
   const searchUsers = async (query: string): Promise<UserSearchResult[]> => {
@@ -380,13 +440,6 @@ export function useMessaging() {
     }
   };
 
-  // Mark messages as read
-  const markAsRead = useCallback((conversationId: string) => {
-    if (socket) {
-      socket.emit('read', { conversationId });
-    }
-  }, [socket]);
-
   // Load messages for a conversation
   const loadMessages = useCallback(async (conversationId: string) => {
     try {
@@ -418,11 +471,12 @@ export function useMessaging() {
     setCurrentConversation(conversation);
     if (conversation) {
       loadMessages(conversation.id);
+      markAsRead(conversation.id);
       openMessagingModal();
     } else {
       setMessages([]);
     }
-  }, [loadMessages, openMessagingModal]);
+  }, [loadMessages, openMessagingModal, markAsRead]);
 
   return {
     conversations,

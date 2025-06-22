@@ -6,6 +6,7 @@ import { Server, Socket } from 'socket.io';
 import mongoose from 'mongoose';
 import dbConnect from '@/lib/dbConnect';
 import { verifyAuth } from '@/lib/auth';
+import { getParticipantInfo } from '@/lib/user-utils';
 import MessageModel, { IMessageSchema } from '@/models/Message.model';
 import ConversationModel from '@/models/Conversation.model';
 
@@ -118,6 +119,7 @@ app.prepare().then(() => {
                 console.log(`[WebSocket] Found existing conversation: ${conversation._id}`);
                 conversation.unreadCounts = conversation.unreadCounts || {};
                 conversation.unreadCounts[receiverId] = (conversation.unreadCounts[receiverId] || 0) + 1;
+                conversation.markModified('unreadCounts');
             }
 
             // Save the message - Fix field names to match schema
@@ -127,11 +129,11 @@ app.prepare().then(() => {
                 sender: userId,  // Changed from senderId to sender
                 receiver: receiverId,  // Changed from receiverId to receiver
                 read: false
-            });
+            }) as mongoose.Document & IMessageSchema;
 
             console.log(`[WebSocket] Message saved to database: ${savedMessageDoc._id}`);
 
-            conversation.lastMessage = savedMessageDoc._id as mongoose.Types.ObjectId;
+            conversation.lastMessage = savedMessageDoc._id;
             await conversation.save();
 
             console.log(`[WebSocket] Emitting message to rooms: ${userId} and ${receiverId}`);
@@ -159,8 +161,68 @@ app.prepare().then(() => {
 
             console.log(`[WebSocket] Message from ${userId} to ${receiverId} saved and emitted successfully.`);
 
+            // Also emit a full conversation update to the receiver so their unread count is updated
+            const senderInfo = await getParticipantInfo(userId); 
+            if (senderInfo) {
+              const conversationForReceiver = {
+                ...(conversation.toObject()),
+                participant: senderInfo,
+                lastMessage: messageToEmit,
+                unreadCount: conversation.unreadCounts[receiverId] || 0,
+              };
+              io.to(receiverId).emit('conversation', conversationForReceiver);
+              console.log(`[WebSocket] Emitted conversation update to receiver: ${receiverId}`);
+            }
+
         } catch (error) {
             console.error('[WebSocket] Error handling message:', error);
+        }
+    });
+
+    socket.on('read', async (data) => {
+        console.log(`[WebSocket] Received read event from ${userId} for conversation:`, data.conversationId);
+        try {
+            await dbConnect();
+            const { conversationId } = data;
+
+            if (!conversationId) {
+                console.error('[WebSocket] Error: conversationId is missing in read event');
+                return;
+            }
+
+            // Mark all unread messages in this conversation as read for the current user
+            const result = await MessageModel.updateMany(
+                {
+                    conversationId,
+                    receiver: userId,
+                    read: false
+                },
+                { $set: { read: true } }
+            );
+
+            console.log(`[WebSocket] Marked ${result.modifiedCount} messages as read for user ${userId} in conversation ${conversationId}`);
+
+            // Update conversation unread count
+            const conversation = await ConversationModel.findById(conversationId);
+            if (conversation) {
+                conversation.unreadCounts = conversation.unreadCounts || {};
+                conversation.unreadCounts[userId] = 0;
+                await conversation.save();
+                console.log(`[WebSocket] Updated unread count for user ${userId} in conversation ${conversationId}`);
+            }
+
+            // Emit conversation update to all participants
+            const participants = conversation?.participants || [];
+            participants.forEach(participantId => {
+                io.to(participantId.toString()).emit('conversation', {
+                    id: conversationId,
+                    unreadCounts: conversation?.unreadCounts || {},
+                    updatedAt: conversation?.updatedAt,
+                });
+            });
+
+        } catch (error) {
+            console.error('[WebSocket] Error handling read event:', error);
         }
     });
 

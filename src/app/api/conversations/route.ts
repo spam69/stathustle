@@ -4,32 +4,7 @@ import ConversationModel from '@/models/Conversation.model';
 import MessageModel from '@/models/Message.model';
 import UserModel from '@/models/User.model';
 import IdentityModel from '@/models/Identity.model';
-
-async function getParticipantInfo(participantId: string) {
-    // Try finding a user first
-    let participant = await UserModel.findById(participantId).lean();
-    if (participant) {
-        return {
-            id: participant._id.toString(),
-            username: participant.username,
-            displayName: participant.username,
-            avatar: participant.profilePictureUrl,
-            isIdentity: false
-        };
-    }
-    // If not a user, try finding an identity
-    participant = await IdentityModel.findById(participantId).lean();
-    if (participant) {
-        return {
-            id: participant._id.toString(),
-            username: participant.username,
-            displayName: participant.displayName || participant.username,
-            avatar: participant.profilePictureUrl,
-            isIdentity: true
-        };
-    }
-    return null;
-}
+import { getParticipantInfo } from '@/lib/user-utils';
 
 export async function GET(req: NextRequest) {
   try {
