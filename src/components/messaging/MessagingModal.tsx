@@ -46,6 +46,16 @@ export function MessagingModal({ isOpen, onClose }: MessagingModalProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isOpen) {
+      setTimeout(() => {
+        if (isMobile) {
+          setShowConversation(false);
+        }
+      }, 200);
+    }
+  }, [isOpen, isMobile]);
+
+  useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
